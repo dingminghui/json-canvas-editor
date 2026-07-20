@@ -1,6 +1,15 @@
 # json-canvas-editor
 
-一个基于 Vite 的 React 项目
+一个基于 React、Konva 与 shadcn/ui 的可视化模板编辑器。
+
+## 功能
+
+- 三栏模板编辑工作区
+- 文本、图形和图片元素的选择、拖动、缩放与旋转
+- 图层结构、排序、显示和锁定控制
+- 元素尺寸、位置和样式属性编辑
+- 多尺寸内置模板与会话内状态保留
+- 面向桌面端的三栏编辑布局
 
 ## 技术栈
 
@@ -8,10 +17,10 @@
 - React 19
 - TypeScript 5
 - Tailwind CSS v4
-- Biome V2
+- Konva + React Konva
+- shadcn/ui
+- Lucide React
 - Vitest + Testing Library
-- React Query
-- React Router
 
 ## 开发
 

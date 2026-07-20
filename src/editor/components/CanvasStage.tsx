@@ -1,0 +1,403 @@
+import { findElementContext } from "@/editor/editor-state";
+import {
+  isGroupElement,
+  isLeafElement,
+  type CanvasDocument,
+  type CanvasElement,
+  type CanvasElementPatch,
+  type CanvasLeafElement,
+  type CanvasPoint,
+  type CanvasTransformPatch,
+  type ImageElement,
+} from "@/editor/types";
+import Konva from "konva";
+import { memo, useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
+import { Group, Image, Layer, Rect, Stage, Text, Transformer } from "react-konva";
+import useImage from "use-image";
+
+interface CanvasStageProps {
+  document: CanvasDocument;
+  hoveredId: string | null;
+  selectedId: string | null;
+  zoom: number;
+  viewportHeight: number;
+  viewportPosition: CanvasPoint;
+  viewportWidth: number;
+  isSelectedLocked: boolean;
+  onSelect: (elementId: string | null) => void;
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  onZoomAtPoint: (zoom: number, point: CanvasPoint) => void;
+}
+
+interface RenderElementProps {
+  element: CanvasElement;
+  inheritedLocked: boolean;
+  onSelect: (elementId: string) => void;
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}
+
+function CanvasImage({
+  element,
+  draggable,
+  onSelect,
+  onElementChange,
+  onElementPreview,
+  setNodeRef,
+}: {
+  element: ImageElement;
+  draggable: boolean;
+  onSelect: (elementId: string) => void;
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}) {
+  const [image] = useImage(element.src);
+  const imageScale = image
+    ? element.fit === "contain"
+      ? Math.min(element.width / image.width, element.height / image.height)
+      : Math.max(element.width / image.width, element.height / image.height)
+    : 1;
+  const imageWidth = image ? image.width * imageScale : element.width;
+  const imageHeight = image ? image.height * imageScale : element.height;
+
+  return (
+    <Group
+      ref={(node) => setNodeRef(element.id, node)}
+      clipFunc={(context) => {
+        context.beginPath();
+        context.roundRect(0, 0, element.width, element.height, element.cornerRadius);
+        context.closePath();
+      }}
+      draggable={draggable}
+      height={element.height}
+      name={element.id}
+      opacity={element.opacity}
+      rotation={element.rotation}
+      visible={element.visible}
+      width={element.width}
+      x={element.x}
+      y={element.y}
+      onClick={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onDragMove={(event) =>
+        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
+      }
+      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onTap={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onTransform={(event) =>
+        onElementPreview(element.id, getTransformPatch(element, event.target))
+      }
+      onTransformEnd={(event) =>
+        commitTransform(element, event.target, onElementChange, onElementPreview)
+      }
+    >
+      <Rect
+        cornerRadius={element.cornerRadius}
+        fill="#e5e3dd"
+        height={element.height}
+        listening
+        width={element.width}
+      />
+      <Image
+        height={imageHeight}
+        image={image}
+        listening={false}
+        width={imageWidth}
+        x={(element.width - imageWidth) / 2}
+        y={(element.height - imageHeight) / 2}
+      />
+    </Group>
+  );
+}
+
+function getTransformPatch(element: CanvasLeafElement, node: Konva.Node): CanvasTransformPatch {
+  return {
+    x: node.x(),
+    y: node.y(),
+    width: Math.max(8, element.width * Math.abs(node.scaleX())),
+    height: Math.max(8, element.height * Math.abs(node.scaleY())),
+    rotation: node.rotation(),
+  };
+}
+
+function commitDrag(
+  elementId: string,
+  node: Konva.Node,
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
+) {
+  flushSync(() => {
+    onElementChange(elementId, { x: node.x(), y: node.y() });
+  });
+  onElementPreview(elementId, null);
+}
+
+function commitTransform(
+  element: CanvasLeafElement,
+  node: Konva.Node,
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
+) {
+  const patch = getTransformPatch(element, node);
+
+  // Keep the scaled Konva node visible until React has applied the normalized dimensions.
+  flushSync(() => {
+    onElementChange(element.id, patch);
+  });
+  node.scaleX(1);
+  node.scaleY(1);
+  onElementPreview(element.id, null);
+}
+
+const RenderElement = memo(function RenderElement({
+  element,
+  inheritedLocked,
+  onSelect,
+  onElementChange,
+  onElementPreview,
+  setNodeRef,
+}: RenderElementProps) {
+  const locked = inheritedLocked || element.locked;
+
+  if (isGroupElement(element)) {
+    return (
+      <Group
+        ref={(node) => setNodeRef(element.id, node)}
+        listening={element.visible}
+        name={element.id}
+        visible={element.visible}
+      >
+        {element.children.map((child) => (
+          <RenderElement
+            element={child}
+            inheritedLocked={locked}
+            key={child.id}
+            setNodeRef={setNodeRef}
+            onElementChange={onElementChange}
+            onElementPreview={onElementPreview}
+            onSelect={onSelect}
+          />
+        ))}
+      </Group>
+    );
+  }
+
+  const commonProps = {
+    draggable: !locked,
+    height: element.height,
+    name: element.id,
+    opacity: element.opacity,
+    rotation: element.rotation,
+    visible: element.visible,
+    width: element.width,
+    x: element.x,
+    y: element.y,
+    onClick: (event: Konva.KonvaEventObject<MouseEvent>) => {
+      event.cancelBubble = true;
+      onSelect(element.id);
+    },
+    onTap: (event: Konva.KonvaEventObject<TouchEvent>) => {
+      event.cancelBubble = true;
+      onSelect(element.id);
+    },
+    onDragMove: (event: Konva.KonvaEventObject<DragEvent>) =>
+      onElementPreview(element.id, { x: event.target.x(), y: event.target.y() }),
+    onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) =>
+      commitDrag(element.id, event.target, onElementChange, onElementPreview),
+    onTransform: (event: Konva.KonvaEventObject<Event>) =>
+      onElementPreview(element.id, getTransformPatch(element, event.target)),
+    onTransformEnd: (event: Konva.KonvaEventObject<Event>) =>
+      commitTransform(element, event.target, onElementChange, onElementPreview),
+  };
+
+  switch (element.type) {
+    case "rect":
+      return (
+        <Rect
+          ref={(node) => setNodeRef(element.id, node)}
+          {...commonProps}
+          cornerRadius={element.cornerRadius}
+          fill={element.fill}
+        />
+      );
+    case "circle":
+      return (
+        <Rect
+          ref={(node) => setNodeRef(element.id, node)}
+          {...commonProps}
+          cornerRadius={Math.min(element.width, element.height) / 2}
+          fill={element.fill}
+        />
+      );
+    case "text":
+      return (
+        <Text
+          ref={(node) => setNodeRef(element.id, node)}
+          {...commonProps}
+          align={element.align}
+          fill={element.fill}
+          fontFamily='"Avenir Next", "PingFang SC", sans-serif'
+          fontSize={element.fontSize}
+          fontStyle={element.fontWeight}
+          lineHeight={1.04}
+          text={element.text}
+          verticalAlign="middle"
+        />
+      );
+    case "image":
+      return (
+        <CanvasImage
+          draggable={!locked}
+          element={element}
+          setNodeRef={setNodeRef}
+          onElementChange={onElementChange}
+          onElementPreview={onElementPreview}
+          onSelect={onSelect}
+        />
+      );
+    default: {
+      const exhaustiveElement: never = element;
+      return exhaustiveElement;
+    }
+  }
+});
+
+export function CanvasStage({
+  document,
+  hoveredId,
+  selectedId,
+  zoom,
+  viewportHeight,
+  viewportPosition,
+  viewportWidth,
+  isSelectedLocked,
+  onSelect,
+  onElementChange,
+  onElementPreview,
+  onZoomAtPoint,
+}: CanvasStageProps) {
+  const transformerRef = useRef<Konva.Transformer>(null);
+  const hoverTransformerRef = useRef<Konva.Transformer>(null);
+  const nodeRefs = useRef(new Map<string, Konva.Node>());
+
+  useEffect(() => {
+    const transformer = hoverTransformerRef.current;
+    if (!transformer) return;
+
+    const hoveredContext = findElementContext(document.elements, hoveredId);
+    const hoveredNode =
+      hoveredId && hoveredId !== selectedId && hoveredContext?.effectivelyVisible
+        ? nodeRefs.current.get(hoveredId)
+        : undefined;
+    transformer.nodes(hoveredNode ? [hoveredNode] : []);
+    transformer.getLayer()?.batchDraw();
+  }, [document, hoveredId, selectedId]);
+
+  useEffect(() => {
+    const transformer = transformerRef.current;
+    if (!transformer) return;
+
+    const selectedContext = findElementContext(document.elements, selectedId);
+    const selectedNode =
+      selectedId &&
+      selectedContext &&
+      isLeafElement(selectedContext.element) &&
+      selectedContext.effectivelyVisible
+        ? nodeRefs.current.get(selectedId)
+        : undefined;
+    transformer.nodes(selectedNode && !isSelectedLocked ? [selectedNode] : []);
+    transformer.getLayer()?.batchDraw();
+  }, [document, isSelectedLocked, selectedId]);
+
+  const setNodeRef = useCallback((elementId: string, node: Konva.Node | null) => {
+    if (node) nodeRefs.current.set(elementId, node);
+    else nodeRefs.current.delete(elementId);
+  }, []);
+
+  return (
+    <Stage
+      height={viewportHeight}
+      width={viewportWidth}
+      onMouseDown={(event) => {
+        if (event.target === event.target.getStage()) onSelect(null);
+      }}
+      onTouchStart={(event) => {
+        if (event.target === event.target.getStage()) onSelect(null);
+      }}
+      onWheel={(event) => {
+        event.evt.preventDefault();
+        const stage = event.target.getStage();
+        const pointer = stage?.getPointerPosition();
+        if (!pointer) return;
+
+        const scaleFactor = Math.exp(-event.evt.deltaY * 0.0015);
+        onZoomAtPoint(Math.min(2, Math.max(0.25, zoom * scaleFactor)), pointer);
+      }}
+    >
+      <Layer scaleX={zoom} scaleY={zoom} x={viewportPosition.x} y={viewportPosition.y}>
+        <Rect
+          fill="#ffffff"
+          height={document.height}
+          listening={false}
+          shadowBlur={24 / zoom}
+          shadowColor="rgba(30, 29, 35, 0.12)"
+          shadowOffsetY={8 / zoom}
+          shadowOpacity={0.7}
+          stroke="rgba(30, 29, 35, 0.06)"
+          strokeWidth={1 / zoom}
+          width={document.width}
+        />
+        {document.elements.map((element) => (
+          <RenderElement
+            element={element}
+            inheritedLocked={false}
+            key={element.id}
+            setNodeRef={setNodeRef}
+            onElementChange={onElementChange}
+            onElementPreview={onElementPreview}
+            onSelect={onSelect}
+          />
+        ))}
+        <Transformer
+          ref={hoverTransformerRef}
+          borderDash={[]}
+          borderStroke="rgba(109, 95, 212, 0.72)"
+          borderStrokeWidth={1.25 / zoom}
+          enabledAnchors={[]}
+          listening={false}
+          padding={2 / zoom}
+          resizeEnabled={false}
+          rotateEnabled={false}
+        />
+        <Transformer
+          ref={transformerRef}
+          anchorCornerRadius={4 / zoom}
+          anchorFill="#ffffff"
+          anchorSize={12 / zoom}
+          anchorStroke="#6d5fd4"
+          anchorStrokeWidth={1 / zoom}
+          borderDash={[]}
+          borderStroke="#6d5fd4"
+          borderStrokeWidth={1.5 / zoom}
+          flipEnabled={false}
+          rotateAnchorOffset={28 / zoom}
+          rotateEnabled
+          boundBoxFunc={(oldBox, newBox) =>
+            Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom
+              ? oldBox
+              : newBox
+          }
+        />
+      </Layer>
+    </Stage>
+  );
+}
