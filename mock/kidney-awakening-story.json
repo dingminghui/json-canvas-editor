@@ -18,8 +18,9 @@
       }
     },
     "fonts": {
-      "body": ["Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", "system-ui", "sans-serif"],
-      "display": ["FangSong", "STFangsong", "Songti SC", "serif"]
+      "body": "noto-sans-sc",
+      "display": "noto-serif-sc",
+      "technical": "jetbrains-mono"
     },
     "colors": {
       "outerBackground": "oklch(93% 0.025 91)",

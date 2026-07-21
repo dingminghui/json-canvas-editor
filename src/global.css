@@ -4,6 +4,8 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/noto-sans-sc";
+@import "@fontsource-variable/noto-serif-sc";
 
 @custom-variant dark (&:is(.dark *));
 

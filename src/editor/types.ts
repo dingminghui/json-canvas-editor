@@ -1,3 +1,5 @@
+import type { CanvasFontFamily } from "@/editor/fonts";
+
 export type ElementId = string;
 
 interface ElementMeta {
@@ -20,6 +22,7 @@ export interface TextElement extends TransformableElement {
   type: "text";
   /** Restricted inline Markdown: bold, italic, strikethrough, line breaks, and color spans. */
   text: string;
+  fontFamily: CanvasFontFamily;
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700" | "800";
   align: "left" | "center" | "right";

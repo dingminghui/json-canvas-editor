@@ -73,6 +73,7 @@ describe("Markdown text helpers", () => {
     const element = {
       align: "left",
       fill: "#1f3f36",
+      fontFamily: "noto-serif-sc",
       fontSize: 48,
       fontWeight: "600",
       height: 100,
@@ -104,5 +105,8 @@ describe("Markdown text helpers", () => {
       }),
     );
     expect(renderMock.mock.lastCall?.[0].html).not.toContain("text-decoration-color: currentcolor");
+    expect(renderMock.mock.lastCall?.[0].html).toContain(
+      'font-family: "Noto Serif SC Variable", "Songti SC", serif;',
+    );
   });
 });

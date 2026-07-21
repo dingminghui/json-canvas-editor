@@ -1,5 +1,10 @@
 import { findElementContext } from "@/editor/editor-state";
-import { markdownToDisplayText, renderMarkdownToCanvas, TEXT_FONT_FAMILY } from "@/editor/markdown";
+import { getCanvasFont, loadCanvasFont, type CanvasFontFamily } from "@/editor/fonts";
+import {
+  invalidateMarkdownCanvasCache,
+  markdownToDisplayText,
+  renderMarkdownToCanvas,
+} from "@/editor/markdown";
 import {
   isGroupElement,
   isLeafElement,
@@ -12,7 +17,7 @@ import {
   type ImageElement,
 } from "@/editor/types";
 import Konva from "konva";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Group, Image, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import useImage from "use-image";
@@ -38,6 +43,7 @@ interface CanvasStageProps {
 
 interface RenderElementProps {
   element: CanvasElement;
+  fontRevision: number;
   inheritedLocked: boolean;
   editingElementId: string | null;
   onEditText: (elementId: string) => void;
@@ -45,6 +51,40 @@ interface RenderElementProps {
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
   setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}
+
+interface FontLoadRequest {
+  fontFamily: CanvasFontFamily;
+  fontWeight: string;
+  text: string;
+}
+
+function getDocumentFontLoadRequests(elements: CanvasElement[]): FontLoadRequest[] {
+  const requests = new Map<string, FontLoadRequest>();
+
+  function visit(element: CanvasElement) {
+    if (isGroupElement(element)) {
+      element.children.forEach(visit);
+      return;
+    }
+    if (element.type !== "text") return;
+
+    const key = `${element.fontFamily}:${element.fontWeight}`;
+    const currentRequest = requests.get(key);
+    if (currentRequest) {
+      currentRequest.text += `\n${element.text}`;
+      return;
+    }
+
+    requests.set(key, {
+      fontFamily: element.fontFamily,
+      fontWeight: element.fontWeight,
+      text: element.text,
+    });
+  }
+
+  elements.forEach(visit);
+  return Array.from(requests.values());
 }
 
 function CanvasImage({
@@ -214,6 +254,7 @@ function canStartViewportPan(target: Konva.Node): boolean {
 
 const RenderElement = memo(function RenderElement({
   element,
+  fontRevision,
   inheritedLocked,
   editingElementId,
   onEditText,
@@ -224,8 +265,8 @@ const RenderElement = memo(function RenderElement({
 }: RenderElementProps) {
   const locked = inheritedLocked || element.locked;
   const richTextCanvas = useMemo(
-    () => (element.type === "text" ? renderMarkdownToCanvas(element) : null),
-    [element],
+    () => (element.type === "text" ? renderMarkdownToCanvas(element, fontRevision) : null),
+    [element, fontRevision],
   );
 
   if (isGroupElement(element)) {
@@ -239,6 +280,7 @@ const RenderElement = memo(function RenderElement({
         {element.children.map((child) => (
           <RenderElement
             element={child}
+            fontRevision={fontRevision}
             editingElementId={editingElementId}
             inheritedLocked={locked}
             key={child.id}
@@ -330,7 +372,7 @@ const RenderElement = memo(function RenderElement({
           {...commonProps}
           align={element.align}
           fill={element.fill}
-          fontFamily={TEXT_FONT_FAMILY}
+          fontFamily={getCanvasFont(element.fontFamily).cssFamily}
           fontSize={element.fontSize}
           fontStyle={element.fontWeight}
           lineHeight={1.04}
@@ -393,6 +435,31 @@ export function CanvasStage({
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
+  const fontLoadRequests = useMemo(
+    () => getDocumentFontLoadRequests(document.elements),
+    [document.elements],
+  );
+  const [fontRevision, setFontRevision] = useState(0);
+
+  useEffect(() => {
+    if (fontLoadRequests.length === 0 || !globalThis.document.fonts?.load) return;
+
+    let cancelled = false;
+
+    void Promise.all(
+      fontLoadRequests.map((request) =>
+        loadCanvasFont(request.fontFamily, request.fontWeight, request.text),
+      ),
+    ).then(() => {
+      if (cancelled) return;
+      invalidateMarkdownCanvasCache();
+      setFontRevision((revision) => revision + 1);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fontLoadRequests]);
 
   useEffect(() => {
     const transformer = hoverTransformerRef.current;
@@ -479,6 +546,7 @@ export function CanvasStage({
         {document.elements.map((element) => (
           <RenderElement
             element={element}
+            fontRevision={fontRevision}
             editingElementId={editingElementId}
             inheritedLocked={false}
             key={element.id}

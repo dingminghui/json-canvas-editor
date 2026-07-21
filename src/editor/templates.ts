@@ -1,3 +1,4 @@
+import { DEFAULT_CANVAS_FONT_FAMILY, type CanvasFontFamily } from "@/editor/fonts";
 import type {
   CanvasDocument,
   CanvasElement,
@@ -61,6 +62,9 @@ interface StoryMock {
   id: string;
   name: string;
   source: { title: string };
+  theme: {
+    fonts: StoryFontPresets;
+  };
   hero: {
     eyebrow: string;
     title: string;
@@ -74,6 +78,12 @@ interface StoryMock {
     disclaimers: string[];
     copyright: string;
   };
+}
+
+interface StoryFontPresets {
+  body: CanvasFontFamily;
+  display: CanvasFontFamily;
+  technical: CanvasFontFamily;
 }
 
 const kidneyStoryMock = rawKidneyStoryMock as unknown as StoryMock;
@@ -132,12 +142,15 @@ function createText(
   y: number,
   width: number,
   height: number,
-  options: Partial<Pick<TextElement, "align" | "fill" | "fontSize" | "fontWeight">> = {},
+  options: Partial<
+    Pick<TextElement, "align" | "fill" | "fontFamily" | "fontSize" | "fontWeight">
+  > = {},
 ): TextElement {
   return {
     ...baseLeaf(id, name, x, y, width, height),
     type: "text",
     text,
+    fontFamily: options.fontFamily ?? DEFAULT_CANVAS_FONT_FAMILY,
     fontSize: options.fontSize ?? 24,
     fontWeight: options.fontWeight ?? "400",
     align: options.align ?? "left",
@@ -222,6 +235,7 @@ function createTableBlock(
   blockIndex: number,
   block: Extract<StoryBlock, { type: "table" }>,
   y: number,
+  fonts: StoryFontPresets,
 ): { elements: CanvasElement[]; height: number } {
   const id = `${sectionId}-table-${blockIndex}`;
   const headerHeight = 62;
@@ -261,7 +275,7 @@ function createTableBlock(
         y + 10,
         columnWidth - 28,
         42,
-        { fontSize: 20, fontWeight: "700" },
+        { fontFamily: fonts.technical, fontSize: 20, fontWeight: "700" },
       ),
     );
   });
@@ -293,6 +307,7 @@ function createTableBlock(
           42,
           {
             fill: block.highlightColumn === columnIndex ? COLORS.accent : COLORS.text,
+            fontFamily: fonts.body,
             fontSize: 19,
             fontWeight: block.highlightColumn === columnIndex ? "700" : "400",
           },
@@ -331,6 +346,7 @@ function createFactBlock(
   blockIndex: number,
   block: Extract<StoryBlock, { type: "fact" }>,
   y: number,
+  fonts: StoryFontPresets,
 ): { elements: CanvasElement[]; height: number } {
   const id = `${sectionId}-fact-${blockIndex}`;
   const content =
@@ -367,7 +383,7 @@ function createFactBlock(
         y + 24,
         CONTENT_WIDTH - 56,
         contentHeight,
-        { fontSize: 22, fontWeight: "500" },
+        { fontFamily: fonts.body, fontSize: 22, fontWeight: "500" },
       ),
       createText(
         `${id}-source`,
@@ -377,7 +393,7 @@ function createFactBlock(
         y + 32 + contentHeight,
         CONTENT_WIDTH - 56,
         sourceHeight,
-        { fill: COLORS.muted, fontSize: 16 },
+        { fill: COLORS.muted, fontFamily: fonts.technical, fontSize: 16 },
       ),
     ],
   };
@@ -389,6 +405,7 @@ function createQuoteBlock(
   blockIndex: number,
   block: Extract<StoryBlock, { type: "quote" }>,
   y: number,
+  fonts: StoryFontPresets,
 ): { elements: CanvasElement[]; height: number } {
   const id = `${sectionId}-quote-${blockIndex}`;
   const attribution = block.attribution ? `\n— ${block.attribution}` : "";
@@ -421,7 +438,12 @@ function createQuoteBlock(
         y + 24,
         CONTENT_WIDTH - 76,
         textHeight,
-        { fill: COLORS.accent, fontSize: 27, fontWeight: "500" },
+        {
+          fill: COLORS.accent,
+          fontFamily: fonts.display,
+          fontSize: 27,
+          fontWeight: "500",
+        },
       ),
     ],
   };
@@ -433,6 +455,7 @@ function createListBlock(
   blockIndex: number,
   block: Extract<StoryBlock, { type: "list" }>,
   y: number,
+  fonts: StoryFontPresets,
 ): { elements: CanvasElement[]; height: number } {
   const id = `${sectionId}-list-${blockIndex}`;
   const children: CanvasElement[] = [];
@@ -447,6 +470,7 @@ function createListBlock(
       CONTENT_WIDTH - 60,
       46,
       {
+        fontFamily: fonts.display,
         fontSize: 25,
         fontWeight: "700",
       },
@@ -467,7 +491,12 @@ function createListBlock(
         cursorY,
         40,
         36,
-        { fill: COLORS.warm, fontSize: 26, fontWeight: "700" },
+        {
+          fill: COLORS.warm,
+          fontFamily: fonts.technical,
+          fontSize: 26,
+          fontWeight: "700",
+        },
       ),
       createText(
         `${id}-item-${itemIndex}`,
@@ -477,7 +506,7 @@ function createListBlock(
         cursorY,
         CONTENT_WIDTH - 108,
         textHeight,
-        { fontSize: 21 },
+        { fontFamily: fonts.body, fontSize: 21 },
       ),
     );
     cursorY += textHeight + 24;
@@ -510,6 +539,7 @@ function createListBlock(
 function createStoryDocument(story: StoryMock): CanvasDocument {
   const elements: CanvasElement[] = [];
   const heroChildren: CanvasElement[] = [];
+  const fonts = story.theme.fonts;
   let cursorY = 72;
 
   heroChildren.push(
@@ -521,13 +551,20 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
       cursorY,
       CONTENT_WIDTH,
       36,
-      { align: "center", fill: COLORS.warm, fontSize: 18, fontWeight: "600" },
+      {
+        align: "center",
+        fill: COLORS.warm,
+        fontFamily: fonts.technical,
+        fontSize: 18,
+        fontWeight: "600",
+      },
     ),
   );
   cursorY += 72;
   heroChildren.push(
     createText("story-title", "主标题", story.hero.title, CONTENT_X, cursorY, CONTENT_WIDTH, 112, {
       align: "center",
+      fontFamily: fonts.display,
       fontSize: 58,
       fontWeight: "700",
     }),
@@ -542,7 +579,13 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
       cursorY,
       CONTENT_WIDTH,
       48,
-      { align: "center", fill: COLORS.muted, fontSize: 25, fontWeight: "500" },
+      {
+        align: "center",
+        fill: COLORS.muted,
+        fontFamily: fonts.body,
+        fontSize: 25,
+        fontWeight: "500",
+      },
     ),
   );
   cursorY += 76;
@@ -556,7 +599,13 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
         cursorY,
         CONTENT_WIDTH,
         58,
-        { align: "center", fill: COLORS.accent, fontSize: 27, fontWeight: "500" },
+        {
+          align: "center",
+          fill: COLORS.accent,
+          fontFamily: fonts.display,
+          fontSize: 27,
+          fontWeight: "500",
+        },
       ),
     );
     cursorY += 92;
@@ -599,7 +648,12 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
         cursorY,
         CONTENT_WIDTH,
         34,
-        { fill: COLORS.accent, fontSize: 19, fontWeight: "700" },
+        {
+          fill: COLORS.accent,
+          fontFamily: fonts.technical,
+          fontSize: 19,
+          fontWeight: "700",
+        },
       ),
     );
     cursorY += 48;
@@ -612,7 +666,7 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
         cursorY,
         CONTENT_WIDTH,
         70,
-        { fontSize: 42, fontWeight: "700" },
+        { fontFamily: fonts.display, fontSize: 42, fontWeight: "700" },
       ),
     );
     cursorY += 96;
@@ -632,7 +686,7 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
                 cursorY,
                 CONTENT_WIDTH,
                 height,
-                { fontSize: 23 },
+                { fontFamily: fonts.body, fontSize: 23 },
               ),
             ],
             height,
@@ -652,7 +706,7 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
                 cursorY,
                 CONTENT_WIDTH,
                 height,
-                { fontSize: 23 },
+                { fontFamily: fonts.body, fontSize: 23 },
               ),
             ],
             height,
@@ -663,16 +717,16 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
           result = createImageBlock(story, section.id, blockIndex, block.assetId, cursorY);
           break;
         case "table":
-          result = createTableBlock(section.id, blockIndex, block, cursorY);
+          result = createTableBlock(section.id, blockIndex, block, cursorY, fonts);
           break;
         case "fact":
-          result = createFactBlock(section.id, blockIndex, block, cursorY);
+          result = createFactBlock(section.id, blockIndex, block, cursorY, fonts);
           break;
         case "quote":
-          result = createQuoteBlock(section.id, blockIndex, block, cursorY);
+          result = createQuoteBlock(section.id, blockIndex, block, cursorY, fonts);
           break;
         case "list":
-          result = createListBlock(section.id, blockIndex, block, cursorY);
+          result = createListBlock(section.id, blockIndex, block, cursorY, fonts);
           break;
         default: {
           const exhaustiveBlock: never = block;
@@ -720,7 +774,7 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
         cursorY,
         CONTENT_WIDTH,
         height,
-        { align: "center", fill: COLORS.muted, fontSize: 17 },
+        { align: "center", fill: COLORS.muted, fontFamily: fonts.body, fontSize: 17 },
       ),
     );
     cursorY += height + 20;
@@ -734,7 +788,12 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
       cursorY,
       CONTENT_WIDTH,
       32,
-      { align: "center", fill: COLORS.muted, fontSize: 16 },
+      {
+        align: "center",
+        fill: COLORS.muted,
+        fontFamily: fonts.technical,
+        fontSize: 16,
+      },
     ),
   );
   cursorY += 112;

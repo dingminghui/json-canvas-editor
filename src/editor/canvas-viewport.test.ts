@@ -37,6 +37,7 @@ const elements: CanvasElement[] = [
         rotation: 0,
         opacity: 1,
         text: "说明",
+        fontFamily: "noto-sans-sc",
         fontSize: 16,
         fontWeight: "400",
         align: "left",

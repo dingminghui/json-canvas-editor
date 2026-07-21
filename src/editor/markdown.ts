@@ -1,9 +1,9 @@
 import { marked } from "marked";
 import { render } from "render-tag";
 
+import { getCanvasFont } from "@/editor/fonts";
 import type { TextElement } from "@/editor/types";
 
-const TEXT_FONT_FAMILY = '"Avenir Next", "PingFang SC", sans-serif';
 const MAX_CANVAS_CACHE_PIXELS = 16 * 1024 * 1024;
 const canvasCache = new Map<string, HTMLCanvasElement>();
 let canvasCachePixels = 0;
@@ -112,16 +112,22 @@ export function markdownToInlineHtml(markdown: string): string {
   );
 }
 
-function getCanvasCacheKey(element: TextElement, pixelRatio: number): string {
+function getCanvasCacheKey(
+  element: TextElement,
+  pixelRatio: number,
+  renderRevision: number,
+): string {
   return JSON.stringify([
     element.text,
     element.width,
     element.height,
     element.fill,
+    element.fontFamily,
     element.fontSize,
     element.fontWeight,
     element.align,
     pixelRatio,
+    renderRevision,
   ]);
 }
 
@@ -142,11 +148,19 @@ function cacheCanvas(key: string, canvas: HTMLCanvasElement) {
   }
 }
 
-export function renderMarkdownToCanvas(element: TextElement): HTMLCanvasElement | null {
+export function invalidateMarkdownCanvasCache() {
+  canvasCache.clear();
+  canvasCachePixels = 0;
+}
+
+export function renderMarkdownToCanvas(
+  element: TextElement,
+  renderRevision = 0,
+): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
 
   const pixelRatio = Math.max(1, globalThis.devicePixelRatio ?? 1);
-  const cacheKey = getCanvasCacheKey(element, pixelRatio);
+  const cacheKey = getCanvasCacheKey(element, pixelRatio, renderRevision);
   const cachedCanvas = canvasCache.get(cacheKey);
   if (cachedCanvas) {
     canvasCache.delete(cacheKey);
@@ -155,13 +169,14 @@ export function renderMarkdownToCanvas(element: TextElement): HTMLCanvasElement 
   }
 
   const boldWeight = Math.max(700, Number(element.fontWeight));
+  const fontFamily = getCanvasFont(element.fontFamily).cssFamily;
   const html = `
     <style>
       .canvas-text {
         width: ${element.width}px;
         margin: 0;
         color: ${element.fill};
-        font-family: ${TEXT_FONT_FAMILY};
+        font-family: ${fontFamily};
         font-size: ${element.fontSize}px;
         font-weight: ${element.fontWeight};
         font-synthesis: weight style;
@@ -195,5 +210,3 @@ export function renderMarkdownToCanvas(element: TextElement): HTMLCanvasElement 
     return null;
   }
 }
-
-export { TEXT_FONT_FAMILY };

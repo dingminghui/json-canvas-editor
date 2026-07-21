@@ -19,6 +19,7 @@ import { createPlateEditor, Plate } from "platejs/react";
 const element: TextElement = {
   align: "center",
   fill: "#123456",
+  fontFamily: "noto-serif-sc",
   fontSize: 24,
   fontWeight: "600",
   height: 80,
@@ -96,6 +97,7 @@ describe("RichTextEditorOverlay", () => {
     });
     expect(screen.getByRole("textbox", { name: "富文本内容" })).toHaveStyle({
       color: "#123456",
+      fontFamily: '"Noto Serif SC Variable", "Songti SC", serif',
       fontSize: "24px",
       fontWeight: "600",
       textAlign: "center",

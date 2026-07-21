@@ -42,6 +42,7 @@ interface MockClipContext {
 
 let imageGestureHandlers: MockGestureHandlers = {};
 let imageClipFunc: ((context: MockClipContext) => void) | undefined;
+let lastTextFontFamily: string | undefined;
 let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
 let textRenderProps: MockTextRenderProps = {};
@@ -144,10 +145,7 @@ vi.mock("react-konva", async () => {
     );
   });
 
-  const Transformer = React.forwardRef(function Transformer(
-    props: MockTransformerProps,
-    ref,
-  ) {
+  const Transformer = React.forwardRef(function Transformer(props: MockTransformerProps, ref) {
     const nodes = vi.fn();
     transformerNodeSpies.push(nodes);
     if (props.resizeEnabled === false) hoverTransformerProps = props;
@@ -167,6 +165,7 @@ vi.mock("react-konva", async () => {
     Stage: Container,
     Text: ({
       draggable,
+      fontFamily,
       fontStyle,
       onDblClick,
       onTransform,
@@ -174,12 +173,14 @@ vi.mock("react-konva", async () => {
       visible,
     }: {
       draggable?: boolean;
+      fontFamily?: string;
       fontStyle?: string;
       onDblClick?: MockTextRenderProps["onDblClick"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
       visible?: boolean;
     }) => {
+      lastTextFontFamily = fontFamily;
       lastTextFontStyle = fontStyle;
       textGestureHandlers = { onTransform, onTransformEnd };
       textRenderProps = { draggable, onDblClick, visible };
@@ -219,6 +220,7 @@ describe("CanvasStage", () => {
   beforeEach(() => {
     imageClipFunc = undefined;
     imageGestureHandlers = {};
+    lastTextFontFamily = undefined;
     lastTextFontStyle = undefined;
     textGestureHandlers = {};
     textRenderProps = {};
@@ -305,6 +307,7 @@ describe("CanvasStage", () => {
         {
           align: "left",
           fill: "#000000",
+          fontFamily: "noto-serif-sc",
           fontSize: 24,
           fontWeight: "600",
           height: 40,
@@ -343,6 +346,7 @@ describe("CanvasStage", () => {
     );
 
     expect(lastTextFontStyle).toBe("600");
+    expect(lastTextFontFamily).toBe('"Noto Serif SC Variable", "Songti SC", serif');
   });
 
   it("opens unlocked text on double click and hides its canvas node while editing", () => {
@@ -352,6 +356,7 @@ describe("CanvasStage", () => {
         {
           align: "left",
           fill: "#000000",
+          fontFamily: "noto-sans-sc",
           fontSize: 24,
           fontWeight: "600",
           height: 80,
@@ -424,6 +429,7 @@ describe("CanvasStage", () => {
         {
           align: "left",
           fill: "#000000",
+          fontFamily: "noto-sans-sc",
           fontSize: 24,
           fontWeight: "600",
           height: 80,

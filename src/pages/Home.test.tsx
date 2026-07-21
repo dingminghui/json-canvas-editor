@@ -452,6 +452,23 @@ describe("Home", () => {
     expect(fontSizeInput).toHaveValue(8);
   });
 
+  it("changes the selected text box font as one undoable property update", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "主标题" }));
+    const fontSelect = screen.getByRole("combobox", { name: "字体" });
+
+    expect(fontSelect).toHaveTextContent("Noto 宋体");
+    expect(screen.getByRole("combobox", { name: "字重" })).toHaveTextContent("700");
+    await user.click(fontSelect);
+    await user.click(await screen.findByRole("option", { name: "Noto 黑体" }));
+
+    expect(fontSelect).toHaveTextContent("Noto 黑体");
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+    expect(fontSelect).toHaveTextContent("Noto 宋体");
+  });
+
   it("enters text editing from Enter or double click and commits one undoable session", async () => {
     const user = userEvent.setup();
     render(<App />);

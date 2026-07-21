@@ -38,7 +38,17 @@ describe("editorReducer", () => {
       templateId: "kidney-awakening-story",
     });
     const title = findElement(getActiveDocument(state).elements, "story-title");
-    expect(title).toMatchObject({ type: "text", text: "A NEW TITLE" });
+    expect(title).toMatchObject({
+      fontFamily: "noto-serif-sc",
+      type: "text",
+      text: "A NEW TITLE",
+    });
+    expect(findElement(getActiveDocument(state).elements, "story-eyebrow")).toMatchObject({
+      fontFamily: "jetbrains-mono",
+    });
+    expect(findElement(getActiveDocument(state).elements, "chapter-1-paragraph-0")).toMatchObject({
+      fontFamily: "noto-sans-sc",
+    });
   });
 
   it("normalizes dimensions and opacity updates", () => {

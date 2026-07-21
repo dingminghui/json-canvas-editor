@@ -23,6 +23,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { CANVAS_FONT_FAMILIES, isCanvasFontFamily } from "@/editor/fonts";
 import { markdownToPlainText } from "@/editor/markdown";
 import {
   isLeafElement,
@@ -50,6 +51,7 @@ interface PropertiesPanelProps {
 interface SelectOption {
   id: string;
   label: string;
+  fontFamily?: string;
 }
 
 const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
@@ -106,7 +108,9 @@ function EditorSelect({
           <SelectGroup>
             {options.map((option) => (
               <SelectItem key={option.id} value={option.id}>
-                {option.label}
+                <span style={option.fontFamily ? { fontFamily: option.fontFamily } : undefined}>
+                  {option.label}
+                </span>
               </SelectItem>
             ))}
           </SelectGroup>
@@ -363,6 +367,19 @@ function ElementSpecificFields({
               </span>
             </div>
           </Field>
+          <EditorSelect
+            disabled={disabled}
+            label="字体"
+            options={CANVAS_FONT_FAMILIES.map((font) => ({
+              id: font.id,
+              label: font.label,
+              fontFamily: font.cssFamily,
+            }))}
+            value={element.fontFamily}
+            onChange={(fontFamily) => {
+              if (isCanvasFontFamily(fontFamily)) onUpdate({ fontFamily });
+            }}
+          />
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
               disabled={disabled}
@@ -375,11 +392,11 @@ function ElementSpecificFields({
               disabled={disabled}
               label="字重"
               options={[
-                { id: "400", label: "常规" },
-                { id: "500", label: "中等" },
-                { id: "600", label: "半粗" },
-                { id: "700", label: "粗体" },
-                { id: "800", label: "特粗" },
+                { id: "400", label: "400" },
+                { id: "500", label: "500" },
+                { id: "600", label: "600" },
+                { id: "700", label: "700" },
+                { id: "800", label: "800" },
               ]}
               value={element.fontWeight}
               onChange={(fontWeight) =>

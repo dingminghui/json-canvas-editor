@@ -2,7 +2,7 @@ import { Editor, EditorContainer } from "@/components/ui/editor";
 import { FloatingToolbar } from "@/components/ui/floating-toolbar";
 import { FontColorToolbarButton } from "@/components/ui/font-color-toolbar-button";
 import { MarkToolbarButton } from "@/components/ui/mark-toolbar-button";
-import { TEXT_FONT_FAMILY } from "@/editor/markdown";
+import { getCanvasFont } from "@/editor/fonts";
 import type { CanvasPoint, TextElement } from "@/editor/types";
 import { BoldPlugin, ItalicPlugin, StrikethroughPlugin } from "@platejs/basic-nodes/react";
 import { FontColorPlugin } from "@platejs/basic-styles/react";
@@ -210,7 +210,7 @@ export default function RichTextEditorOverlay({
               {
                 "--canvas-rich-bold-weight": boldWeight,
                 color: element.fill,
-                fontFamily: TEXT_FONT_FAMILY,
+                fontFamily: getCanvasFont(element.fontFamily).cssFamily,
                 fontSize: element.fontSize,
                 fontSynthesis: "weight style",
                 fontWeight: element.fontWeight,
