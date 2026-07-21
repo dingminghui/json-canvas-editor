@@ -1,6 +1,7 @@
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { CanvasStage } from "@/editor/components/CanvasStage";
+import { DocumentJsonPreviewDialog } from "@/editor/components/DocumentJsonPreviewDialog";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
 import { findElement } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
@@ -287,7 +288,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       className="relative h-full min-h-0 min-w-0 overflow-hidden bg-[color-mix(in_oklch,var(--background)_94%,var(--muted))]"
       ref={workspaceRef}
     >
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex h-12 items-center justify-start border-b border-[color-mix(in_oklch,var(--border)_65%,transparent)] bg-[color-mix(in_oklch,var(--background)_86%,transparent)] px-2.5 backdrop-blur-[10px]">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex h-12 items-center justify-between border-b border-[color-mix(in_oklch,var(--border)_65%,transparent)] bg-[color-mix(in_oklch,var(--background)_86%,transparent)] px-2.5 backdrop-blur-[10px]">
         <div
           aria-label="当前页面信息"
           className="flex min-w-0 max-w-[min(420px,calc(100%-20px))] items-center gap-[7px] px-2"
@@ -300,6 +301,8 @@ export const EditorWorkspace = memo(function EditorWorkspace({
             {document.width} × {document.height}
           </span>
         </div>
+
+        <DocumentJsonPreviewDialog document={document} />
       </header>
 
       <div

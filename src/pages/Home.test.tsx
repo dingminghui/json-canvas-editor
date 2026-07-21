@@ -97,6 +97,40 @@ vi.mock("@/editor/components/RichTextEditorOverlay", () => {
 });
 
 describe("Home", () => {
+  it("previews the current page definition as read-only JSON", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
+
+    const dialog = screen.getByRole("dialog", { name: "页面结构" });
+    const preview = screen.getByLabelText("当前页面 JSON");
+    const pageDefinition = JSON.parse(preview.textContent ?? "") as {
+      id: string;
+      name: string;
+      elements: unknown[];
+    };
+
+    expect(dialog).toHaveTextContent("工作室手记 · 1080 × 1080");
+    expect(dialog).toHaveTextContent("只读预览");
+    expect(dialog.querySelector('[data-slot="scroll-area"]')).toBeInTheDocument();
+    expect(pageDefinition.id).toBe("studio-square");
+    expect(pageDefinition.name).toBe("工作室手记");
+    expect(pageDefinition.elements.length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开页面 旷野笔记" }));
+    await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
+
+    const nextPreviewElement = screen.getByLabelText("当前页面 JSON");
+    const nextPreview = JSON.parse(nextPreviewElement.textContent ?? "") as {
+      id: string;
+    };
+    expect(nextPreview.id).toBe("field-landscape");
+  });
+
   it("renders the editor and switches pages only from the sidebar", async () => {
     const user = userEvent.setup();
     render(<App />);
