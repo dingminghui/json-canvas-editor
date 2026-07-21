@@ -129,6 +129,26 @@ function getTransformPatch(element: CanvasLeafElement, node: Konva.Node): Canvas
   };
 }
 
+function normalizeTextTransform(node: Konva.Text): CanvasTransformPatch {
+  const width = Math.max(8, node.width() * Math.abs(node.scaleX()));
+  const height = Math.max(8, node.height() * Math.abs(node.scaleY()));
+
+  // Text needs real dimensions during the gesture so Konva can reflow it instead of
+  // stretching the already-rendered glyphs with scaleX/scaleY.
+  node.width(width);
+  node.height(height);
+  node.scaleX(1);
+  node.scaleY(1);
+
+  return {
+    x: node.x(),
+    y: node.y(),
+    width,
+    height,
+    rotation: node.rotation(),
+  };
+}
+
 function commitDrag(
   elementId: string,
   node: Konva.Node,
@@ -156,6 +176,20 @@ function commitTransform(
   node.scaleX(1);
   node.scaleY(1);
   onElementPreview(element.id, null);
+}
+
+function commitTextTransform(
+  elementId: string,
+  node: Konva.Text,
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
+) {
+  const patch = normalizeTextTransform(node);
+
+  flushSync(() => {
+    onElementChange(elementId, patch);
+  });
+  onElementPreview(elementId, null);
 }
 
 const RenderElement = memo(function RenderElement({
@@ -251,6 +285,17 @@ const RenderElement = memo(function RenderElement({
           lineHeight={1.04}
           text={element.text}
           verticalAlign="middle"
+          onTransform={(event) =>
+            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Text))
+          }
+          onTransformEnd={(event) =>
+            commitTextTransform(
+              element.id,
+              event.target as Konva.Text,
+              onElementChange,
+              onElementPreview,
+            )
+          }
         />
       );
     case "image":

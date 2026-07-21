@@ -20,6 +20,7 @@ interface MockClipContext {
 let imageGestureHandlers: MockGestureHandlers = {};
 let imageClipFunc: ((context: MockClipContext) => void) | undefined;
 let lastTextFontStyle: string | undefined;
+let textGestureHandlers: MockGestureHandlers = {};
 let stageWheelHandler: MockGestureHandlers["onWheel"];
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
@@ -123,8 +124,17 @@ vi.mock("react-konva", async () => {
     Layer: Container,
     Rect,
     Stage: Container,
-    Text: ({ fontStyle }: { fontStyle?: string }) => {
+    Text: ({
+      fontStyle,
+      onTransform,
+      onTransformEnd,
+    }: {
+      fontStyle?: string;
+      onTransform?: MockGestureHandlers["onTransform"];
+      onTransformEnd?: MockGestureHandlers["onTransformEnd"];
+    }) => {
       lastTextFontStyle = fontStyle;
+      textGestureHandlers = { onTransform, onTransformEnd };
       return null;
     },
     Transformer,
@@ -162,6 +172,7 @@ describe("CanvasStage", () => {
     imageClipFunc = undefined;
     imageGestureHandlers = {};
     lastTextFontStyle = undefined;
+    textGestureHandlers = {};
     stageWheelHandler = undefined;
     transformerNodeSpies = [];
   });
@@ -274,6 +285,101 @@ describe("CanvasStage", () => {
     );
 
     expect(lastTextFontStyle).toBe("600");
+  });
+
+  it("reflows text using real dimensions instead of stretching its glyphs", () => {
+    const textDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          align: "left",
+          fill: "#000000",
+          fontSize: 24,
+          fontWeight: "600",
+          height: 80,
+          id: "caption",
+          locked: false,
+          name: "说明",
+          opacity: 1,
+          rotation: 0,
+          text: "一段需要重新排版的说明文字",
+          type: "text",
+          visible: true,
+          width: 200,
+          x: 10,
+          y: 10,
+        },
+      ],
+    };
+    const onElementChange = vi.fn();
+    const onElementPreview = vi.fn();
+    let width = 200;
+    let height = 80;
+    let scaleX = 0.5;
+    let scaleY = 0.75;
+    const node = {
+      height: (value?: number) => {
+        if (value !== undefined) height = value;
+        return height;
+      },
+      rotation: () => 5,
+      scaleX: (value?: number) => {
+        if (value !== undefined) scaleX = value;
+        return scaleX;
+      },
+      scaleY: (value?: number) => {
+        if (value !== undefined) scaleY = value;
+        return scaleY;
+      },
+      width: (value?: number) => {
+        if (value !== undefined) width = value;
+        return width;
+      },
+      x: () => 24,
+      y: () => 36,
+    };
+
+    render(
+      <CanvasStage
+        document={textDocument}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId="caption"
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onElementChange={onElementChange}
+        onElementPreview={onElementPreview}
+        onSelect={vi.fn()}
+        onZoomAtPoint={vi.fn()}
+      />,
+    );
+
+    act(() => textGestureHandlers.onTransform?.({ target: node }));
+
+    expect(width).toBe(100);
+    expect(height).toBe(60);
+    expect(scaleX).toBe(1);
+    expect(scaleY).toBe(1);
+    expect(onElementPreview).toHaveBeenLastCalledWith("caption", {
+      height: 60,
+      rotation: 5,
+      width: 100,
+      x: 24,
+      y: 36,
+    });
+
+    act(() => textGestureHandlers.onTransformEnd?.({ target: node }));
+
+    expect(onElementChange).toHaveBeenCalledWith("caption", {
+      height: 60,
+      rotation: 5,
+      width: 100,
+      x: 24,
+      y: 36,
+    });
+    expect(onElementPreview).toHaveBeenLastCalledWith("caption", null);
   });
 
   it("does not attach editable transform handles to groups or hidden elements", () => {
