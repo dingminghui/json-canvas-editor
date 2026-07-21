@@ -11,6 +11,8 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     onEditText,
     onElementChange,
     onElementPreview,
+    onPanReadyChange,
+    onPanStart,
     viewportPosition,
   }: {
     document: { name: string };
@@ -22,6 +24,8 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       elementId: string,
       patch: { height?: number; width?: number; x?: number; y?: number } | null,
     ) => void;
+    onPanReadyChange: (ready: boolean) => void;
+    onPanStart: (pointerId: number, point: { x: number; y: number }) => void;
     viewportPosition: { x: number; y: number };
   }) => (
     <div
@@ -30,6 +34,10 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       data-testid="canvas-stage"
       data-viewport-x={viewportPosition.x}
       data-viewport-y={viewportPosition.y}
+      onPointerDown={(event) => {
+        onPanReadyChange(true);
+        onPanStart(event.pointerId, { x: event.clientX, y: event.clientY });
+      }}
     >
       {document.name}
       <button onClick={() => onEditText("square-title")}>模拟双击文本</button>
@@ -337,6 +345,45 @@ describe("Home", () => {
     expect(viewport).toHaveAttribute("data-panning", "true");
 
     fireEvent.pointerUp(viewport, { pointerId: 7 });
+    expect(viewport).toHaveAttribute("data-panning", "false");
+  });
+
+  it("pans the canvas by dragging an empty area with the primary mouse button", () => {
+    render(<App />);
+
+    const canvas = screen.getByTestId("canvas-stage");
+    const viewport = canvas.parentElement;
+    if (!viewport) throw new Error("未找到画板视口");
+
+    Object.assign(viewport, {
+      hasPointerCapture: () => true,
+      releasePointerCapture: vi.fn(),
+      setPointerCapture: vi.fn(),
+    });
+
+    const initialX = Number(canvas.getAttribute("data-viewport-x"));
+    const initialY = Number(canvas.getAttribute("data-viewport-y"));
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 240,
+      clientY: 180,
+      pointerId: 8,
+    });
+    expect(viewport).toHaveAttribute("data-panning", "false");
+
+    fireEvent.pointerMove(viewport, {
+      clientX: 206,
+      clientY: 222,
+      pointerId: 8,
+    });
+
+    expect(canvas).toHaveAttribute("data-viewport-x", String(initialX - 34));
+    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY + 42));
+    expect(viewport).toHaveAttribute("data-pan-ready", "true");
+    expect(viewport).toHaveAttribute("data-panning", "true");
+
+    fireEvent.pointerUp(viewport, { pointerId: 8 });
     expect(viewport).toHaveAttribute("data-panning", "false");
   });
 });

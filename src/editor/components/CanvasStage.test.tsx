@@ -9,6 +9,13 @@ interface MockGestureHandlers {
   onTransform?: (event: { target: unknown }) => void;
   onTransformEnd?: (event: { target: unknown }) => void;
   onWheel?: (event: { evt: WheelEvent; target: unknown }) => void;
+  onPointerDown?: (event: {
+    evt: PointerEvent;
+    pointerId: number;
+    target: { getStage: () => unknown };
+  }) => void;
+  onPointerLeave?: () => void;
+  onPointerMove?: (event: { target: { getStage: () => unknown } }) => void;
 }
 
 interface MockTextRenderProps extends MockGestureHandlers {
@@ -29,6 +36,10 @@ let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
 let textRenderProps: MockTextRenderProps = {};
 let stageWheelHandler: MockGestureHandlers["onWheel"];
+let stagePointerHandlers: Pick<
+  MockGestureHandlers,
+  "onPointerDown" | "onPointerLeave" | "onPointerMove"
+> = {};
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
 vi.mock("use-image", () => ({
@@ -68,6 +79,9 @@ vi.mock("react-konva", async () => {
       onTransform,
       onTransformEnd,
       onWheel,
+      onPointerDown,
+      onPointerLeave,
+      onPointerMove,
       width,
       x,
       y,
@@ -81,6 +95,9 @@ vi.mock("react-konva", async () => {
       imageClipFunc = clipFunc;
     }
     if (onWheel) stageWheelHandler = onWheel;
+    if (onPointerDown || onPointerLeave || onPointerMove) {
+      stagePointerHandlers = { onPointerDown, onPointerLeave, onPointerMove };
+    }
 
     return (
       <div
@@ -189,6 +206,7 @@ describe("CanvasStage", () => {
     textGestureHandlers = {};
     textRenderProps = {};
     stageWheelHandler = undefined;
+    stagePointerHandlers = {};
     transformerNodeSpies = [];
   });
 
@@ -637,5 +655,90 @@ describe("CanvasStage", () => {
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(onZoomAtPoint).toHaveBeenCalledWith(expect.any(Number), { x: 280, y: 190 });
     expect(onZoomAtPoint.mock.calls[0][0]).toBeGreaterThan(1);
+  });
+
+  it("starts panning only when the primary pointer is over empty or locked content", () => {
+    const onPanReadyChange = vi.fn();
+    const onPanStart = vi.fn();
+    const stage = { getStage: () => stage };
+    const element = { draggable: () => true, getParent: () => stage, getStage: () => stage };
+    const lockedBackground = {
+      draggable: () => false,
+      getParent: () => stage,
+      getStage: () => stage,
+    };
+
+    render(
+      <CanvasStage
+        document={document}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId={null}
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={2}
+        onEditText={vi.fn()}
+        onElementChange={vi.fn()}
+        onElementPreview={vi.fn()}
+        onPanReadyChange={onPanReadyChange}
+        onPanStart={onPanStart}
+        onSelect={vi.fn()}
+        onZoomAtPoint={vi.fn()}
+      />,
+    );
+
+    act(() => stagePointerHandlers.onPointerMove?.({ target: stage }));
+    expect(onPanReadyChange).toHaveBeenLastCalledWith(true);
+
+    act(() => stagePointerHandlers.onPointerMove?.({ target: element }));
+    expect(onPanReadyChange).toHaveBeenLastCalledWith(false);
+
+    const blankPointerEvent = new PointerEvent("pointerdown", {
+      button: 0,
+      cancelable: true,
+      clientX: 280,
+      clientY: 190,
+    });
+    act(() =>
+      stagePointerHandlers.onPointerDown?.({
+        evt: blankPointerEvent,
+        pointerId: 9,
+        target: stage,
+      }),
+    );
+
+    expect(blankPointerEvent.defaultPrevented).toBe(false);
+    expect(onPanStart).toHaveBeenCalledWith(9, { x: 280, y: 190 });
+
+    act(() =>
+      stagePointerHandlers.onPointerDown?.({
+        evt: new PointerEvent("pointerdown", { button: 0 }),
+        pointerId: 10,
+        target: lockedBackground,
+      }),
+    );
+    expect(onPanStart).toHaveBeenLastCalledWith(10, { x: 0, y: 0 });
+
+    act(() =>
+      stagePointerHandlers.onPointerDown?.({
+        evt: new PointerEvent("pointerdown", { button: 0 }),
+        pointerId: 11,
+        target: element,
+      }),
+    );
+    act(() =>
+      stagePointerHandlers.onPointerDown?.({
+        evt: new PointerEvent("pointerdown", { button: 2 }),
+        pointerId: 12,
+        target: stage,
+      }),
+    );
+
+    expect(onPanStart).toHaveBeenCalledTimes(2);
+
+    act(() => stagePointerHandlers.onPointerLeave?.());
+    expect(onPanReadyChange).toHaveBeenLastCalledWith(false);
   });
 });

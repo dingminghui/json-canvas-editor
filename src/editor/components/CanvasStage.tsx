@@ -31,6 +31,8 @@ interface CanvasStageProps {
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  onPanReadyChange?: (ready: boolean) => void;
+  onPanStart?: (pointerId: number, point: CanvasPoint) => void;
   onZoomAtPoint: (zoom: number, point: CanvasPoint) => void;
 }
 
@@ -195,6 +197,19 @@ function commitTextTransform(
     onElementChange(elementId, patch);
   });
   onElementPreview(elementId, null);
+}
+
+function canStartViewportPan(target: Konva.Node): boolean {
+  const stage = target.getStage();
+  if (!stage) return false;
+
+  let node: Konva.Node | null = target;
+  while (node && node !== stage) {
+    if (node.draggable()) return false;
+    node = node.getParent();
+  }
+
+  return true;
 }
 
 const RenderElement = memo(function RenderElement({
@@ -371,6 +386,8 @@ export function CanvasStage({
   onSelect,
   onElementChange,
   onElementPreview,
+  onPanReadyChange,
+  onPanStart,
   onZoomAtPoint,
 }: CanvasStageProps) {
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -422,6 +439,16 @@ export function CanvasStage({
       width={viewportWidth}
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
+      }}
+      onPointerDown={(event) => {
+        if (!canStartViewportPan(event.target) || event.evt.button !== 0) return;
+
+        onPanReadyChange?.(true);
+        onPanStart?.(event.pointerId, { x: event.evt.clientX, y: event.evt.clientY });
+      }}
+      onPointerLeave={() => onPanReadyChange?.(false)}
+      onPointerMove={(event) => {
+        onPanReadyChange?.(canStartViewportPan(event.target));
       }}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);

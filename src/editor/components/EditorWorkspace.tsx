@@ -62,6 +62,8 @@ interface PanSession {
   startPosition: CanvasPoint;
 }
 
+const PAN_ACTIVATION_DISTANCE = 3;
+
 function useContainerSize(containerRef: React.RefObject<HTMLDivElement | null>): ContainerSize {
   const [size, setSize] = useState<ContainerSize>({ width: 0, height: 0 });
 
@@ -118,9 +120,12 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onRedo,
 }: EditorWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const panSessionRef = useRef<PanSession | null>(null);
+  const pendingPanSessionRef = useRef<PanSession | null>(null);
   const viewportHoveredRef = useRef(false);
   const size = useContainerSize(workspaceRef);
+  const [isPanReady, setIsPanReady] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportPositions, setViewportPositions] = useState<Record<string, CanvasPoint>>({});
@@ -175,6 +180,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       setIsSpacePressed(false);
       setIsPanning(false);
       panSessionRef.current = null;
+      pendingPanSessionRef.current = null;
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -205,26 +211,59 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     onSetZoom(clampedZoom);
   }
 
+  function createPanSession(pointerId: number, point: CanvasPoint): PanSession {
+    return {
+      pointerId,
+      startClientX: point.x,
+      startClientY: point.y,
+      startPosition: viewportPosition,
+    };
+  }
+
+  function activatePanning(session: PanSession) {
+    const viewport = viewportRef.current;
+    if (!viewport || panSessionRef.current) return false;
+
+    viewport.setPointerCapture(session.pointerId);
+    pendingPanSessionRef.current = null;
+    panSessionRef.current = session;
+    updateViewportPosition(session.startPosition);
+    if (fitMode) onSetZoom(zoom);
+    setIsPanning(true);
+    return true;
+  }
+
+  function startPanning(pointerId: number, point: CanvasPoint) {
+    activatePanning(createPanSession(pointerId, point));
+  }
+
+  function preparePanning(pointerId: number, point: CanvasPoint) {
+    if (panSessionRef.current || pendingPanSessionRef.current) return;
+    pendingPanSessionRef.current = createPanSession(pointerId, point);
+  }
+
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const shouldPan = event.button === 1 || (event.button === 0 && isSpacePressed);
     if (!shouldPan) return;
 
     event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    panSessionRef.current = {
-      pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      startPosition: viewportPosition,
-    };
-    updateViewportPosition(viewportPosition);
-    if (fitMode) onSetZoom(zoom);
-    setIsPanning(true);
+    startPanning(event.pointerId, { x: event.clientX, y: event.clientY });
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const session = panSessionRef.current;
+    let session = panSessionRef.current;
+    if (!session) {
+      const pendingSession = pendingPanSessionRef.current;
+      if (!pendingSession || pendingSession.pointerId !== event.pointerId) return;
+
+      const distance = Math.hypot(
+        event.clientX - pendingSession.startClientX,
+        event.clientY - pendingSession.startClientY,
+      );
+      if (distance < PAN_ACTIVATION_DISTANCE || !activatePanning(pendingSession)) return;
+      session = pendingSession;
+    }
     if (!session || session.pointerId !== event.pointerId) return;
 
     event.preventDefault();
@@ -235,6 +274,9 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   }
 
   function finishPanning(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pendingPanSessionRef.current?.pointerId === event.pointerId) {
+      pendingPanSessionRef.current = null;
+    }
     if (panSessionRef.current?.pointerId !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -260,14 +302,18 @@ export const EditorWorkspace = memo(function EditorWorkspace({
 
       <div
         className="absolute inset-0 cursor-default touch-none overflow-hidden select-none data-[pan-ready=true]:cursor-grab data-[panning=true]:cursor-grabbing [&_canvas]:block"
-        data-pan-ready={isSpacePressed}
+        data-pan-ready={isSpacePressed || isPanReady}
         data-panning={isPanning}
+        ref={viewportRef}
         onLostPointerCapture={finishPanning}
+        onPointerCancelCapture={finishPanning}
         onPointerEnter={() => {
           viewportHoveredRef.current = true;
         }}
         onPointerLeave={() => {
           viewportHoveredRef.current = false;
+          setIsPanReady(false);
+          if (!panSessionRef.current) pendingPanSessionRef.current = null;
         }}
         onPointerDownCapture={handlePointerDown}
         onPointerMoveCapture={handlePointerMove}
@@ -286,6 +332,8 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           onEditText={onEditText}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onPanReadyChange={setIsPanReady}
+          onPanStart={preparePanning}
           onSelect={onSelect}
           onZoomAtPoint={setZoomAroundPoint}
         />
