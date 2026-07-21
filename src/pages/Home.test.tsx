@@ -17,6 +17,7 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     viewportHeight,
     viewportPosition,
     viewportWidth,
+    zoom,
   }: {
     document: { name: string };
     editingElementId: string | null;
@@ -33,6 +34,7 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     viewportHeight: number;
     viewportPosition: { x: number; y: number };
     viewportWidth: number;
+    zoom: number;
   }) => (
     <div
       data-hovered-id={hoveredId ?? ""}
@@ -42,6 +44,7 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       data-viewport-y={viewportPosition.y}
       data-viewport-height={viewportHeight}
       data-viewport-width={viewportWidth}
+      data-zoom={zoom}
       onPointerDown={(event) => {
         onPanReadyChange(true);
         onPanStart(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -310,6 +313,39 @@ describe("Home", () => {
       await waitFor(() =>
         expect(Number(canvas.getAttribute("data-viewport-y"))).toBeLessThan(-1_000),
       );
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver;
+    }
+  });
+
+  it("caps the fitted canvas preview width at 890 pixels", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+
+    class WideContainerResizeObserver implements ResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+
+      disconnect() {}
+
+      observe(target: Element) {
+        if (target.tagName !== "MAIN") return;
+        this.callback(
+          [{ contentRect: { height: 900, width: 1_400 }, target } as ResizeObserverEntry],
+          this,
+        );
+      }
+
+      unobserve() {}
+    }
+
+    globalThis.ResizeObserver = WideContainerResizeObserver;
+
+    try {
+      render(<App />);
+
+      const canvas = screen.getByTestId("canvas-stage");
+      await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "1400"));
+
+      expect(Number(canvas.getAttribute("data-zoom")) * 1_080).toBeCloseTo(890);
     } finally {
       globalThis.ResizeObserver = originalResizeObserver;
     }
@@ -625,6 +661,36 @@ describe("Home", () => {
 
     fireEvent.pointerUp(viewport, { pointerId: 7 });
     expect(viewport).toHaveAttribute("data-panning", "false");
+  });
+
+  it("pans the free canvas in both axes with trackpad scrolling", () => {
+    render(<App />);
+
+    const canvas = screen.getByTestId("canvas-stage");
+    const initialX = Number(canvas.getAttribute("data-viewport-x"));
+    const initialY = Number(canvas.getAttribute("data-viewport-y"));
+    const initialZoom = canvas.getAttribute("data-zoom");
+
+    const allowedDefault = fireEvent.wheel(canvas, { deltaX: 28, deltaY: -36 });
+
+    expect(allowedDefault).toBe(false);
+    expect(canvas).toHaveAttribute("data-viewport-x", String(initialX - 28));
+    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY + 36));
+    expect(canvas).toHaveAttribute("data-zoom", initialZoom);
+  });
+
+  it("moves instead of zooming for ctrl-modified wheel input", () => {
+    render(<App />);
+
+    const canvas = screen.getByTestId("canvas-stage");
+    const initialY = Number(canvas.getAttribute("data-viewport-y"));
+    const initialZoom = canvas.getAttribute("data-zoom");
+
+    const allowedDefault = fireEvent.wheel(canvas, { ctrlKey: true, deltaY: -60 });
+
+    expect(allowedDefault).toBe(false);
+    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY + 60));
+    expect(canvas).toHaveAttribute("data-zoom", initialZoom);
   });
 
   it("pans the canvas by dragging an empty area with the primary mouse button", () => {

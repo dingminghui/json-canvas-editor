@@ -276,6 +276,76 @@ describe("RichTextEditorOverlay", () => {
     );
   });
 
+  it("keeps the color popover open while dragging inside the color controls", async () => {
+    const editor = createRichTextEditor("原始文本");
+    editor.tf.select({
+      anchor: { offset: 1, path: [0, 0] },
+      focus: { offset: 3, path: [0, 0] },
+    });
+    render(
+      <TooltipProvider>
+        <Plate editor={editor}>
+          <Toolbar>
+            <FontColorToolbarButton nodeType={KEYS.color}>
+              <span>拖动颜色</span>
+            </FontColorToolbarButton>
+          </Toolbar>
+        </Plate>
+      </TooltipProvider>,
+    );
+
+    const colorButton = screen.getByRole("radio", { name: "拖动颜色" });
+    fireEvent.pointerDown(colorButton, { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(colorButton);
+    fireEvent.click(colorButton);
+
+    const colorControl = await screen.findByRole("slider", { name: "Color" });
+    const colorInput = screen.getByRole("textbox", { name: "Hex 颜色" });
+    vi.spyOn(colorControl, "getBoundingClientRect").mockReturnValue({
+      bottom: 100,
+      height: 100,
+      left: 0,
+      right: 100,
+      top: 0,
+      width: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const documentMouseDown = vi.fn();
+    const documentWheel = vi.fn();
+    document.addEventListener("mousedown", documentMouseDown);
+    document.addEventListener("wheel", documentWheel);
+
+    const getSelectedTextColor = () =>
+      editor.children[0]?.children.find((child) => child.text === "始文")?.color;
+
+    try {
+      fireEvent.mouseDown(colorControl, { button: 0, buttons: 1, clientX: 20, clientY: 20 });
+      fireEvent.mouseMove(window, { buttons: 1, clientX: 55, clientY: 45 });
+      fireEvent.mouseMove(window, { buttons: 1, clientX: 70, clientY: 60 });
+      fireEvent.mouseUp(window, { button: 0 });
+      fireEvent.change(colorInput, { target: { value: "#ff0000" } });
+      const firstTypedColor = getSelectedTextColor();
+      fireEvent.change(colorInput, { target: { value: "#00ff00" } });
+      const secondTypedColor = getSelectedTextColor();
+      fireEvent.wheel(colorControl, { deltaX: 12, deltaY: 24 });
+
+      expect(documentMouseDown).not.toHaveBeenCalled();
+      expect(documentWheel).not.toHaveBeenCalled();
+      expect(firstTypedColor).toBe("#ff0000");
+      expect(secondTypedColor).toBe("#00ff00");
+    } finally {
+      document.removeEventListener("mousedown", documentMouseDown);
+      document.removeEventListener("wheel", documentWheel);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Hex 颜色" })).toBeInTheDocument();
+    });
+  });
+
   it("repairs duplicate legacy soft-break escapes without adding new ones", () => {
     expect(markdownToSupportedInlineSource("原始\\\\\n文本")).toBe("原始\\\n文本");
   });

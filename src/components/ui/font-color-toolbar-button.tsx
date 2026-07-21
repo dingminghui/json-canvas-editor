@@ -20,26 +20,26 @@ export function FontColorToolbarButton({
     [nodeType],
   );
   const [open, setOpen] = React.useState(false);
-  const selectionRef = React.useRef(editor.selection);
+  const selectionRef = React.useRef<ReturnType<typeof editor.api.rangeRef> | null>(null);
 
   const preserveSelection = React.useCallback(() => {
     if (!editor.selection) return;
 
-    selectionRef.current = {
-      anchor: {
-        offset: editor.selection.anchor.offset,
-        path: [...editor.selection.anchor.path],
-      },
-      focus: {
-        offset: editor.selection.focus.offset,
-        path: [...editor.selection.focus.path],
-      },
-    };
+    selectionRef.current?.unref();
+    selectionRef.current = editor.api.rangeRef(editor.selection, { affinity: "inward" });
   }, [editor]);
+
+  React.useEffect(
+    () => () => {
+      selectionRef.current?.unref();
+      selectionRef.current = null;
+    },
+    [],
+  );
 
   const applyColor = React.useCallback(
     (color: string) => {
-      const selection = selectionRef.current ?? editor.selection;
+      const selection = selectionRef.current?.current ?? editor.selection;
       if (!selection) return;
 
       editor.tf.select(selection);
@@ -49,7 +49,7 @@ export function FontColorToolbarButton({
   );
 
   const clearColor = React.useCallback(() => {
-    const selection = selectionRef.current ?? editor.selection;
+    const selection = selectionRef.current?.current ?? editor.selection;
     if (!selection) return;
 
     editor.tf.select(selection);
@@ -63,8 +63,10 @@ export function FontColorToolbarButton({
       onChange={applyColor}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
-        if (!nextOpen && selectionRef.current) {
-          editor.tf.select(selectionRef.current);
+        if (!nextOpen) {
+          const selection = selectionRef.current?.unref();
+          selectionRef.current = null;
+          if (selection) editor.tf.select(selection);
           editor.tf.focus();
         }
       }}

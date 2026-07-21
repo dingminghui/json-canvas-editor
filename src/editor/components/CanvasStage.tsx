@@ -38,7 +38,6 @@ interface CanvasStageProps {
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
   onPanReadyChange?: (ready: boolean) => void;
   onPanStart?: (pointerId: number, point: CanvasPoint) => void;
-  onZoomAtPoint: (zoom: number, point: CanvasPoint) => void;
 }
 
 interface RenderElementProps {
@@ -430,7 +429,6 @@ export function CanvasStage({
   onElementPreview,
   onPanReadyChange,
   onPanStart,
-  onZoomAtPoint,
 }: CanvasStageProps) {
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
@@ -519,15 +517,6 @@ export function CanvasStage({
       }}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
-      }}
-      onWheel={(event) => {
-        event.evt.preventDefault();
-        const stage = event.target.getStage();
-        const pointer = stage?.getPointerPosition();
-        if (!pointer) return;
-
-        const scaleFactor = Math.exp(-event.evt.deltaY * 0.0015);
-        onZoomAtPoint(Math.min(2, Math.max(0.25, zoom * scaleFactor)), pointer);
       }}
     >
       <Layer scaleX={zoom} scaleY={zoom} x={viewportPosition.x} y={viewportPosition.y}>

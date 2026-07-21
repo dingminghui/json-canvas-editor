@@ -8,7 +8,6 @@ interface MockGestureHandlers {
   onDragMove?: (event: { target: unknown }) => void;
   onTransform?: (event: { target: unknown }) => void;
   onTransformEnd?: (event: { target: unknown }) => void;
-  onWheel?: (event: { evt: WheelEvent; target: unknown }) => void;
   onPointerDown?: (event: {
     evt: PointerEvent;
     pointerId: number;
@@ -46,7 +45,6 @@ let lastTextFontFamily: string | undefined;
 let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
 let textRenderProps: MockTextRenderProps = {};
-let stageWheelHandler: MockGestureHandlers["onWheel"];
 let stagePointerHandlers: Pick<
   MockGestureHandlers,
   "onPointerDown" | "onPointerLeave" | "onPointerMove"
@@ -91,7 +89,6 @@ vi.mock("react-konva", async () => {
       onDragMove,
       onTransform,
       onTransformEnd,
-      onWheel,
       onPointerDown,
       onPointerLeave,
       onPointerMove,
@@ -107,7 +104,6 @@ vi.mock("react-konva", async () => {
       imageGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
       imageClipFunc = clipFunc;
     }
-    if (onWheel) stageWheelHandler = onWheel;
     if (onPointerDown || onPointerLeave || onPointerMove) {
       stagePointerHandlers = { onPointerDown, onPointerLeave, onPointerMove };
     }
@@ -224,7 +220,6 @@ describe("CanvasStage", () => {
     lastTextFontStyle = undefined;
     textGestureHandlers = {};
     textRenderProps = {};
-    stageWheelHandler = undefined;
     stagePointerHandlers = {};
     hoverTransformerProps = {};
     selectionTransformerProps = {};
@@ -249,7 +244,6 @@ describe("CanvasStage", () => {
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={onSelect}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -284,7 +278,6 @@ describe("CanvasStage", () => {
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -341,7 +334,6 @@ describe("CanvasStage", () => {
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -388,7 +380,6 @@ describe("CanvasStage", () => {
       onElementChange: vi.fn(),
       onElementPreview: vi.fn(),
       onSelect: vi.fn(),
-      onZoomAtPoint: vi.fn(),
     };
     const { rerender } = render(<CanvasStage {...sharedProps} editingElementId={null} />);
     const event = { cancelBubble: false };
@@ -490,7 +481,6 @@ describe("CanvasStage", () => {
         onElementChange={onElementChange}
         onElementPreview={onElementPreview}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -549,7 +539,6 @@ describe("CanvasStage", () => {
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -573,7 +562,6 @@ describe("CanvasStage", () => {
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -621,7 +609,6 @@ describe("CanvasStage", () => {
         onElementChange={onElementChange}
         onElementPreview={onElementPreview}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 
@@ -649,39 +636,6 @@ describe("CanvasStage", () => {
     expect(onElementPreview).toHaveBeenLastCalledWith("photo", null);
   });
 
-  it("zooms around the current pointer position", () => {
-    const onZoomAtPoint = vi.fn();
-    const stage = {
-      getPointerPosition: () => ({ x: 280, y: 190 }),
-    };
-
-    render(
-      <CanvasStage
-        document={document}
-        editingElementId={null}
-        hoveredId={null}
-        isSelectedLocked={false}
-        selectedId={null}
-        viewportHeight={620}
-        viewportPosition={{ x: 160, y: 140 }}
-        viewportWidth={720}
-        zoom={1}
-        onEditText={vi.fn()}
-        onElementChange={vi.fn()}
-        onElementPreview={vi.fn()}
-        onSelect={vi.fn()}
-        onZoomAtPoint={onZoomAtPoint}
-      />,
-    );
-
-    const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaY: -100 });
-    act(() => stageWheelHandler?.({ evt: wheelEvent, target: { getStage: () => stage } }));
-
-    expect(wheelEvent.defaultPrevented).toBe(true);
-    expect(onZoomAtPoint).toHaveBeenCalledWith(expect.any(Number), { x: 280, y: 190 });
-    expect(onZoomAtPoint.mock.calls[0][0]).toBeGreaterThan(1);
-  });
-
   it("keeps hover and selection chrome at fixed screen sizes while zoom changes", () => {
     const sharedProps = {
       document,
@@ -696,7 +650,6 @@ describe("CanvasStage", () => {
       onElementChange: vi.fn(),
       onElementPreview: vi.fn(),
       onSelect: vi.fn(),
-      onZoomAtPoint: vi.fn(),
     };
     const { rerender } = render(<CanvasStage {...sharedProps} zoom={0.5} />);
 
@@ -755,7 +708,6 @@ describe("CanvasStage", () => {
         onPanReadyChange={onPanReadyChange}
         onPanStart={onPanStart}
         onSelect={vi.fn()}
-        onZoomAtPoint={vi.fn()}
       />,
     );
 

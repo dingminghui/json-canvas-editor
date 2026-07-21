@@ -35,6 +35,10 @@ function normalizeColor(value: string): string {
   return HEX_COLOR_PATTERN.test(value) ? value.toLowerCase() : "#000000";
 }
 
+function stopInteractionPropagation(event: React.SyntheticEvent) {
+  event.stopPropagation();
+}
+
 export function ColorPicker({
   children,
   disabled = false,
@@ -56,7 +60,11 @@ export function ColorPicker({
         className="ignore-click-outside/toolbar w-[218px] gap-3 p-3"
         data-canvas-rich-text-popup="true"
         sideOffset={6}
+        onMouseDown={stopInteractionPropagation}
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onPointerDown={stopInteractionPropagation}
+        onTouchStart={stopInteractionPropagation}
+        onWheel={stopInteractionPropagation}
       >
         <HexColorPicker
           aria-label="颜色选择区域"

@@ -28,6 +28,7 @@ import {
 } from "react";
 
 const RichTextEditorOverlay = lazy(() => import("@/editor/components/RichTextEditorOverlay"));
+const MAX_CANVAS_PREVIEW_WIDTH = 890;
 
 interface EditorWorkspaceProps {
   document: CanvasDocument;
@@ -136,7 +137,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportPositions, setViewportPositions] = useState<Record<string, CanvasPoint>>({});
   const [readyEditingSessionId, setReadyEditingSessionId] = useState<number | null>(null);
-  const availableWidth = Math.max(1, size.width - 112);
+  const availableWidth = Math.max(1, Math.min(MAX_CANVAS_PREVIEW_WIDTH, size.width - 112));
   const availableHeight = Math.max(1, size.height - 174);
   const widthFitZoom = availableWidth / document.width;
   const heightFitZoom = availableHeight / document.height;
@@ -145,6 +146,8 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const zoom = fitMode && size.width > 0 ? fitZoom : manualZoom;
   const zoomPercent = Math.round(zoom * 100);
   const centeredPosition = getCenteredPosition(size, document, zoom);
+  const centeredPositionX = centeredPosition.x;
+  const centeredPositionY = centeredPosition.y;
   const viewportPosition = fitMode
     ? centeredPosition
     : (viewportPositions[document.id] ?? centeredPosition);
@@ -241,6 +244,40 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     });
     onSetZoom(clampedZoom);
   }
+
+  const panViewportBy = useCallback(
+    (delta: CanvasPoint) => {
+      setViewportPositions((positions) => {
+        const fallbackPosition = { x: centeredPositionX, y: centeredPositionY };
+        const currentPosition = fitMode
+          ? fallbackPosition
+          : (positions[document.id] ?? fallbackPosition);
+
+        return {
+          ...positions,
+          [document.id]: {
+            x: currentPosition.x + delta.x,
+            y: currentPosition.y + delta.y,
+          },
+        };
+      });
+      if (fitMode) onSetZoom(zoom);
+    },
+    [centeredPositionX, centeredPositionY, document.id, fitMode, onSetZoom, zoom],
+  );
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    function handleWheel(event: WheelEvent) {
+      event.preventDefault();
+      panViewportBy({ x: -event.deltaX, y: -event.deltaY });
+    }
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleWheel);
+  }, [panViewportBy]);
 
   function createPanSession(pointerId: number, point: CanvasPoint): PanSession {
     return {
@@ -375,7 +412,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           onPanReadyChange={setIsPanReady}
           onPanStart={preparePanning}
           onSelect={onSelect}
-          onZoomAtPoint={setZoomAroundPoint}
         />
 
         {editingText && editingElement?.type === "text" ? (
