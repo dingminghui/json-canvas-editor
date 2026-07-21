@@ -24,6 +24,16 @@ interface MockTextRenderProps extends MockGestureHandlers {
   visible?: boolean;
 }
 
+interface MockTransformerProps {
+  anchorCornerRadius?: number;
+  anchorSize?: number;
+  anchorStrokeWidth?: number;
+  borderStrokeWidth?: number;
+  padding?: number;
+  resizeEnabled?: boolean;
+  rotateAnchorOffset?: number;
+}
+
 interface MockClipContext {
   beginPath: () => void;
   closePath: () => void;
@@ -40,6 +50,8 @@ let stagePointerHandlers: Pick<
   MockGestureHandlers,
   "onPointerDown" | "onPointerLeave" | "onPointerMove"
 > = {};
+let hoverTransformerProps: MockTransformerProps = {};
+let selectionTransformerProps: MockTransformerProps = {};
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
 vi.mock("use-image", () => ({
@@ -132,9 +144,14 @@ vi.mock("react-konva", async () => {
     );
   });
 
-  const Transformer = React.forwardRef(function Transformer(_, ref) {
+  const Transformer = React.forwardRef(function Transformer(
+    props: MockTransformerProps,
+    ref,
+  ) {
     const nodes = vi.fn();
     transformerNodeSpies.push(nodes);
+    if (props.resizeEnabled === false) hoverTransformerProps = props;
+    else selectionTransformerProps = props;
     React.useImperativeHandle(ref, () => ({
       getLayer: () => ({ batchDraw: vi.fn() }),
       nodes,
@@ -207,6 +224,8 @@ describe("CanvasStage", () => {
     textRenderProps = {};
     stageWheelHandler = undefined;
     stagePointerHandlers = {};
+    hoverTransformerProps = {};
+    selectionTransformerProps = {};
     transformerNodeSpies = [];
   });
 
@@ -655,6 +674,51 @@ describe("CanvasStage", () => {
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(onZoomAtPoint).toHaveBeenCalledWith(expect.any(Number), { x: 280, y: 190 });
     expect(onZoomAtPoint.mock.calls[0][0]).toBeGreaterThan(1);
+  });
+
+  it("keeps hover and selection chrome at fixed screen sizes while zoom changes", () => {
+    const sharedProps = {
+      document,
+      editingElementId: null,
+      hoveredId: null,
+      isSelectedLocked: false,
+      selectedId: "photo",
+      viewportHeight: 620,
+      viewportPosition: { x: 160, y: 140 },
+      viewportWidth: 720,
+      onEditText: vi.fn(),
+      onElementChange: vi.fn(),
+      onElementPreview: vi.fn(),
+      onSelect: vi.fn(),
+      onZoomAtPoint: vi.fn(),
+    };
+    const { rerender } = render(<CanvasStage {...sharedProps} zoom={0.5} />);
+
+    expect(hoverTransformerProps).toMatchObject({
+      borderStrokeWidth: 1.25,
+      padding: 2,
+    });
+    expect(selectionTransformerProps).toMatchObject({
+      anchorCornerRadius: 4,
+      anchorSize: 12,
+      anchorStrokeWidth: 1,
+      borderStrokeWidth: 1.5,
+      rotateAnchorOffset: 28,
+    });
+
+    rerender(<CanvasStage {...sharedProps} zoom={2} />);
+
+    expect(hoverTransformerProps).toMatchObject({
+      borderStrokeWidth: 1.25,
+      padding: 2,
+    });
+    expect(selectionTransformerProps).toMatchObject({
+      anchorCornerRadius: 4,
+      anchorSize: 12,
+      anchorStrokeWidth: 1,
+      borderStrokeWidth: 1.5,
+      rotateAnchorOffset: 28,
+    });
   });
 
   it("starts panning only when the primary pointer is over empty or locked content", () => {

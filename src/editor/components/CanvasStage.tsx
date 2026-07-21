@@ -493,25 +493,25 @@ export function CanvasStage({
           ref={hoverTransformerRef}
           borderDash={[]}
           borderStroke="rgba(109, 95, 212, 0.72)"
-          borderStrokeWidth={1.25 / zoom}
+          borderStrokeWidth={1.25}
           enabledAnchors={[]}
           listening={false}
-          padding={2 / zoom}
+          padding={2}
           resizeEnabled={false}
           rotateEnabled={false}
         />
         <Transformer
           ref={transformerRef}
-          anchorCornerRadius={4 / zoom}
+          anchorCornerRadius={4}
           anchorFill="#ffffff"
-          anchorSize={12 / zoom}
+          anchorSize={12}
           anchorStroke="#6d5fd4"
-          anchorStrokeWidth={1 / zoom}
+          anchorStrokeWidth={1}
           borderDash={[]}
           borderStroke="#6d5fd4"
-          borderStrokeWidth={1.5 / zoom}
+          borderStrokeWidth={1.5}
           flipEnabled={false}
-          rotateAnchorOffset={28 / zoom}
+          rotateAnchorOffset={28}
           rotateEnabled
           boundBoxFunc={(oldBox, newBox) =>
             Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom
