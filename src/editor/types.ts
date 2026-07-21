@@ -18,6 +18,7 @@ interface TransformableElement extends ElementMeta {
 
 export interface TextElement extends TransformableElement {
   type: "text";
+  /** Restricted inline Markdown: bold, italic, strikethrough, line breaks, and color spans. */
   text: string;
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700" | "800";
@@ -67,6 +68,12 @@ export interface CanvasDocument {
   width: number;
   height: number;
   elements: CanvasElement[];
+}
+
+export interface TextEditingSession {
+  elementId: ElementId;
+  initialText: string;
+  sessionId: number;
 }
 
 export type CanvasElementPatch = CanvasLeafElement extends infer Element

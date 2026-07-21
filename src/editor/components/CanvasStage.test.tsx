@@ -11,6 +11,12 @@ interface MockGestureHandlers {
   onWheel?: (event: { evt: WheelEvent; target: unknown }) => void;
 }
 
+interface MockTextRenderProps extends MockGestureHandlers {
+  draggable?: boolean;
+  onDblClick?: (event: { cancelBubble: boolean }) => void;
+  visible?: boolean;
+}
+
 interface MockClipContext {
   beginPath: () => void;
   closePath: () => void;
@@ -21,6 +27,7 @@ let imageGestureHandlers: MockGestureHandlers = {};
 let imageClipFunc: ((context: MockClipContext) => void) | undefined;
 let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
+let textRenderProps: MockTextRenderProps = {};
 let stageWheelHandler: MockGestureHandlers["onWheel"];
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
@@ -125,16 +132,23 @@ vi.mock("react-konva", async () => {
     Rect,
     Stage: Container,
     Text: ({
+      draggable,
       fontStyle,
+      onDblClick,
       onTransform,
       onTransformEnd,
+      visible,
     }: {
+      draggable?: boolean;
       fontStyle?: string;
+      onDblClick?: MockTextRenderProps["onDblClick"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
+      visible?: boolean;
     }) => {
       lastTextFontStyle = fontStyle;
       textGestureHandlers = { onTransform, onTransformEnd };
+      textRenderProps = { draggable, onDblClick, visible };
       return null;
     },
     Transformer,
@@ -173,6 +187,7 @@ describe("CanvasStage", () => {
     imageGestureHandlers = {};
     lastTextFontStyle = undefined;
     textGestureHandlers = {};
+    textRenderProps = {};
     stageWheelHandler = undefined;
     transformerNodeSpies = [];
   });
@@ -183,6 +198,7 @@ describe("CanvasStage", () => {
     const { container } = render(
       <CanvasStage
         document={document}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId={null}
@@ -190,6 +206,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={onSelect}
@@ -216,6 +233,7 @@ describe("CanvasStage", () => {
     render(
       <CanvasStage
         document={document}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId={null}
@@ -223,6 +241,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
@@ -270,6 +289,7 @@ describe("CanvasStage", () => {
     render(
       <CanvasStage
         document={textDocument}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId={null}
@@ -277,6 +297,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
@@ -285,6 +306,78 @@ describe("CanvasStage", () => {
     );
 
     expect(lastTextFontStyle).toBe("600");
+  });
+
+  it("opens unlocked text on double click and hides its canvas node while editing", () => {
+    const textDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          align: "left",
+          fill: "#000000",
+          fontSize: 24,
+          fontWeight: "600",
+          height: 80,
+          id: "caption",
+          locked: false,
+          name: "说明",
+          opacity: 1,
+          rotation: 0,
+          text: "**可编辑**文本",
+          type: "text",
+          visible: true,
+          width: 200,
+          x: 10,
+          y: 10,
+        },
+      ],
+    };
+    const onEditText = vi.fn();
+    const sharedProps = {
+      document: textDocument,
+      hoveredId: null,
+      isSelectedLocked: false,
+      selectedId: "caption",
+      viewportHeight: 620,
+      viewportPosition: { x: 160, y: 140 },
+      viewportWidth: 720,
+      zoom: 1,
+      onEditText,
+      onElementChange: vi.fn(),
+      onElementPreview: vi.fn(),
+      onSelect: vi.fn(),
+      onZoomAtPoint: vi.fn(),
+    };
+    const { rerender } = render(<CanvasStage {...sharedProps} editingElementId={null} />);
+    const event = { cancelBubble: false };
+
+    act(() => textRenderProps.onDblClick?.(event));
+
+    expect(event.cancelBubble).toBe(true);
+    expect(onEditText).toHaveBeenCalledWith("caption");
+    expect(textRenderProps.draggable).toBe(true);
+
+    rerender(<CanvasStage {...sharedProps} editingElementId="caption" />);
+
+    expect(textRenderProps.visible).toBe(false);
+    expect(textRenderProps.draggable).toBe(false);
+    expect(transformerNodeSpies.at(-1)).toHaveBeenLastCalledWith([]);
+
+    onEditText.mockClear();
+    rerender(
+      <CanvasStage
+        {...sharedProps}
+        document={{
+          ...textDocument,
+          elements: [{ ...textDocument.elements[0], locked: true }],
+        }}
+        editingElementId={null}
+        isSelectedLocked
+      />,
+    );
+    act(() => textRenderProps.onDblClick?.({ cancelBubble: false }));
+
+    expect(onEditText).not.toHaveBeenCalled();
   });
 
   it("reflows text using real dimensions instead of stretching its glyphs", () => {
@@ -342,6 +435,7 @@ describe("CanvasStage", () => {
     render(
       <CanvasStage
         document={textDocument}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId="caption"
@@ -349,6 +443,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={onElementChange}
         onElementPreview={onElementPreview}
         onSelect={vi.fn()}
@@ -399,6 +494,7 @@ describe("CanvasStage", () => {
     const { rerender } = render(
       <CanvasStage
         document={groupedDocument}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId="photo-group"
@@ -406,6 +502,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
@@ -421,6 +518,7 @@ describe("CanvasStage", () => {
           ...document,
           elements: [{ ...document.elements[0], visible: false }],
         }}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId="photo"
@@ -428,6 +526,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}
@@ -467,6 +566,7 @@ describe("CanvasStage", () => {
     render(
       <CanvasStage
         document={document}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId="photo"
@@ -474,6 +574,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={onElementChange}
         onElementPreview={onElementPreview}
         onSelect={vi.fn()}
@@ -514,6 +615,7 @@ describe("CanvasStage", () => {
     render(
       <CanvasStage
         document={document}
+        editingElementId={null}
         hoveredId={null}
         isSelectedLocked={false}
         selectedId={null}
@@ -521,6 +623,7 @@ describe("CanvasStage", () => {
         viewportPosition={{ x: 160, y: 140 }}
         viewportWidth={720}
         zoom={1}
+        onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
         onSelect={vi.fn()}

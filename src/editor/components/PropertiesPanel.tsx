@@ -1,4 +1,6 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   Empty,
   EmptyDescription,
@@ -8,6 +10,7 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -19,8 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
-import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { markdownToPlainText } from "@/editor/markdown";
 import {
   isLeafElement,
   type CanvasElement,
@@ -41,6 +44,7 @@ import { memo, useId, useRef, useState } from "react";
 interface PropertiesPanelProps {
   selectedElement: CanvasElement | null;
   isLocked: boolean;
+  onPreview: (patch: CanvasElementPatch | null) => void;
   onUpdate: (patch: CanvasElementPatch) => void;
 }
 
@@ -59,7 +63,7 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
 const TWO_DECIMAL_NUMBER_PATTERN = /^-?\d*(?:\.\d{0,2})?$/;
 const PROPERTY_LABEL_CLASS_NAME = "text-xs font-[550] text-muted-foreground";
 const PROPERTY_CONTROL_CLASS_NAME =
-  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
+  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring";
 const COMPACT_FIELD_GROUP_CLASS_NAME = "gap-2.5";
 
 function roundToTwoDecimals(value: number) {
@@ -195,40 +199,40 @@ function RotationField({
   }
 
   return (
-    <Field className="relative">
-      <FieldLabel className="sr-only" htmlFor={id}>
-        旋转
+    <Field>
+      <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={id}>
+        角度
       </FieldLabel>
-      <TriangleRight
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-[9px] z-[1] size-3.5 -translate-y-1/2 text-muted-foreground"
-        strokeWidth={1.75}
-      />
-      <Input
-        className={cn(PROPERTY_CONTROL_CLASS_NAME, "pl-[30px] font-mono")}
-        disabled={disabled}
-        id={id}
-        inputMode="decimal"
-        type="text"
-        value={displayValue}
-        onBlur={() => {
-          if (!cancelCommitRef.current && draftValue !== null) commitValue(draftValue);
-          cancelCommitRef.current = false;
-          setDraftValue(null);
-        }}
-        onChange={(event) => setDraftValue(event.currentTarget.value)}
-        onFocus={() => {
-          cancelCommitRef.current = false;
-          setDraftValue(formatPropertyNumber(value));
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") {
-            cancelCommitRef.current = true;
-            event.currentTarget.blur();
-          }
-        }}
-      />
+      <InputGroup className={PROPERTY_CONTROL_CLASS_NAME}>
+        <InputGroupInput
+          className="font-mono text-xs"
+          disabled={disabled}
+          id={id}
+          inputMode="decimal"
+          type="text"
+          value={displayValue}
+          onBlur={() => {
+            if (!cancelCommitRef.current && draftValue !== null) commitValue(draftValue);
+            cancelCommitRef.current = false;
+            setDraftValue(null);
+          }}
+          onChange={(event) => setDraftValue(event.currentTarget.value)}
+          onFocus={() => {
+            cancelCommitRef.current = false;
+            setDraftValue(formatPropertyNumber(value));
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              cancelCommitRef.current = true;
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        <InputGroupAddon>
+          <TriangleRight aria-hidden="true" strokeWidth={1.75} />
+        </InputGroupAddon>
+      </InputGroup>
     </Field>
   );
 }
@@ -237,35 +241,59 @@ function ColorControl({
   label,
   value,
   disabled,
+  onPreview,
   onChange,
 }: {
   label: string;
   value: string;
   disabled: boolean;
+  onPreview: (value: string | null) => void;
   onChange: (value: string) => void;
 }) {
   const id = useId();
+  const [draftValue, setDraftValue] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) return;
+
+    if (draftValue !== null) onChange(draftValue);
+    onPreview(null);
+    setDraftValue(null);
+  }
 
   return (
     <Field>
       <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={id}>
         {label}
       </FieldLabel>
-      <label
-        className="flex h-8 cursor-pointer items-center gap-2 rounded-[calc(var(--radius-sm)-3px)] bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] px-2 py-1 font-mono text-xs text-muted-foreground"
-        htmlFor={id}
+      <ColorPicker
+        disabled={disabled}
+        open={open}
+        value={draftValue ?? value}
+        onChange={(nextValue) => {
+          setDraftValue(nextValue);
+          onPreview(nextValue);
+        }}
+        onOpenChange={handleOpenChange}
       >
-        <Input
+        <Button
           aria-label={`${label}选择器`}
-          className="size-[22px] cursor-pointer overflow-hidden rounded-[5px] p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0"
+          className="h-8 w-full justify-start gap-2 rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] px-2 font-mono text-xs font-normal text-muted-foreground shadow-none"
           disabled={disabled}
           id={id}
-          type="color"
-          value={value}
-          onChange={(event) => onChange(event.currentTarget.value)}
-        />
-        <span>{value.toUpperCase()}</span>
-      </label>
+          type="button"
+          variant="outline"
+        >
+          <span
+            aria-hidden="true"
+            className="size-[22px] shrink-0 rounded-[5px] border border-black/10"
+            style={{ backgroundColor: value }}
+          />
+          <span>{value.toUpperCase()}</span>
+        </Button>
+      </ColorPicker>
     </Field>
   );
 }
@@ -325,10 +353,12 @@ function TextAlignmentControl({
 function ElementSpecificFields({
   element,
   disabled,
+  onPreview,
   onUpdate,
 }: {
   element: CanvasLeafElement;
   disabled: boolean;
+  onPreview: (patch: CanvasElementPatch | null) => void;
   onUpdate: (patch: CanvasElementPatch) => void;
 }) {
   const textId = useId();
@@ -338,17 +368,25 @@ function ElementSpecificFields({
       return (
         <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
           <Field>
-            <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={textId}>
+            <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} id={`${textId}-label`}>
               文本内容
             </FieldLabel>
-            <Textarea
-              className={cn(PROPERTY_CONTROL_CLASS_NAME, "min-h-[72px] resize-y")}
-              disabled={disabled}
+            <div
+              aria-labelledby={`${textId}-label`}
+              aria-readonly="true"
+              className={cn(
+                PROPERTY_CONTROL_CLASS_NAME,
+                "flex h-8 items-center overflow-x-auto overflow-y-hidden px-2.5 text-xs leading-none whitespace-nowrap",
+                disabled && "cursor-not-allowed opacity-50",
+              )}
               id={textId}
-              rows={4}
-              value={element.text}
-              onChange={(event) => onUpdate({ text: event.currentTarget.value })}
-            />
+              role="textbox"
+              tabIndex={0}
+            >
+              <span className="block w-max min-w-full shrink-0">
+                {markdownToPlainText(element.text) || ""}
+              </span>
+            </div>
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
@@ -383,6 +421,7 @@ function ElementSpecificFields({
             disabled={disabled}
             label="文字颜色"
             value={element.fill}
+            onPreview={(fill) => onPreview(fill ? { fill } : null)}
             onChange={(fill) => onUpdate({ fill })}
           />
         </FieldGroup>
@@ -394,6 +433,7 @@ function ElementSpecificFields({
             disabled={disabled}
             label="填充颜色"
             value={element.fill}
+            onPreview={(fill) => onPreview(fill ? { fill } : null)}
             onChange={(fill) => onUpdate({ fill })}
           />
           <PropertyNumberField
@@ -411,6 +451,7 @@ function ElementSpecificFields({
           disabled={disabled}
           label="填充颜色"
           value={element.fill}
+          onPreview={(fill) => onPreview(fill ? { fill } : null)}
           onChange={(fill) => onUpdate({ fill })}
         />
       );
@@ -437,6 +478,7 @@ function ElementSpecificFields({
 export const PropertiesPanel = memo(function PropertiesPanel({
   selectedElement,
   isLocked,
+  onPreview,
   onUpdate,
 }: PropertiesPanelProps) {
   const nameId = useId();
@@ -568,8 +610,10 @@ export const PropertiesPanel = memo(function PropertiesPanel({
             </h3>
           </div>
           <ElementSpecificFields
+            key={selectedElement.id}
             disabled={isLocked}
             element={selectedElement}
+            onPreview={onPreview}
             onUpdate={onUpdate}
           />
         </section>

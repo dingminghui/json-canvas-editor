@@ -73,6 +73,15 @@ export function getActiveDocument(state: EditorState): CanvasDocument {
   return state.documents[state.activeTemplateId];
 }
 
+export function previewDocumentElement(
+  document: CanvasDocument,
+  elementId: string,
+  patch: CanvasElementPatch,
+): CanvasDocument {
+  const elements = updateLeafElement(document.elements, elementId, patch);
+  return elements === document.elements ? document : { ...document, elements };
+}
+
 export interface CanvasElementContext {
   element: CanvasElement;
   effectivelyLocked: boolean;

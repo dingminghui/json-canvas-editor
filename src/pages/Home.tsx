@@ -7,6 +7,7 @@ import {
   editorHistoryReducer,
   findElementContext,
   getActiveDocument,
+  previewDocumentElement,
 } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
 import { EDITOR_TEMPLATES } from "@/editor/templates";
@@ -14,9 +15,17 @@ import {
   isLeafElement,
   type CanvasElement,
   type CanvasElementPatch,
-  type CanvasTransformPatch,
+  type TextEditingSession,
 } from "@/editor/types";
-import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 function createDuplicateId(sourceId: string) {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -27,8 +36,10 @@ export function Home() {
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   const [elementPreview, setElementPreview] = useState<{
     elementId: string;
-    patch: Partial<CanvasTransformPatch>;
+    patch: CanvasElementPatch;
   } | null>(null);
+  const [textEditing, setTextEditing] = useState<TextEditingSession | null>(null);
+  const nextTextEditingSessionIdRef = useRef(0);
   const [history, dispatch] = useReducer(
     editorHistoryReducer,
     undefined,
@@ -36,6 +47,13 @@ export function Home() {
   );
   const state = history.present;
   const activeDocument = getActiveDocument(state);
+  const displayedDocument = useMemo(
+    () =>
+      elementPreview
+        ? previewDocumentElement(activeDocument, elementPreview.elementId, elementPreview.patch)
+        : activeDocument,
+    [activeDocument, elementPreview],
+  );
   const selectedElementContext = useMemo(
     () => findElementContext(activeDocument.elements, state.selectedId),
     [activeDocument.elements, state.selectedId],
@@ -71,6 +89,7 @@ export function Home() {
   const selectTemplate = useCallback((templateId: string) => {
     setHoveredElementId(null);
     setElementPreview(null);
+    setTextEditing(null);
     dispatch({ type: "select-template", templateId });
   }, []);
 
@@ -96,10 +115,21 @@ export function Home() {
     [activeDocument.elements],
   );
   const previewElement = useCallback(
-    (elementId: string, patch: Partial<CanvasTransformPatch> | null) => {
+    (elementId: string, patch: CanvasElementPatch | null) => {
       setElementPreview(patch ? { elementId, patch } : null);
     },
     [],
+  );
+  const previewSelectedElement = useCallback(
+    (patch: CanvasElementPatch | null) => {
+      if (!patch) {
+        setElementPreview(null);
+        return;
+      }
+      if (!state.selectedId || isSelectedLocked) return;
+      setElementPreview({ elementId: state.selectedId, patch });
+    },
+    [isSelectedLocked, state.selectedId],
   );
   const setFitMode = useCallback(
     (enabled: boolean) => dispatch({ type: "set-fit-mode", enabled }),
@@ -107,7 +137,53 @@ export function Home() {
   );
   const setZoom = useCallback((zoom: number) => dispatch({ type: "set-zoom", zoom }), []);
 
+  const beginTextEditing = useCallback(
+    (elementId: string) => {
+      const context = findElementContext(activeDocument.elements, elementId);
+      if (
+        context?.element.type !== "text" ||
+        context.effectivelyLocked ||
+        !context.effectivelyVisible
+      ) {
+        return;
+      }
+
+      setElementPreview(null);
+      dispatch({ type: "select-element", elementId });
+      setTextEditing({
+        elementId,
+        initialText: context.element.text,
+        sessionId: ++nextTextEditingSessionIdRef.current,
+      });
+    },
+    [activeDocument.elements],
+  );
+
+  const cancelTextEditing = useCallback(() => {
+    setTextEditing(null);
+  }, []);
+
+  const commitTextEditing = useCallback(
+    (sessionId: number, elementId: string, markdown: string) => {
+      if (textEditing?.sessionId !== sessionId || textEditing.elementId !== elementId) return;
+
+      setTextEditing(null);
+      const context = findElementContext(activeDocument.elements, elementId);
+      if (context?.element.type !== "text" || context.effectivelyLocked) return;
+      dispatch({ type: "update-element", elementId, patch: { text: markdown } });
+    },
+    [activeDocument.elements, textEditing],
+  );
+
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (textEditing) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelTextEditing();
+      }
+      return;
+    }
+
     if (isInteractiveTarget(event.target)) return;
 
     if (event.key === "Escape") {
@@ -124,6 +200,12 @@ export function Home() {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
       event.preventDefault();
       dispatch({ type: "redo" });
+      return;
+    }
+
+    if (event.key === "Enter" && selectedElement?.type === "text" && !isSelectedLocked) {
+      event.preventDefault();
+      beginTextEditing(selectedElement.id);
       return;
     }
 
@@ -189,13 +271,17 @@ export function Home() {
         <EditorWorkspace
           canRedo={history.future.length > 0}
           canUndo={history.past.length > 0}
-          document={activeDocument}
+          document={displayedDocument}
           documents={documents}
+          editingText={textEditing}
           fitMode={state.fitMode}
           hoveredId={hoveredElementId}
           isSelectedLocked={isSelectedLocked}
           manualZoom={state.manualZoomByTemplate[state.activeTemplateId]}
           selectedId={state.selectedId}
+          onCancelTextEdit={cancelTextEditing}
+          onCommitTextEdit={commitTextEditing}
+          onEditText={beginTextEditing}
           onElementChange={updateElement}
           onElementPreview={previewElement}
           onSelect={selectElement}
@@ -224,6 +310,7 @@ export function Home() {
           <PropertiesPanel
             isLocked={isSelectedLocked}
             selectedElement={displayedSelectedElement}
+            onPreview={previewSelectedElement}
             onUpdate={updateSelectedElement}
           />
         </aside>

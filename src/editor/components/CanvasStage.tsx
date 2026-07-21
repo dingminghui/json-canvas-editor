@@ -1,4 +1,5 @@
 import { findElementContext } from "@/editor/editor-state";
+import { markdownToDisplayText, renderMarkdownToCanvas, TEXT_FONT_FAMILY } from "@/editor/markdown";
 import {
   isGroupElement,
   isLeafElement,
@@ -11,7 +12,7 @@ import {
   type ImageElement,
 } from "@/editor/types";
 import Konva from "konva";
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { flushSync } from "react-dom";
 import { Group, Image, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import useImage from "use-image";
@@ -24,7 +25,9 @@ interface CanvasStageProps {
   viewportHeight: number;
   viewportPosition: CanvasPoint;
   viewportWidth: number;
+  editingElementId: string | null;
   isSelectedLocked: boolean;
+  onEditText: (elementId: string) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
@@ -34,6 +37,8 @@ interface CanvasStageProps {
 interface RenderElementProps {
   element: CanvasElement;
   inheritedLocked: boolean;
+  editingElementId: string | null;
+  onEditText: (elementId: string) => void;
   onSelect: (elementId: string) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
@@ -129,7 +134,7 @@ function getTransformPatch(element: CanvasLeafElement, node: Konva.Node): Canvas
   };
 }
 
-function normalizeTextTransform(node: Konva.Text): CanvasTransformPatch {
+function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
   const width = Math.max(8, node.width() * Math.abs(node.scaleX()));
   const height = Math.max(8, node.height() * Math.abs(node.scaleY()));
 
@@ -180,7 +185,7 @@ function commitTransform(
 
 function commitTextTransform(
   elementId: string,
-  node: Konva.Text,
+  node: Konva.Shape,
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
 ) {
@@ -195,12 +200,18 @@ function commitTextTransform(
 const RenderElement = memo(function RenderElement({
   element,
   inheritedLocked,
+  editingElementId,
+  onEditText,
   onSelect,
   onElementChange,
   onElementPreview,
   setNodeRef,
 }: RenderElementProps) {
   const locked = inheritedLocked || element.locked;
+  const richTextCanvas = useMemo(
+    () => (element.type === "text" ? renderMarkdownToCanvas(element) : null),
+    [element],
+  );
 
   if (isGroupElement(element)) {
     return (
@@ -213,9 +224,11 @@ const RenderElement = memo(function RenderElement({
         {element.children.map((child) => (
           <RenderElement
             element={child}
+            editingElementId={editingElementId}
             inheritedLocked={locked}
             key={child.id}
             setNodeRef={setNodeRef}
+            onEditText={onEditText}
             onElementChange={onElementChange}
             onElementPreview={onElementPreview}
             onSelect={onSelect}
@@ -225,8 +238,9 @@ const RenderElement = memo(function RenderElement({
     );
   }
 
+  const isEditing = editingElementId === element.id;
   const commonProps = {
-    draggable: !locked,
+    draggable: !locked && !isEditing,
     height: element.height,
     name: element.id,
     opacity: element.opacity,
@@ -273,18 +287,45 @@ const RenderElement = memo(function RenderElement({
         />
       );
     case "text":
-      return (
+      return richTextCanvas ? (
+        <Image
+          ref={(node) => setNodeRef(element.id, node)}
+          {...commonProps}
+          image={richTextCanvas}
+          visible={element.visible && !isEditing}
+          onDblClick={(event) => {
+            event.cancelBubble = true;
+            if (!locked) onEditText(element.id);
+          }}
+          onTransform={(event) =>
+            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Image))
+          }
+          onTransformEnd={(event) =>
+            commitTextTransform(
+              element.id,
+              event.target as Konva.Image,
+              onElementChange,
+              onElementPreview,
+            )
+          }
+        />
+      ) : (
         <Text
           ref={(node) => setNodeRef(element.id, node)}
           {...commonProps}
           align={element.align}
           fill={element.fill}
-          fontFamily='"Avenir Next", "PingFang SC", sans-serif'
+          fontFamily={TEXT_FONT_FAMILY}
           fontSize={element.fontSize}
           fontStyle={element.fontWeight}
           lineHeight={1.04}
-          text={element.text}
+          text={markdownToDisplayText(element.text)}
           verticalAlign="middle"
+          visible={element.visible && !isEditing}
+          onDblClick={(event) => {
+            event.cancelBubble = true;
+            if (!locked) onEditText(element.id);
+          }}
           onTransform={(event) =>
             onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Text))
           }
@@ -324,7 +365,9 @@ export function CanvasStage({
   viewportHeight,
   viewportPosition,
   viewportWidth,
+  editingElementId,
   isSelectedLocked,
+  onEditText,
   onSelect,
   onElementChange,
   onElementPreview,
@@ -340,12 +383,15 @@ export function CanvasStage({
 
     const hoveredContext = findElementContext(document.elements, hoveredId);
     const hoveredNode =
-      hoveredId && hoveredId !== selectedId && hoveredContext?.effectivelyVisible
+      hoveredId &&
+      hoveredId !== selectedId &&
+      hoveredId !== editingElementId &&
+      hoveredContext?.effectivelyVisible
         ? nodeRefs.current.get(hoveredId)
         : undefined;
     transformer.nodes(hoveredNode ? [hoveredNode] : []);
     transformer.getLayer()?.batchDraw();
-  }, [document, hoveredId, selectedId]);
+  }, [document, editingElementId, hoveredId, selectedId]);
 
   useEffect(() => {
     const transformer = transformerRef.current;
@@ -359,9 +405,11 @@ export function CanvasStage({
       selectedContext.effectivelyVisible
         ? nodeRefs.current.get(selectedId)
         : undefined;
-    transformer.nodes(selectedNode && !isSelectedLocked ? [selectedNode] : []);
+    transformer.nodes(
+      selectedNode && !isSelectedLocked && selectedId !== editingElementId ? [selectedNode] : [],
+    );
     transformer.getLayer()?.batchDraw();
-  }, [document, isSelectedLocked, selectedId]);
+  }, [document, editingElementId, isSelectedLocked, selectedId]);
 
   const setNodeRef = useCallback((elementId: string, node: Konva.Node | null) => {
     if (node) nodeRefs.current.set(elementId, node);
@@ -404,9 +452,11 @@ export function CanvasStage({
         {document.elements.map((element) => (
           <RenderElement
             element={element}
+            editingElementId={editingElementId}
             inheritedLocked={false}
             key={element.id}
             setNodeRef={setNodeRef}
+            onEditText={onEditText}
             onElementChange={onElementChange}
             onElementPreview={onElementPreview}
             onSelect={onSelect}

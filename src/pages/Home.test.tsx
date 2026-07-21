@@ -1,17 +1,22 @@
 import { App } from "@/App";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect } from "react";
 
 vi.mock("@/editor/components/CanvasStage", () => ({
   CanvasStage: ({
     document,
+    editingElementId,
     hoveredId,
+    onEditText,
     onElementChange,
     onElementPreview,
     viewportPosition,
   }: {
     document: { name: string };
+    editingElementId: string | null;
     hoveredId: string | null;
+    onEditText: (elementId: string) => void;
     onElementChange: (elementId: string, patch: { x: number }) => void;
     onElementPreview: (
       elementId: string,
@@ -21,11 +26,13 @@ vi.mock("@/editor/components/CanvasStage", () => ({
   }) => (
     <div
       data-hovered-id={hoveredId ?? ""}
+      data-editing-id={editingElementId ?? ""}
       data-testid="canvas-stage"
       data-viewport-x={viewportPosition.x}
       data-viewport-y={viewportPosition.y}
     >
       {document.name}
+      <button onClick={() => onEditText("square-title")}>模拟双击文本</button>
       <button
         onClick={() =>
           onElementPreview("square-title", {
@@ -49,6 +56,37 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     </div>
   ),
 }));
+
+vi.mock("@/editor/components/RichTextEditorOverlay", () => {
+  function MockRichTextEditorOverlay({
+    element,
+    initialText,
+    onCancel,
+    onCommit,
+    onReady,
+  }: {
+    element: { id: string };
+    initialText: string;
+    onCancel: () => void;
+    onCommit: (elementId: string, markdown: string) => void;
+    onReady: (elementId: string) => void;
+  }) {
+    useEffect(() => {
+      onReady(element.id);
+    }, [element.id, onReady]);
+
+    return (
+      <div data-testid="rich-text-editor">
+        <span>{initialText}</span>
+        <button onClick={() => onCommit(element.id, initialText)}>模拟原文提交</button>
+        <button onClick={() => onCommit(element.id, "**已修改** ~~文本~~")}>模拟富文本提交</button>
+        <button onClick={onCancel}>模拟取消编辑</button>
+      </div>
+    );
+  }
+
+  return { default: MockRichTextEditorOverlay };
+});
 
 describe("Home", () => {
   it("renders the single editor page and switches templates", async () => {
@@ -144,9 +182,15 @@ describe("Home", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "主标题" }));
-    const rotationInput = screen.getByLabelText("旋转");
+    const rotationInput = screen.getByLabelText("角度");
+    const rotationGroup = rotationInput.closest('[data-slot="input-group"]');
+    const rotationAddon = rotationGroup?.querySelector('[data-slot="input-group-addon"]');
 
     expect(rotationInput).toHaveValue("0°");
+    expect(screen.getByText("角度")).toBeVisible();
+    expect(rotationGroup).not.toBeNull();
+    expect(rotationAddon).toHaveAttribute("data-align", "inline-start");
+    expect(rotationGroup?.lastElementChild).toBe(rotationAddon);
 
     await user.click(rotationInput);
     await user.clear(rotationInput);
@@ -175,6 +219,78 @@ describe("Home", () => {
     await user.tab();
 
     expect(fontSizeInput).toHaveValue(8);
+  });
+
+  it("enters text editing from Enter or double click and commits one undoable session", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "主标题" }));
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("安静地 创造");
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveClass(
+      "flex",
+      "items-center",
+      "leading-none",
+    );
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(await screen.findByTestId("rich-text-editor")).toHaveTextContent("安静地 创造");
+    await waitFor(() =>
+      expect(screen.getByTestId("canvas-stage")).toHaveAttribute("data-editing-id", "square-title"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "模拟富文本提交" }));
+    expect(screen.queryByTestId("rich-text-editor")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("已修改 文本");
+
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("安静地 创造");
+
+    await user.click(screen.getByRole("button", { name: "模拟双击文本" }));
+    expect(await screen.findByTestId("rich-text-editor")).toBeInTheDocument();
+  });
+
+  it("does not create history for an unchanged edit and cancels on Escape", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "主标题" }));
+    fireEvent.keyDown(window, { key: "Enter" });
+    await user.click(await screen.findByRole("button", { name: "模拟原文提交" }));
+
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(await screen.findByTestId("rich-text-editor")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.queryByTestId("rich-text-editor")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
+  });
+
+  it("previews color changes and records only the committed color in history", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "主标题" }));
+    const colorButton = screen.getByRole("button", { name: "文字颜色选择器" });
+    await user.click(colorButton);
+
+    fireEvent.change(await screen.findByRole("textbox", { name: "Hex 颜色" }), {
+      target: { value: "#ff0000" },
+    });
+
+    expect(colorButton).toHaveTextContent("#FF0000");
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
+
+    await user.click(document.body);
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Hex 颜色" })).toBeNull());
+
+    expect(screen.getByRole("button", { name: "撤销" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+
+    expect(colorButton).toHaveTextContent("#1F3F36");
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
   });
 
   it("shows only the action name in layer tooltips", async () => {
