@@ -10,48 +10,49 @@ import {
 import { isGroupElement } from "@/editor/types";
 
 describe("editorReducer", () => {
-  it("keeps independent document edits while switching templates", () => {
+  it("initializes the story as the only active mock document", () => {
     let state = createInitialEditorState();
+    expect(Object.keys(state.documents)).toEqual(["kidney-awakening-story"]);
+    expect(state.activeTemplateId).toBe("kidney-awakening-story");
+
     state = editorReducer(state, {
       type: "update-element",
-      elementId: "square-title",
+      elementId: "story-title",
       patch: { text: "A NEW TITLE" },
     });
-    state = editorReducer(state, { type: "select-template", templateId: "field-landscape" });
-    state = editorReducer(state, { type: "select-template", templateId: "studio-square" });
 
-    const title = findElement(getActiveDocument(state).elements, "square-title");
+    const title = findElement(getActiveDocument(state).elements, "story-title");
     expect(title).toMatchObject({ type: "text", text: "A NEW TITLE" });
   });
 
   it("normalizes dimensions and opacity updates", () => {
     const state = editorReducer(createInitialEditorState(), {
       type: "update-element",
-      elementId: "square-title",
+      elementId: "story-title",
       patch: { width: 2, height: -1, opacity: 2 },
     });
 
-    const title = findElement(getActiveDocument(state).elements, "square-title");
+    const title = findElement(getActiveDocument(state).elements, "story-title");
     expect(title).toMatchObject({ width: 8, height: 8, opacity: 1 });
   });
 
   it("preserves untouched branches and ignores no-op mutations", () => {
     const initialState = createInitialEditorState();
     const initialDocument = getActiveDocument(initialState);
-    const untouchedGroup = findElement(initialDocument.elements, "square-photo-group");
+    const untouchedGroup = findElement(initialDocument.elements, "chapter-1-group");
 
     const updatedState = editorReducer(initialState, {
       type: "update-element",
-      elementId: "square-title",
+      elementId: "story-title",
       patch: { x: 83 },
     });
     const updatedDocument = getActiveDocument(updatedState);
 
-    expect(findElement(updatedDocument.elements, "square-photo-group")).toBe(untouchedGroup);
+    expect(findElement(updatedDocument.elements, "chapter-1-group")).toBe(untouchedGroup);
 
     const noOpState = editorReducer(updatedState, {
       type: "update-element",
-      elementId: "square-title",
+      elementId: "story-title",
       patch: { x: 83 },
     });
     const missingElementState = editorReducer(updatedState, {
@@ -67,22 +68,22 @@ describe("editorReducer", () => {
     let state = createInitialEditorState();
     state = editorReducer(state, {
       type: "duplicate-element",
-      elementId: "square-title",
-      duplicateId: "square-title-copy-test",
+      elementId: "story-title",
+      duplicateId: "story-title-copy-test",
     });
 
-    expect(state.selectedId).toBe("square-title-copy-test");
-    expect(findElement(getActiveDocument(state).elements, "square-title-copy-test")).toMatchObject({
+    expect(state.selectedId).toBe("story-title-copy-test");
+    expect(findElement(getActiveDocument(state).elements, "story-title-copy-test")).toMatchObject({
       name: "主标题 副本",
-      x: 106,
-      y: 826,
+      x: 164,
+      y: 168,
     });
 
     state = editorReducer(state, {
       type: "delete-element",
-      elementId: "square-title-copy-test",
+      elementId: "story-title-copy-test",
     });
-    expect(findElement(getActiveDocument(state).elements, "square-title-copy-test")).toBeNull();
+    expect(findElement(getActiveDocument(state).elements, "story-title-copy-test")).toBeNull();
     expect(state.selectedId).toBeNull();
   });
 
@@ -90,21 +91,21 @@ describe("editorReducer", () => {
     let state = createInitialEditorState();
     state = editorReducer(state, {
       type: "toggle-locked",
-      elementId: "square-copy-group",
+      elementId: "story-hero-group",
     });
     state = editorReducer(state, {
       type: "toggle-visible",
-      elementId: "square-copy-group",
+      elementId: "story-hero-group",
     });
 
     const document = getActiveDocument(state);
-    const group = findElement(document.elements, "square-copy-group");
+    const group = findElement(document.elements, "story-hero-group");
     expect(group).toMatchObject({ locked: true, visible: false });
-    expect(findElementContext(document.elements, "square-title")).toMatchObject({
+    expect(findElementContext(document.elements, "story-title")).toMatchObject({
       effectivelyLocked: true,
       effectivelyVisible: false,
     });
-    expect(findElement(document.elements, "square-title")).toMatchObject({
+    expect(findElement(document.elements, "story-title")).toMatchObject({
       locked: false,
       visible: true,
     });
@@ -113,43 +114,43 @@ describe("editorReducer", () => {
   it("reparents an element across groups while preserving its properties", () => {
     const initialState = createInitialEditorState();
     const elements = structuredClone(getActiveDocument(initialState).elements);
-    const photoGroup = findElement(elements, "square-photo-group");
-    const copyGroup = findElement(elements, "square-copy-group");
-    const originalTitle = findElement(elements, "square-title");
+    const heroGroup = findElement(elements, "story-hero-group");
+    const chapterGroup = findElement(elements, "chapter-1-group");
+    const originalTitle = findElement(elements, "story-title");
 
-    expect(photoGroup && isGroupElement(photoGroup)).toBe(true);
-    expect(copyGroup && isGroupElement(copyGroup)).toBe(true);
+    expect(heroGroup && isGroupElement(heroGroup)).toBe(true);
+    expect(chapterGroup && isGroupElement(chapterGroup)).toBe(true);
     expect(originalTitle?.type).toBe("text");
     if (
-      !photoGroup ||
-      !copyGroup ||
-      !isGroupElement(photoGroup) ||
-      !isGroupElement(copyGroup) ||
+      !heroGroup ||
+      !chapterGroup ||
+      !isGroupElement(heroGroup) ||
+      !isGroupElement(chapterGroup) ||
       originalTitle?.type !== "text"
     ) {
       return;
     }
 
-    const titleIndex = copyGroup.children.findIndex((element) => element.id === "square-title");
-    const [movedTitle] = copyGroup.children.splice(titleIndex, 1);
-    photoGroup.children.push(movedTitle);
+    const titleIndex = heroGroup.children.findIndex((element) => element.id === "story-title");
+    const [movedTitle] = heroGroup.children.splice(titleIndex, 1);
+    chapterGroup.children.push(movedTitle);
 
     const state = editorReducer(initialState, { type: "reorder-elements", elements });
     const document = getActiveDocument(state);
-    const nextPhotoGroup = findElement(document.elements, "square-photo-group");
-    const nextCopyGroup = findElement(document.elements, "square-copy-group");
+    const nextHeroGroup = findElement(document.elements, "story-hero-group");
+    const nextChapterGroup = findElement(document.elements, "chapter-1-group");
 
     expect(
-      nextPhotoGroup && isGroupElement(nextPhotoGroup)
-        ? nextPhotoGroup.children.map((child) => child.id)
+      nextChapterGroup && isGroupElement(nextChapterGroup)
+        ? nextChapterGroup.children.map((child) => child.id)
         : [],
-    ).toContain("square-title");
+    ).toContain("story-title");
     expect(
-      nextCopyGroup && isGroupElement(nextCopyGroup)
-        ? nextCopyGroup.children.map((child) => child.id)
+      nextHeroGroup && isGroupElement(nextHeroGroup)
+        ? nextHeroGroup.children.map((child) => child.id)
         : [],
-    ).not.toContain("square-title");
-    expect(findElement(document.elements, "square-title")).toMatchObject({
+    ).not.toContain("story-title");
+    expect(findElement(document.elements, "story-title")).toMatchObject({
       text: originalTitle.text,
       x: originalTitle.x,
       y: originalTitle.y,
@@ -164,22 +165,22 @@ describe("editorReducer", () => {
 
     history = editorHistoryReducer(history, {
       type: "update-element",
-      elementId: "square-title",
+      elementId: "story-title",
       patch: { text: "可撤销标题" },
     });
     expect(history.past).toHaveLength(1);
-    expect(findElement(getActiveDocument(history.present).elements, "square-title")).toMatchObject({
+    expect(findElement(getActiveDocument(history.present).elements, "story-title")).toMatchObject({
       text: "可撤销标题",
     });
 
     history = editorHistoryReducer(history, { type: "undo" });
     expect(
-      findElement(getActiveDocument(history.present).elements, "square-title"),
+      findElement(getActiveDocument(history.present).elements, "story-title"),
     ).not.toMatchObject({ text: "可撤销标题" });
     expect(history.future).toHaveLength(1);
 
     history = editorHistoryReducer(history, { type: "redo" });
-    expect(findElement(getActiveDocument(history.present).elements, "square-title")).toMatchObject({
+    expect(findElement(getActiveDocument(history.present).elements, "story-title")).toMatchObject({
       text: "可撤销标题",
     });
   });
@@ -188,8 +189,8 @@ describe("editorReducer", () => {
     const history = createInitialEditorHistoryState();
     const nextHistory = editorHistoryReducer(history, {
       type: "update-element",
-      elementId: "square-title",
-      patch: { x: 82 },
+      elementId: "story-title",
+      patch: { x: 140 },
     });
 
     expect(nextHistory.past).toHaveLength(0);

@@ -33,42 +33,39 @@ describe("layer tree conversion", () => {
 
   it("rebuilds a cross-group hierarchy without changing element properties", () => {
     const elements = structuredClone(EDITOR_TEMPLATES[0].elements);
-    const items = createLayerTreeItems(
-      elements,
-      new Set(["square-photo-group", "square-copy-group"]),
-    );
-    const photoGroup = findTreeItem(items, "square-photo-group");
-    const copyGroup = findTreeItem(items, "square-copy-group");
-    const title = findTreeItem(items, "square-title");
+    const items = createLayerTreeItems(elements, new Set(["story-hero-group", "chapter-1-group"]));
+    const heroGroup = findTreeItem(items, "story-hero-group");
+    const chapterGroup = findTreeItem(items, "chapter-1-group");
+    const title = findTreeItem(items, "story-title");
 
-    expect(photoGroup?.canHaveChildren).toBe(true);
+    expect(heroGroup?.canHaveChildren).toBe(true);
     expect(title?.canHaveChildren).toBe(false);
-    expect(copyGroup?.children).toContain(title);
-    if (!photoGroup || !copyGroup || !title) return;
+    expect(heroGroup?.children).toContain(title);
+    if (!heroGroup || !chapterGroup || !title) return;
 
-    copyGroup.children = copyGroup.children?.filter((item) => item.id !== title.id);
-    photoGroup.children = [title, ...(photoGroup.children ?? [])];
+    heroGroup.children = heroGroup.children?.filter((item) => item.id !== title.id);
+    chapterGroup.children = [title, ...(chapterGroup.children ?? [])];
 
     const nextElements = createCanvasElements(items);
-    const nextPhotoGroup = findElement(nextElements, "square-photo-group");
-    const nextCopyGroup = findElement(nextElements, "square-copy-group");
-    const nextTitle = findElement(nextElements, "square-title");
+    const nextHeroGroup = findElement(nextElements, "story-hero-group");
+    const nextChapterGroup = findElement(nextElements, "chapter-1-group");
+    const nextTitle = findElement(nextElements, "story-title");
 
     expect(
-      nextPhotoGroup && isGroupElement(nextPhotoGroup)
-        ? nextPhotoGroup.children.map((element) => element.id)
+      nextChapterGroup && isGroupElement(nextChapterGroup)
+        ? nextChapterGroup.children.map((element) => element.id)
         : [],
-    ).toContain("square-title");
+    ).toContain("story-title");
     expect(
-      nextCopyGroup && isGroupElement(nextCopyGroup)
-        ? nextCopyGroup.children.map((element) => element.id)
+      nextHeroGroup && isGroupElement(nextHeroGroup)
+        ? nextHeroGroup.children.map((element) => element.id)
         : [],
-    ).not.toContain("square-title");
+    ).not.toContain("story-title");
     expect(nextTitle).toMatchObject({
-      id: "square-title",
+      id: "story-title",
       type: "text",
-      x: 82,
-      y: 802,
+      x: 140,
+      y: 144,
     });
   });
 });

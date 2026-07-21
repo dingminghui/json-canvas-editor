@@ -88,9 +88,10 @@ function getCenteredPosition(
   document: CanvasDocument,
   zoom: number,
 ): CanvasPoint {
+  const scaledHeight = document.height * zoom;
   return {
     x: (viewport.width - document.width * zoom) / 2,
-    y: (viewport.height - document.height * zoom) / 2,
+    y: scaledHeight > viewport.height ? 48 : (viewport.height - scaledHeight) / 2,
   };
 }
 
@@ -126,9 +127,12 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportPositions, setViewportPositions] = useState<Record<string, CanvasPoint>>({});
   const [readyEditingSessionId, setReadyEditingSessionId] = useState<number | null>(null);
-  const fitZoom = clampZoom(
-    Math.min((size.width - 112) / document.width, (size.height - 174) / document.height),
-  );
+  const availableWidth = Math.max(1, size.width - 112);
+  const availableHeight = Math.max(1, size.height - 174);
+  const widthFitZoom = availableWidth / document.width;
+  const heightFitZoom = availableHeight / document.height;
+  const isLongDocument = document.height / document.width > availableHeight / availableWidth;
+  const fitZoom = clampZoom(isLongDocument ? widthFitZoom : Math.min(widthFitZoom, heightFitZoom));
   const zoom = fitMode && size.width > 0 ? fitZoom : manualZoom;
   const zoomPercent = Math.round(zoom * 100);
   const centeredPosition = getCenteredPosition(size, document, zoom);

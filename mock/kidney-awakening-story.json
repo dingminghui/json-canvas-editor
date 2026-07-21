@@ -1,0 +1,562 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "kidney-awakening-story",
+  "type": "medical-case-story",
+  "locale": "zh-CN",
+  "source": {
+    "file": "index_fa881ff4.html",
+    "title": "病例故事：当\"老年常态\"不是常态——一位69岁退休工人的肾脏觉醒之路",
+    "declaration": "基于真实病例改编，患者信息已匿名化处理"
+  },
+  "theme": {
+    "layout": {
+      "pageMaxWidth": "52rem",
+      "pagePadding": {
+        "default": "1.5rem",
+        "wide": "3rem"
+      }
+    },
+    "fonts": {
+      "body": ["Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", "system-ui", "sans-serif"],
+      "display": ["FangSong", "STFangsong", "Songti SC", "serif"]
+    },
+    "colors": {
+      "outerBackground": "oklch(93% 0.025 91)",
+      "pageBackground": "oklch(97% 0.012 92)",
+      "text": "oklch(28% 0.025 152)",
+      "mutedText": "oklch(49% 0.025 150)",
+      "accent": "oklch(52% 0.07 152)",
+      "warmAccent": "oklch(73% 0.095 58)",
+      "softAccent": "oklch(89% 0.035 150)",
+      "divider": "oklch(84% 0.024 105)"
+    }
+  },
+  "assets": [
+    {
+      "id": "leg-edema",
+      "type": "image",
+      "localPath": "./assets/01-leg-edema.jpg",
+      "sourceUrl": "https://nullht-enterprise-common-public-dev.oss-cn-shanghai.aliyuncs.com/story-med/patient_case/7696c87d-8a78-4178-9263-5a462a7945c8/images/story_367448150_0_025ca20d.png",
+      "mimeType": "image/jpeg",
+      "width": 1920,
+      "height": 1920,
+      "sha256": "991c166f4332094aa568d0f4f53d03ce9923768a22cfa29927007ed511e238f3",
+      "alt": "69岁男性坐在床边，侧身弯腰用手按压自己浮肿的小腿，晨光从窗外照入，映出疲惫的神情",
+      "caption": "暖灰淡蓝的晨光中，水肿的双腿是最早的警报"
+    },
+    {
+      "id": "consultation-report",
+      "type": "image",
+      "localPath": "./assets/02-consultation-report.jpg",
+      "sourceUrl": "https://nullht-enterprise-common-public-dev.oss-cn-shanghai.aliyuncs.com/story-med/patient_case/7696c87d-8a78-4178-9263-5a462a7945c8/images/story_367448150_1_025ca20d.png",
+      "mimeType": "image/jpeg",
+      "width": 1920,
+      "height": 1920,
+      "sha256": "cd41719b8523d814bb7b412c344a9b6a9e7bc525ff47919e28c7418ecd693526",
+      "alt": "医生诊室中，化验单放在桌上，69岁男性的背影坐在画面右下角，肩膀微微下垂",
+      "caption": "诊室里的沉重时刻——化验单上的数字预示着一场硬仗"
+    },
+    {
+      "id": "kidney-treatment-plan",
+      "type": "image",
+      "localPath": "./assets/03-kidney-treatment-plan.jpg",
+      "sourceUrl": "https://nullht-enterprise-common-public-dev.oss-cn-shanghai.aliyuncs.com/story-med/patient_case/7696c87d-8a78-4178-9263-5a462a7945c8/images/story_367448150_2_025ca20d.png",
+      "mimeType": "image/jpeg",
+      "width": 1920,
+      "height": 1920,
+      "sha256": "2db7c5de5e59a1a3abd6fedf12ffd405a90baa0dbc793f4186c65536a50b2119",
+      "alt": "医生的手用笔在纸上画肾脏示意图和下降箭头，暖金色阳光照亮纸面",
+      "caption": "暖金阳光下，医生用笔画出肾脏的康复路径"
+    },
+    {
+      "id": "park-walk",
+      "type": "image",
+      "localPath": "./assets/04-park-walk.jpg",
+      "sourceUrl": "https://nullht-enterprise-common-public-dev.oss-cn-shanghai.aliyuncs.com/story-med/patient_case/7696c87d-8a78-4178-9263-5a462a7945c8/images/story_367448150_3_025ca20d.png",
+      "mimeType": "image/jpeg",
+      "width": 1920,
+      "height": 1078,
+      "sha256": "5c8888b260eb5162d24ea36380c6796ef64d4073d2b33f7625264a5e7e8dc280",
+      "alt": "69岁男性背影走在公园梧桐树步道上，晨光透过树冠洒下斑驳光影，远处是开阔的天空",
+      "caption": "曾经不敢想象的事——如今能去公园散步了"
+    },
+    {
+      "id": "outcome-notebook",
+      "type": "image",
+      "localPath": "./assets/05-outcome-notebook.jpg",
+      "sourceUrl": "https://nullht-enterprise-common-public-dev.oss-cn-shanghai.aliyuncs.com/story-med/patient_case/7696c87d-8a78-4178-9263-5a462a7945c8/images/story_367448150_4_025ca20d.png",
+      "mimeType": "image/jpeg",
+      "width": 1920,
+      "height": 1920,
+      "sha256": "461028acf18ec18011b059b0918ac219e60fb181d29c5a73d027eb1ffe324524",
+      "alt": "打开的笔记本上画着上升曲线和三片绿叶，旁边放着一支钢笔和一杯清茶，窗外是柔和的绿色树影",
+      "caption": "从低谷到希望——8周，三项核心指标全面改善"
+    }
+  ],
+  "hero": {
+    "eyebrow": "📋 基于真实病例改编 · 患者信息已匿名化处理",
+    "title": "当\"老年常态\"不是常态",
+    "subtitle": "一位69岁退休工人的肾脏觉醒之路",
+    "quote": "5年了一直以为是累的，谁知道是肾在报警。"
+  },
+  "sections": [
+    {
+      "id": "chapter-1",
+      "type": "chapter",
+      "eyebrow": "第一章",
+      "title": "风暴降临",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "content": "老张今年69岁，退休前在工厂干了大半辈子。年轻时患过小儿麻痹症，左腿不太利索，但几十年下来，他早习惯了——走路慢一点，活照样干。"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "大约5年前，他发现自己双腿开始水肿。"
+            },
+            {
+              "text": "\"下午按一下小腿，一个坑，半天弹不回来。\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "他以为是年纪大了、站久了，没太当回事。老伴催他去医院，他总说："
+            },
+            {
+              "text": "\"没事，歇歇就好了。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "assetId": "leg-edema"
+        },
+        {
+          "type": "paragraph",
+          "content": "可近两年，水肿越来越重，早上起来腿还是肿的。更让人不安的是，他开始频繁跑厕所——尿频、尿急、尿痛，尿液里总漂着一层细密的泡沫。"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"泡沫尿嘛，听说男人上了年纪多少都有点。\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "老张还是没往心里去。"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "直到这次，水肿实在扛不住了，他才在门诊挂号，以\"水肿待查\"住了院。"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "入院检查的结果，让老张和医生都吃了一惊。",
+              "marks": ["strong"]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "columns": ["实验室数据（治疗前）", "数值"],
+          "rows": [
+            ["空腹血糖（FPG）", "14.47 mmol/L"],
+            ["餐后血糖（PBG）", "17.8 mmol/L"],
+            ["糖化血红蛋白（HbA1c）", "12.6%"],
+            ["24小时尿总蛋白", "14.66 g/24h"],
+            ["血肌酐（Scr）", "162.3 umol/L"],
+            ["血压", "155/93 mmHg"]
+          ]
+        },
+        {
+          "type": "image",
+          "assetId": "consultation-report"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"老张，你知道你血糖有多高吗？\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "主治医生拿着报告单，语气严肃。"
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"我没觉得口干，也不怎么渴，就是腿肿……\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "老张有些茫然。"
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "医生叹了口气："
+            },
+            {
+              "text": "\"这就是问题所在——很多人以为糖尿病一定有'三多一少'，口干、多饮、多尿、体重下降。但你的血糖已经高到这个程度，身体却几乎没有给你发出典型的警报信号。这种'无症状高血糖'最危险，因为它在你不知不觉中，已经把肾损伤了。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "fact",
+          "source": "临床指南：HbA1c ≥ 6.5% 即可诊断为糖尿病。老张的 12.6% 已远超诊断标准，属于重度高血糖。",
+          "content": "HbA1c 12.6%——这意味着过去3个月，老张的平均血糖水平接近15 mmol/L。而他的24小时尿蛋白高达14.66克，是正常上限（<0.23 g/24h）的60多倍，提示肾脏已经严重受损。",
+          "highlights": ["HbA1c 12.6%"]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"医生，我的肾……严重吗？\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "老张的声音有些发紧。"
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"你的肾现在就像被水泡着的房子——长期高血糖让肾小球持续高滤过，就像洪水不停地冲刷，墙体已经出现了裂缝，蛋白尿就是裂缝的证明。我们得先排水，再修房子。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chapter-2",
+      "type": "chapter",
+      "eyebrow": "第二章",
+      "title": "命运转折",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "content": "老张入院前的用药方案包括利格列汀降糖、阿托伐他汀调脂、螺内酯和呋塞米片利尿消肿、阿里沙坦酯片降压。但面对HbA1c 12.6%和大量蛋白尿，现有方案显然不够。"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"你这种情况，血糖严重失控，肾功能已经受损，还有大量蛋白尿，\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "医生在病床前坐下来，用笔在纸上画了一个简单的示意图，"
+            },
+            {
+              "text": "\"我们需要在现有方案基础上，加用一种能同时降糖和保护肾脏的药物。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "assetId": "kidney-treatment-plan"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "医生选择了"
+            },
+            {
+              "text": "安达唐（达格列净）",
+              "marks": ["strong"]
+            },
+            {
+              "text": "。"
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"这是一种SGLT2抑制剂，\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "医生解释道，"
+            },
+            {
+              "text": "\"它通过抑制肾脏对葡萄糖的重吸收，让多余的糖从尿液中排出去。更重要的是，它还能降低肾小球内部的压力——就像给水龙头减压，让水流不那么猛，肾脏的负担就小了，蛋白尿自然就减少了。你明白我的意思吗？\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "老张用力点了点头："
+            },
+            {
+              "text": "\"就是说，它不光降糖，还护肾？\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"没错。在一周内，我们就应该能看到血糖的初步改善。4周时复查尿蛋白和肾功能，8周全面评估。我们一步步来。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "治疗一周后，变化开始显现。",
+              "marks": ["strong"]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "columns": ["指标", "治疗前", "治疗一周"],
+          "rows": [
+            ["空腹血糖（FPG）", "14.47", "12.64"],
+            ["餐后血糖（PBG）", "17.8", "16.87"]
+          ],
+          "highlightColumn": 2
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"这才一周，血糖就降下来了？\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "老张看着化验单，有点不敢相信。"
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"说明药物对你是有效的，\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "医生笑着说，"
+            },
+            {
+              "text": "\"但这才刚开始，我们的目标是让血糖和肾功能都回到安全线。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "治疗四周后，数据让所有人振奋。",
+              "marks": ["strong"]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "columns": ["指标", "治疗前", "治疗四周"],
+          "rows": [
+            ["空腹血糖（FPG）", "14.47", "7.4"],
+            ["餐后血糖（PBG）", "17.8", "11.2"],
+            ["糖化血红蛋白（HbA1c）", "12.6%", "6.9%"],
+            ["血肌酐（Scr）", "162.3", "145.7"],
+            ["尿蛋白", "(+)", "(-)转阴"]
+          ],
+          "highlightColumn": 2
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"尿蛋白转阴了！\"",
+              "marks": ["artistic"]
+            },
+            {
+              "text": "医生把报告单递给老张，声音里带着惊喜，"
+            },
+            {
+              "text": "\"从14.66克降到完全转阴，4周时间，你的肾警报解除了！\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "老张看着报告单上那个\"(-)\"的符号，眼眶有些发酸。"
+            },
+            {
+              "text": "\"医生，我比中彩票还高兴。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"你确实应该高兴，但还不能松懈。我们继续治疗，目标是8周全面达标。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "治疗八周，全面达标。",
+              "marks": ["strong"]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "columns": ["指标", "治疗前", "治疗八周"],
+          "rows": [
+            ["空腹血糖（FPG）", "14.47", "6.4"],
+            ["餐后血糖（PBG）", "17.8", "8.6"],
+            ["糖化血红蛋白（HbA1c）", "12.6%", "6.3%"],
+            ["血肌酐（Scr）", "162.3", "128.3"],
+            ["尿蛋白", "(+)", "(-)持续阴性"]
+          ],
+          "highlightColumn": 2
+        },
+        {
+          "type": "fact",
+          "source": "中国2型糖尿病防治指南(2020版)：SGLT2抑制剂达格列净推荐用于合并CKD的T2DM患者以延缓肾功能恶化。",
+          "content": "从HbA1c 12.6%到6.3%，从血肌酐162.3到128.3，从大量蛋白尿到完全转阴——8周，三项核心指标全面改善。",
+          "highlights": ["8周，三项核心指标全面改善。"]
+        }
+      ]
+    },
+    {
+      "id": "chapter-3",
+      "type": "chapter",
+      "eyebrow": "第三章",
+      "title": "转变与新生",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "content": "但老张感受最深的，不是化验单上的数字，而是身体实实在在的变化。"
+        },
+        {
+          "type": "quote",
+          "content": "腿不肿了，走路轻松多了。"
+        },
+        {
+          "type": "image",
+          "assetId": "park-walk"
+        },
+        {
+          "type": "paragraph",
+          "content": "以前下午一按一个坑的双腿，现在恢复了正常。老张甚至能去公园遛弯了——这是他过去两年想都不敢想的事。"
+        },
+        {
+          "type": "quote",
+          "content": "精神头也好了，以前下午就想睡觉，现在一天都精神。"
+        },
+        {
+          "type": "paragraph",
+          "content": "血糖控制后，身体的能量代谢恢复正常，不再像以前那样昏昏沉沉。"
+        },
+        {
+          "type": "quote",
+          "content": "以前不知道病情有多严重，现在我知道自己该做什么了。"
+        },
+        {
+          "type": "paragraph",
+          "content": "从\"被动拖延\"到\"主动管理\"，老张的认知发生了根本性的转变。"
+        },
+        {
+          "type": "richText",
+          "segments": [
+            {
+              "text": "\"我以前觉得，糖尿病就是吃药的事，吃了药就没事了。这回我明白了——糖尿病是个全身的毛病，它跟肾、跟心、跟血管都有关系。你得把它当回事，每天看、每天管。但好消息是，只要管好了，它也不会把你怎么样。\"",
+              "marks": ["artistic"]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "出院时，老张跟医生说了这样一段话："
+        },
+        {
+          "type": "quote",
+          "content": "我活了69年，从小儿麻痹到大腿上，从来不知道什么叫系统的管理。这次生病教会我一件事——糖尿病不是吃药就完事，它是个全身的毛病，你得把它当回事，每天看、每天管。但好消息是，只要管好了，它也不会把你怎么样。原来管好自己的身体，68岁开始也不算晚。",
+          "variant": "accent"
+        }
+      ]
+    },
+    {
+      "id": "doctor-note",
+      "type": "chapter",
+      "eyebrow": "医生的话",
+      "title": "给所有糖尿病患者的提醒",
+      "blocks": [
+        {
+          "type": "image",
+          "assetId": "outcome-notebook"
+        },
+        {
+          "type": "list",
+          "title": "这个案例中的关键要点",
+          "ordered": false,
+          "items": [
+            {
+              "lead": "\"无症状高血糖\"是沉默的杀手。",
+              "content": "老张HbA1c高达12.6%，却几乎没有典型的口干多饮症状，这正是糖尿病最危险的地方——等人感觉到问题时，并发症往往已经发生。"
+            },
+            {
+              "lead": "糖尿病与慢性肾病关系密切。",
+              "content": "长期高血糖会导致肾小球高滤过、肾小球内压升高，最终出现蛋白尿和肾功能下降。老张的24小时尿蛋白高达14.66克，已是肾病综合征水平。"
+            },
+            {
+              "lead": "早期干预可以实现多重获益。",
+              "content": "老张在加用达格列净后，8周内血糖达标（HbA1c 6.3%）、肾功能改善（Scr降至128.3）、尿蛋白转阴——实现了降糖、护肾、消肿的三重获益。"
+            },
+            {
+              "lead": "水肿不只是\"累了\"。",
+              "content": "双下肢水肿可能是糖尿病肾病的早期信号，合并泡沫尿更应高度警惕。不要把它当成\"老年常态\"。"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "disclaimers": [
+      "声明：本故事基于真实病例改编，患者信息已做匿名化处理。个体结果可能不同，请遵医嘱用药。",
+      "本内容仅供医药专业人士参考，不构成对任何药品的推广或推荐。"
+    ],
+    "copyright": "© 2024 · 温暖纪实病例长页"
+  }
+}

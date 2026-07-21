@@ -40,10 +40,10 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       }}
     >
       {document.name}
-      <button onClick={() => onEditText("square-title")}>模拟双击文本</button>
+      <button onClick={() => onEditText("story-title")}>模拟双击文本</button>
       <button
         onClick={() =>
-          onElementPreview("square-title", {
+          onElementPreview("story-title", {
             height: 55.678,
             width: 333.456,
             x: 83.456,
@@ -55,8 +55,8 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       </button>
       <button
         onClick={() => {
-          onElementChange("square-title", { x: 82.3456 });
-          onElementPreview("square-title", null);
+          onElementChange("story-title", { x: 82.3456 });
+          onElementPreview("story-title", null);
         }}
       >
         模拟画布变换
@@ -111,28 +111,18 @@ describe("Home", () => {
       elements: unknown[];
     };
 
-    expect(dialog).toHaveTextContent("工作室手记 · 1080 × 1080");
+    expect(dialog).toHaveTextContent(/肾脏觉醒之路 · 1080 × \d+/);
     expect(dialog).toHaveTextContent("只读预览");
     expect(dialog.querySelector('[data-slot="scroll-area"]')).toBeInTheDocument();
-    expect(pageDefinition.id).toBe("studio-square");
-    expect(pageDefinition.name).toBe("工作室手记");
+    expect(pageDefinition.id).toBe("kidney-awakening-story");
+    expect(pageDefinition.name).toBe("肾脏觉醒之路");
     expect(pageDefinition.elements.length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "关闭" }));
     expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "打开页面 旷野笔记" }));
-    await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
-
-    const nextPreviewElement = screen.getByLabelText("当前页面 JSON");
-    const nextPreview = JSON.parse(nextPreviewElement.textContent ?? "") as {
-      id: string;
-    };
-    expect(nextPreview.id).toBe("field-landscape");
   });
 
-  it("renders the editor and switches pages only from the sidebar", async () => {
-    const user = userEvent.setup();
+  it("renders the story as the only selected page", () => {
     render(<App />);
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
@@ -145,14 +135,15 @@ describe("Home", () => {
       "horizontal",
     );
     expect(screen.getByText("选择一个元素")).toBeInTheDocument();
-    expect(screen.getByTestId("canvas-stage")).toHaveTextContent("工作室手记");
-    expect(currentPageInfo).toHaveTextContent("工作室手记1080 × 1080");
+    expect(screen.getByTestId("canvas-stage")).toHaveTextContent("肾脏觉醒之路");
+    expect(currentPageInfo).toHaveTextContent(/肾脏觉醒之路1080 × \d+/);
+    expect(screen.getAllByRole("button", { name: "打开页面 肾脏觉醒之路" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "打开页面 肾脏觉醒之路" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "打开页面 旷野笔记" }));
-    expect(screen.getByTestId("canvas-stage")).toHaveTextContent("旷野笔记");
-    expect(currentPageInfo).toHaveTextContent("旷野笔记1600 × 900");
   });
 
   it("highlights the matching canvas element while hovering a layer", async () => {
@@ -160,10 +151,10 @@ describe("Home", () => {
     render(<App />);
 
     const canvas = screen.getByTestId("canvas-stage");
-    const layer = screen.getByRole("button", { name: "暖灰背景" });
+    const layer = screen.getByRole("button", { name: "纸张背景" });
 
     await user.hover(layer);
-    expect(canvas).toHaveAttribute("data-hovered-id", "square-background");
+    expect(canvas).toHaveAttribute("data-hovered-id", "story-background");
 
     await user.unhover(layer);
     expect(canvas).toHaveAttribute("data-hovered-id", "");
@@ -173,24 +164,24 @@ describe("Home", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const groupButton = screen.getByRole("button", { name: "主视觉" });
+    const groupButton = screen.getByRole("button", { name: "开篇" });
     await user.click(groupButton);
 
     expect(groupButton.closest('[data-slot="layer-row"]')).toHaveAttribute("data-selected", "true");
-    expect(screen.getByRole("button", { name: "工作室照片" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "病例声明" })).toBeInTheDocument();
 
     const childRow = screen
-      .getByRole("button", { name: "工作室照片" })
+      .getByRole("button", { name: "病例声明" })
       .closest('[data-slot="layer-row"]');
     expect(childRow?.querySelector('[data-slot="layer-indent-spacer"]')).toHaveStyle({
       width: "12px",
     });
 
-    await user.click(screen.getByRole("button", { name: "收起 主视觉" }));
-    expect(screen.queryByRole("button", { name: "工作室照片" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "收起 开篇" }));
+    expect(screen.queryByRole("button", { name: "病例声明" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "展开 主视觉" }));
-    expect(screen.getByRole("button", { name: "工作室照片" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开 开篇" }));
+    expect(screen.getByRole("button", { name: "病例声明" })).toBeInTheDocument();
   });
 
   it("edits the element name and shows position values with at most two decimals", async () => {
@@ -270,7 +261,9 @@ describe("Home", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "主标题" }));
-    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("安静地 创造");
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent(
+      '当"老年常态"不是常态',
+    );
     expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveClass(
       "flex",
       "items-center",
@@ -278,9 +271,9 @@ describe("Home", () => {
     );
 
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(await screen.findByTestId("rich-text-editor")).toHaveTextContent("安静地 创造");
+    expect(await screen.findByTestId("rich-text-editor")).toHaveTextContent('当"老年常态"不是常态');
     await waitFor(() =>
-      expect(screen.getByTestId("canvas-stage")).toHaveAttribute("data-editing-id", "square-title"),
+      expect(screen.getByTestId("canvas-stage")).toHaveAttribute("data-editing-id", "story-title"),
     );
 
     await user.click(screen.getByRole("button", { name: "模拟富文本提交" }));
@@ -288,7 +281,9 @@ describe("Home", () => {
     expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("已修改 文本");
 
     await user.click(screen.getByRole("button", { name: "撤销" }));
-    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("安静地 创造");
+    expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent(
+      '当"老年常态"不是常态',
+    );
 
     await user.click(screen.getByRole("button", { name: "模拟双击文本" }));
     expect(await screen.findByTestId("rich-text-editor")).toBeInTheDocument();
@@ -333,7 +328,7 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "撤销" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "撤销" }));
 
-    expect(colorButton).toHaveTextContent("#1F3F36");
+    expect(colorButton).toHaveTextContent("#24382F");
     expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
   });
 
@@ -341,20 +336,20 @@ describe("Home", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.hover(screen.getByRole("button", { name: "暖灰背景" }));
-    await user.hover(screen.getByRole("button", { name: "隐藏 暖灰背景" }));
+    await user.hover(screen.getByRole("button", { name: "纸张背景" }));
+    await user.hover(screen.getByRole("button", { name: "隐藏 纸张背景" }));
 
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip).toHaveTextContent("隐藏");
-    expect(tooltip).not.toHaveTextContent("暖灰背景");
+    expect(tooltip).not.toHaveTextContent("纸张背景");
   });
 
   it("keeps only active hidden and locked layer actions visible outside hover", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const backgroundHideButton = screen.getByRole("button", { name: "隐藏 暖灰背景" });
-    const backgroundUnlockButton = screen.getByRole("button", { name: "解锁 暖灰背景" });
+    const backgroundHideButton = screen.getByRole("button", { name: "隐藏 纸张背景" });
+    const backgroundUnlockButton = screen.getByRole("button", { name: "解锁 纸张背景" });
 
     expect(backgroundHideButton).toHaveClass("opacity-0", "pointer-events-none");
     expect(backgroundUnlockButton).toHaveClass("opacity-100", "pointer-events-auto");
