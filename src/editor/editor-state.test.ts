@@ -10,9 +10,12 @@ import {
 import { isGroupElement } from "@/editor/types";
 
 describe("editorReducer", () => {
-  it("initializes the story as the only active mock document", () => {
+  it("initializes both stories with the kidney case active", () => {
     let state = createInitialEditorState();
-    expect(Object.keys(state.documents)).toEqual(["kidney-awakening-story"]);
+    expect(Object.keys(state.documents)).toEqual([
+      "kidney-awakening-story",
+      "lymphoma-transformation-story",
+    ]);
     expect(state.activeTemplateId).toBe("kidney-awakening-story");
 
     state = editorReducer(state, {
@@ -21,6 +24,19 @@ describe("editorReducer", () => {
       patch: { text: "A NEW TITLE" },
     });
 
+    state = editorReducer(state, {
+      type: "select-template",
+      templateId: "lymphoma-transformation-story",
+    });
+    expect(findElement(getActiveDocument(state).elements, "story-title")).toMatchObject({
+      type: "text",
+      text: '从"惰性"到"侵袭"',
+    });
+
+    state = editorReducer(state, {
+      type: "select-template",
+      templateId: "kidney-awakening-story",
+    });
     const title = findElement(getActiveDocument(state).elements, "story-title");
     expect(title).toMatchObject({ type: "text", text: "A NEW TITLE" });
   });

@@ -120,9 +120,21 @@ describe("Home", () => {
 
     await user.click(screen.getByRole("button", { name: "关闭" }));
     expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开页面 淋巴瘤转化之路" }));
+    await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
+
+    const nextPreview = JSON.parse(screen.getByLabelText("当前页面 JSON").textContent ?? "") as {
+      id: string;
+      name: string;
+    };
+    expect(nextPreview).toMatchObject({
+      id: "lymphoma-transformation-story",
+      name: "淋巴瘤转化之路",
+    });
   });
 
-  it("renders the story as the only selected page", () => {
+  it("renders both stories with the kidney case selected by default", () => {
     render(<App />);
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
@@ -137,10 +149,13 @@ describe("Home", () => {
     expect(screen.getByText("选择一个元素")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-stage")).toHaveTextContent("肾脏觉醒之路");
     expect(currentPageInfo).toHaveTextContent(/肾脏觉醒之路1080 × \d+/);
-    expect(screen.getAllByRole("button", { name: "打开页面 肾脏觉醒之路" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "打开页面 肾脏觉醒之路" })).toHaveAttribute(
       "aria-current",
       "page",
+    );
+    expect(screen.getByRole("button", { name: "打开页面 淋巴瘤转化之路" })).not.toHaveAttribute(
+      "aria-current",
     );
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();

@@ -11,7 +11,13 @@ import consultationReportUrl from "../../mock/assets/02-consultation-report.jpg"
 import kidneyTreatmentPlanUrl from "../../mock/assets/03-kidney-treatment-plan.jpg";
 import parkWalkUrl from "../../mock/assets/04-park-walk.jpg";
 import outcomeNotebookUrl from "../../mock/assets/05-outcome-notebook.jpg";
-import rawStoryMock from "../../mock/kidney-awakening-story.json";
+import lymphomaDiagnosisUrl from "../../mock/assets/06-lymphoma-diagnosis.jpg";
+import lymphomaProgressionUrl from "../../mock/assets/07-lymphoma-progression.jpg";
+import rchopTreatmentPlanUrl from "../../mock/assets/08-rchop-treatment-plan.jpg";
+import chemotherapySupportUrl from "../../mock/assets/09-chemotherapy-support.jpg";
+import springParkRecoveryUrl from "../../mock/assets/10-spring-park-recovery.jpg";
+import rawKidneyStoryMock from "../../mock/kidney-awakening-story.json";
+import rawLymphomaStoryMock from "../../mock/lymphoma-transformation-story.json";
 
 interface StoryAsset {
   id: string;
@@ -21,7 +27,8 @@ interface StoryAsset {
 
 interface StorySegment {
   text: string;
-  marks?: ("artistic" | "strong")[];
+  marks?: ("artistic" | "fact" | "strong")[];
+  source?: string;
 }
 
 interface StoryListItem {
@@ -40,7 +47,7 @@ type StoryBlock =
       highlightColumn?: number;
     }
   | { type: "fact"; content: string; source: string; highlights?: string[] }
-  | { type: "quote"; content: string; variant?: "accent" }
+  | { type: "quote"; content: string; attribution?: string; variant?: "accent" }
   | { type: "list"; title: string; ordered: boolean; items: StoryListItem[] };
 
 interface StorySection {
@@ -52,12 +59,14 @@ interface StorySection {
 
 interface StoryMock {
   id: string;
+  name: string;
   source: { title: string };
   hero: {
     eyebrow: string;
     title: string;
     subtitle: string;
-    quote: string;
+    quote?: string;
+    assetId?: string;
   };
   assets: StoryAsset[];
   sections: StorySection[];
@@ -67,7 +76,8 @@ interface StoryMock {
   };
 }
 
-const storyMock = rawStoryMock as unknown as StoryMock;
+const kidneyStoryMock = rawKidneyStoryMock as unknown as StoryMock;
+const lymphomaStoryMock = rawLymphomaStoryMock as unknown as StoryMock;
 
 const PAGE_WIDTH = 1080;
 const CONTENT_X = 140;
@@ -92,6 +102,11 @@ const assetUrls: Record<string, string> = {
   "leg-edema": legEdemaUrl,
   "outcome-notebook": outcomeNotebookUrl,
   "park-walk": parkWalkUrl,
+  "lymphoma-diagnosis": lymphomaDiagnosisUrl,
+  "lymphoma-progression": lymphomaProgressionUrl,
+  "rchop-treatment-plan": rchopTreatmentPlanUrl,
+  "chemotherapy-support": chemotherapySupportUrl,
+  "spring-park-recovery": springParkRecoveryUrl,
 };
 
 function baseLeaf(id: string, name: string, x: number, y: number, width: number, height: number) {
@@ -159,13 +174,14 @@ function estimateTextHeight(
   const lines = displayText
     .split("\n")
     .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
-  return Math.max(minimum, Math.ceil(lines * fontSize * 1.22));
+  return Math.ceil(Math.max(minimum, lines * fontSize * 1.22));
 }
 
 function segmentsToMarkdown(segments: StorySegment[]) {
   return segments
     .map((segment) => {
       if (segment.marks?.includes("strong")) return `**${segment.text}**`;
+      if (segment.marks?.includes("fact")) return `**${segment.text}**`;
       if (segment.marks?.includes("artistic")) return `*${segment.text}*`;
       return segment.text;
     })
@@ -173,12 +189,13 @@ function segmentsToMarkdown(segments: StorySegment[]) {
 }
 
 function createImageBlock(
+  story: StoryMock,
   sectionId: string,
   blockIndex: number,
   assetId: string,
   y: number,
 ): { elements: CanvasElement[]; height: number } {
-  const asset = storyMock.assets.find((candidate) => candidate.id === assetId);
+  const asset = story.assets.find((candidate) => candidate.id === assetId);
   const src = assetUrls[assetId];
   if (!asset || !src) throw new Error(`Missing story asset: ${assetId}`);
 
@@ -374,7 +391,8 @@ function createQuoteBlock(
   y: number,
 ): { elements: CanvasElement[]; height: number } {
   const id = `${sectionId}-quote-${blockIndex}`;
-  const text = `*“${block.content}”*`;
+  const attribution = block.attribution ? `\n— ${block.attribution}` : "";
+  const text = `*“${block.content}”*${attribution}`;
   const textHeight = estimateTextHeight(text, 27, CONTENT_WIDTH - 76, 64);
   const height = textHeight + 48;
   const group: GroupElement = {
@@ -489,7 +507,7 @@ function createListBlock(
   return { elements: [group], height };
 }
 
-function createStoryDocument(): CanvasDocument {
+function createStoryDocument(story: StoryMock): CanvasDocument {
   const elements: CanvasElement[] = [];
   const heroChildren: CanvasElement[] = [];
   let cursorY = 72;
@@ -498,7 +516,7 @@ function createStoryDocument(): CanvasDocument {
     createText(
       "story-eyebrow",
       "病例声明",
-      storyMock.hero.eyebrow,
+      story.hero.eyebrow,
       CONTENT_X,
       cursorY,
       CONTENT_WIDTH,
@@ -508,23 +526,18 @@ function createStoryDocument(): CanvasDocument {
   );
   cursorY += 72;
   heroChildren.push(
-    createText(
-      "story-title",
-      "主标题",
-      storyMock.hero.title,
-      CONTENT_X,
-      cursorY,
-      CONTENT_WIDTH,
-      112,
-      { align: "center", fontSize: 58, fontWeight: "700" },
-    ),
+    createText("story-title", "主标题", story.hero.title, CONTENT_X, cursorY, CONTENT_WIDTH, 112, {
+      align: "center",
+      fontSize: 58,
+      fontWeight: "700",
+    }),
   );
   cursorY += 132;
   heroChildren.push(
     createText(
       "story-subtitle",
       "副标题",
-      storyMock.hero.subtitle,
+      story.hero.subtitle,
       CONTENT_X,
       cursorY,
       CONTENT_WIDTH,
@@ -533,19 +546,26 @@ function createStoryDocument(): CanvasDocument {
     ),
   );
   cursorY += 76;
-  heroChildren.push(
-    createText(
-      "story-hero-quote",
-      "开篇引语",
-      `*“${storyMock.hero.quote}”*`,
-      CONTENT_X,
-      cursorY,
-      CONTENT_WIDTH,
-      58,
-      { align: "center", fill: COLORS.accent, fontSize: 27, fontWeight: "500" },
-    ),
-  );
-  cursorY += 92;
+  if (story.hero.quote) {
+    heroChildren.push(
+      createText(
+        "story-hero-quote",
+        "开篇引语",
+        `*“${story.hero.quote}”*`,
+        CONTENT_X,
+        cursorY,
+        CONTENT_WIDTH,
+        58,
+        { align: "center", fill: COLORS.accent, fontSize: 27, fontWeight: "500" },
+      ),
+    );
+    cursorY += 92;
+  }
+  if (story.hero.assetId) {
+    const heroImage = createImageBlock(story, "story-hero", 0, story.hero.assetId, cursorY);
+    heroChildren.push(...heroImage.elements);
+    cursorY += heroImage.height + 64;
+  }
   heroChildren.push(
     createRect(
       "story-hero-divider",
@@ -568,7 +588,7 @@ function createStoryDocument(): CanvasDocument {
     children: heroChildren,
   });
 
-  storyMock.sections.forEach((section) => {
+  story.sections.forEach((section) => {
     const sectionChildren: CanvasElement[] = [];
     sectionChildren.push(
       createText(
@@ -640,7 +660,7 @@ function createStoryDocument(): CanvasDocument {
           break;
         }
         case "image":
-          result = createImageBlock(section.id, blockIndex, block.assetId, cursorY);
+          result = createImageBlock(story, section.id, blockIndex, block.assetId, cursorY);
           break;
         case "table":
           result = createTableBlock(section.id, blockIndex, block, cursorY);
@@ -689,7 +709,7 @@ function createStoryDocument(): CanvasDocument {
   });
 
   const footerChildren: CanvasElement[] = [];
-  storyMock.footer.disclaimers.forEach((disclaimer, index) => {
+  story.footer.disclaimers.forEach((disclaimer, index) => {
     const height = estimateTextHeight(disclaimer, 17, CONTENT_WIDTH);
     footerChildren.push(
       createText(
@@ -709,7 +729,7 @@ function createStoryDocument(): CanvasDocument {
     createText(
       "story-footer-copyright",
       "版权信息",
-      storyMock.footer.copyright,
+      story.footer.copyright,
       CONTENT_X,
       cursorY,
       CONTENT_WIDTH,
@@ -739,13 +759,16 @@ function createStoryDocument(): CanvasDocument {
   background.locked = true;
 
   return {
-    id: storyMock.id,
-    name: "肾脏觉醒之路",
-    description: storyMock.source.title,
+    id: story.id,
+    name: story.name,
+    description: story.source.title,
     width: PAGE_WIDTH,
     height: cursorY,
     elements: [background, ...elements],
   };
 }
 
-export const EDITOR_TEMPLATES: CanvasDocument[] = [createStoryDocument()];
+export const EDITOR_TEMPLATES: CanvasDocument[] = [
+  createStoryDocument(kidneyStoryMock),
+  createStoryDocument(lymphomaStoryMock),
+];

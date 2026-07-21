@@ -1,6 +1,11 @@
 # Mock 数据
 
-`kidney-awakening-story.json` 是从 `index_fa881ff4.html` 提取的语义化长页数据，包含：
+当前包含两个从 HTML 提取的语义化病例长页：
+
+- `kidney-awakening-story.json`：肾脏觉醒之路
+- `lymphoma-transformation-story.json`：淋巴瘤转化之路
+
+每份数据包含：
 
 - 页面来源、主题与版式 token
 - Hero、章节、正文、引语、事实卡、表格、列表与页脚声明
