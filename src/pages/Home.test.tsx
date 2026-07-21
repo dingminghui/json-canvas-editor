@@ -97,26 +97,28 @@ vi.mock("@/editor/components/RichTextEditorOverlay", () => {
 });
 
 describe("Home", () => {
-  it("renders the single editor page and switches templates", async () => {
+  it("renders the editor and switches pages only from the sidebar", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "图层" })).toBeInTheDocument();
+    const layerHeading = screen.getByRole("heading", { name: "图层" });
+    const pagesHeading = screen.getByRole("heading", { name: "页面" });
+    const currentPageInfo = screen.getByRole("group", { name: "当前页面信息" });
+    expect(layerHeading.parentElement).toHaveTextContent(/^图层$/);
+    expect(pagesHeading.parentElement).toHaveTextContent(/^页面$/);
+    expect(screen.getByRole("separator", { name: "调整页面与图层区域高度" })).toHaveAttribute(
+      "aria-orientation",
+      "horizontal",
+    );
     expect(screen.getByText("选择一个元素")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-stage")).toHaveTextContent("工作室手记");
+    expect(currentPageInfo).toHaveTextContent("工作室手记1080 × 1080");
+    expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
+    expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
 
-    await user.hover(screen.getByRole("button", { name: "切换模板" }));
-    const templateOption = await screen.findByRole("button", { name: "切换到模板 旷野笔记" });
-
-    expect(screen.queryByText("切换模板")).not.toBeInTheDocument();
-    expect(screen.queryByText("共 3 个")).not.toBeInTheDocument();
-    expect(screen.queryByText("01")).not.toBeInTheDocument();
-
-    await user.click(templateOption);
-
+    await user.click(screen.getByRole("button", { name: "打开页面 旷野笔记" }));
     expect(screen.getByTestId("canvas-stage")).toHaveTextContent("旷野笔记");
-    expect(screen.queryByRole("button", { name: "打开图层结构" })).not.toBeInTheDocument();
-    expect(screen.queryByText("关于页面")).not.toBeInTheDocument();
+    expect(currentPageInfo).toHaveTextContent("旷野笔记1600 × 900");
   });
 
   it("highlights the matching canvas element while hovering a layer", async () => {
@@ -305,11 +307,39 @@ describe("Home", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.hover(screen.getByRole("button", { name: "暖灰背景" }));
     await user.hover(screen.getByRole("button", { name: "隐藏 暖灰背景" }));
 
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip).toHaveTextContent("隐藏");
     expect(tooltip).not.toHaveTextContent("暖灰背景");
+  });
+
+  it("keeps only active hidden and locked layer actions visible outside hover", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const backgroundHideButton = screen.getByRole("button", { name: "隐藏 暖灰背景" });
+    const backgroundUnlockButton = screen.getByRole("button", { name: "解锁 暖灰背景" });
+
+    expect(backgroundHideButton).toHaveClass("opacity-0", "pointer-events-none");
+    expect(backgroundUnlockButton).toHaveClass("opacity-100", "pointer-events-auto");
+    expect(backgroundUnlockButton.querySelector("svg")).toHaveClass("h-[15px]!", "w-[13px]!");
+
+    const titleHideButton = screen.getByRole("button", { name: "隐藏 主标题" });
+    const titleLockButton = screen.getByRole("button", { name: "锁定 主标题" });
+    expect(titleHideButton).toHaveClass("opacity-0", "pointer-events-none");
+    expect(titleLockButton).toHaveClass("opacity-0", "pointer-events-none");
+
+    await user.hover(screen.getByRole("button", { name: "主标题" }));
+    await user.click(titleHideButton);
+
+    const titleShowButton = screen.getByRole("button", { name: "显示 主标题" });
+    expect(titleShowButton).toHaveClass("opacity-100", "pointer-events-auto");
+    expect(screen.getByRole("button", { name: "锁定 主标题" })).toHaveClass("opacity-0");
+
+    await user.click(titleShowButton);
+    expect(screen.getByRole("button", { name: "隐藏 主标题" })).toHaveClass("opacity-0");
   });
 
   it("pans the free canvas with the middle mouse button", () => {

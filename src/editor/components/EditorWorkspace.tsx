@@ -2,7 +2,6 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { CanvasStage } from "@/editor/components/CanvasStage";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
-import { TemplateSwitcher } from "@/editor/components/TemplateSwitcher";
 import { findElement } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
 import type {
@@ -28,7 +27,6 @@ const RichTextEditorOverlay = lazy(() => import("@/editor/components/RichTextEdi
 
 interface EditorWorkspaceProps {
   document: CanvasDocument;
-  documents: CanvasDocument[];
   hoveredId: string | null;
   selectedId: string | null;
   editingText: TextEditingSession | null;
@@ -45,7 +43,6 @@ interface EditorWorkspaceProps {
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
   onSetZoom: (zoom: number) => void;
   onSetFitMode: (enabled: boolean) => void;
-  onSelectTemplate: (templateId: string) => void;
   onUndo: () => void;
   onRedo: () => void;
 }
@@ -98,7 +95,6 @@ function getCenteredPosition(
 
 export const EditorWorkspace = memo(function EditorWorkspace({
   document,
-  documents,
   hoveredId,
   selectedId,
   editingText,
@@ -115,7 +111,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onElementPreview,
   onSetZoom,
   onSetFitMode,
-  onSelectTemplate,
   onUndo,
   onRedo,
 }: EditorWorkspaceProps) {
@@ -293,11 +288,18 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       ref={workspaceRef}
     >
       <header className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex h-12 items-center justify-start border-b border-[color-mix(in_oklch,var(--border)_65%,transparent)] bg-[color-mix(in_oklch,var(--background)_86%,transparent)] px-2.5 backdrop-blur-[10px]">
-        <TemplateSwitcher
-          activeDocument={document}
-          documents={documents}
-          onSelectTemplate={onSelectTemplate}
-        />
+        <div
+          aria-label="当前页面信息"
+          className="flex min-w-0 max-w-[min(420px,calc(100%-20px))] items-center gap-[7px] px-2"
+          role="group"
+        >
+          <strong className="overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap">
+            {document.name}
+          </strong>
+          <span className="font-mono text-xs text-muted-foreground">
+            {document.width} × {document.height}
+          </span>
+        </div>
       </header>
 
       <div

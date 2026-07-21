@@ -114,12 +114,9 @@ export function Home() {
     },
     [activeDocument.elements],
   );
-  const previewElement = useCallback(
-    (elementId: string, patch: CanvasElementPatch | null) => {
-      setElementPreview(patch ? { elementId, patch } : null);
-    },
-    [],
-  );
+  const previewElement = useCallback((elementId: string, patch: CanvasElementPatch | null) => {
+    setElementPreview(patch ? { elementId, patch } : null);
+  }, []);
   const previewSelectedElement = useCallback(
     (patch: CanvasElementPatch | null) => {
       if (!patch) {
@@ -252,9 +249,11 @@ export function Home() {
         <aside className="relative z-10 h-full min-w-0 bg-card">
           <LayerSidebar
             document={activeDocument}
+            documents={documents}
             onHover={setHoveredElementId}
             onReorder={reorderElements}
             onSelect={selectElement}
+            onSelectDocument={selectTemplate}
             onToggleLocked={toggleLocked}
             onToggleVisible={toggleVisible}
             selectedId={state.selectedId}
@@ -272,7 +271,6 @@ export function Home() {
           canRedo={history.future.length > 0}
           canUndo={history.past.length > 0}
           document={displayedDocument}
-          documents={documents}
           editingText={textEditing}
           fitMode={state.fitMode}
           hoveredId={hoveredElementId}
@@ -285,7 +283,6 @@ export function Home() {
           onElementChange={updateElement}
           onElementPreview={previewElement}
           onSelect={selectElement}
-          onSelectTemplate={selectTemplate}
           onSetFitMode={setFitMode}
           onSetZoom={setZoom}
           onRedo={redo}

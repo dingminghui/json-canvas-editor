@@ -208,34 +208,35 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
           </Button>
 
           {props.clone ? null : (
-            <div
-              className={cn(
-                "ml-auto flex flex-none gap-0 pr-0.5 opacity-40 group-hover/layer:opacity-100",
-                selected && "opacity-100",
-              )}
-            >
+            <div className="ml-auto flex flex-none gap-0 pr-0.5">
               <EditorIconButton
-                className="size-6"
+                className={cn(
+                  "size-6 opacity-0 transition-opacity duration-100 pointer-events-none group-hover/layer:pointer-events-auto group-hover/layer:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
+                  !element.visible && "pointer-events-auto opacity-100",
+                )}
                 label={element.visible ? `隐藏 ${element.name}` : `显示 ${element.name}`}
                 tooltip={element.visible ? "隐藏" : "显示"}
                 onPress={() => actions.onToggleVisible(element.id)}
               >
                 {element.visible ? (
-                  <Eye size={14} strokeWidth={1.75} />
+                  <Eye size={12} strokeWidth={1.75} />
                 ) : (
-                  <EyeOff size={14} strokeWidth={1.75} />
+                  <EyeOff size={12} strokeWidth={1.75} />
                 )}
               </EditorIconButton>
               <EditorIconButton
-                className="size-6"
+                className={cn(
+                  "size-6 opacity-0 transition-opacity duration-100 pointer-events-none group-hover/layer:pointer-events-auto group-hover/layer:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
+                  element.locked && "pointer-events-auto opacity-100",
+                )}
                 label={element.locked ? `解锁 ${element.name}` : `锁定 ${element.name}`}
                 tooltip={element.locked ? "解锁" : "锁定"}
                 onPress={() => actions.onToggleLocked(element.id)}
               >
                 {element.locked ? (
-                  <Lock size={12} strokeWidth={1.75} />
+                  <Lock className="h-[15px]! w-[13px]!" strokeWidth={1.75} />
                 ) : (
-                  <Unlock size={12} strokeWidth={1.75} />
+                  <Unlock className="h-[15px]! w-[13px]!" strokeWidth={1.75} />
                 )}
               </EditorIconButton>
             </div>
