@@ -31,7 +31,9 @@ import {
   createContext,
   forwardRef,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -80,6 +82,22 @@ function collectGroupIds(elements: CanvasElement[]): string[] {
   );
 }
 
+function findAncestorGroupIds(
+  elements: CanvasElement[],
+  elementId: string,
+  ancestors: string[] = [],
+): string[] | null {
+  for (const element of elements) {
+    if (element.id === elementId) return ancestors;
+    if (!isGroupElement(element)) continue;
+
+    const result = findAncestorGroupIds(element.children, elementId, [...ancestors, element.id]);
+    if (result) return result;
+  }
+
+  return null;
+}
+
 function getElementIcon(element: CanvasElement, selected: boolean): ReactNode {
   const props = {
     className: cn("size-3.5 flex-none text-muted-foreground", selected && "text-primary"),
@@ -118,12 +136,12 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
       <SimpleTreeItemWrapper
         {...props}
         className={cn(
-          "m-0! box-border w-full min-w-0 max-w-full",
+          "m-0! box-border w-max min-w-full max-w-none",
           props.ghost && "opacity-0",
           props.clone && "w-auto max-w-none p-0!",
         )}
         contentClassName={cn(
-          "w-full min-w-0 max-w-full border-0! bg-transparent! p-0! text-inherit!",
+          "w-max min-w-full max-w-none border-0! bg-transparent! p-0! text-inherit!",
           props.clone && "rounded-none shadow-none",
         )}
         disableCollapseOnItemClick
@@ -133,8 +151,9 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
         showDragHandle={false}
       >
         <div
+          aria-selected={selected}
           className={cn(
-            "group/layer flex min-h-8 w-full min-w-0 items-center gap-0 rounded-[calc(var(--radius-sm)-4px)] py-px pr-0 pl-0.5 transition-[background-color,box-shadow,color] duration-100 hover:bg-[color-mix(in_oklch,var(--muted)_82%,var(--card))]",
+            "group/layer flex min-h-8 w-max min-w-full items-center gap-0 rounded-[calc(var(--radius-sm)-4px)] bg-card py-px pr-0 pl-0.5 transition-[background-color,box-shadow,color] duration-100 hover:bg-[color-mix(in_oklch,var(--muted)_82%,var(--card))]",
             selected && "bg-[var(--selection-background)] shadow-[inset_2px_0_0_var(--primary)]",
             props.clone &&
               "min-h-7 w-auto rounded-sm border-0 bg-popover px-[7px] py-[3px] shadow-[0_8px_20px_color-mix(in_oklch,var(--foreground)_7%,transparent)]",
@@ -146,10 +165,26 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
           data-slot="layer-row"
           data-clone={props.clone}
           data-dragging={props.ghost}
+          data-element-id={element.id}
           data-over={props.isOver}
           data-over-parent={props.isOverParent}
           data-selected={selected}
           data-type={element.type}
+          role="treeitem"
+          tabIndex={props.clone ? -1 : 0}
+          onClick={() => {
+            if (!props.clone) actions.onSelect(element.id);
+          }}
+          onKeyDown={(event) => {
+            if (
+              !props.clone &&
+              event.target === event.currentTarget &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              event.preventDefault();
+              actions.onSelect(element.id);
+            }
+          }}
           onMouseEnter={() => {
             if (!props.clone) actions.onHover(element.id);
           }}
@@ -173,7 +208,10 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
               size="icon-xs"
               type="button"
               variant="ghost"
-              onClick={props.onCollapse}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onCollapse?.();
+              }}
             >
               {props.collapsed ? (
                 <ChevronRight size={14} strokeWidth={1.75} />
@@ -188,17 +226,16 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
           <Button
             {...dragHandleProps}
             className={cn(
-              "h-7 min-w-0 flex-1 cursor-grab touch-none justify-start gap-1.5 overflow-hidden px-[3px] text-foreground active:cursor-grabbing",
+              "h-7 w-auto min-w-0 flex-none cursor-grab touch-none justify-start gap-1.5 px-[3px] text-foreground active:cursor-grabbing",
               props.clone && "w-auto max-w-60 flex-initial",
             )}
             type="button"
             variant="ghost"
-            onClick={() => actions.onSelect(element.id)}
           >
             {getElementIcon(element, selected)}
             <span
               className={cn(
-                "min-w-0 flex-1 overflow-hidden text-left text-xs font-[550] text-ellipsis whitespace-nowrap",
+                "w-max flex-none text-left text-xs font-[550] whitespace-nowrap",
                 isGroup && "font-[650]",
                 selected && "text-primary",
               )}
@@ -208,7 +245,10 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
           </Button>
 
           {props.clone ? null : (
-            <div className="ml-auto flex flex-none gap-0 pr-0.5">
+            <div
+              className="sticky right-0 ml-auto flex flex-none gap-0 bg-inherit pr-0.5 pl-1"
+              data-slot="layer-row-actions"
+            >
               <EditorIconButton
                 className={cn(
                   "size-6 opacity-0 transition-opacity duration-100 pointer-events-none group-hover/layer:pointer-events-auto group-hover/layer:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
@@ -257,6 +297,8 @@ export function LayerTree({
   onReorder,
 }: LayerTreeProps) {
   const [expandedIds, setExpandedIds] = useState(() => new Set(collectGroupIds(elements)));
+  const revealedSelectionRef = useRef<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => createLayerTreeItems(elements, expandedIds), [elements, expandedIds]);
 
   const actions = useMemo(
@@ -264,9 +306,65 @@ export function LayerTree({
     [onHover, onSelect, onToggleLocked, onToggleVisible, selectedId],
   );
 
+  useEffect(() => {
+    if (!selectedId) {
+      revealedSelectionRef.current = null;
+      return;
+    }
+    if (revealedSelectionRef.current === selectedId) return;
+    revealedSelectionRef.current = selectedId;
+
+    const ancestorIds = findAncestorGroupIds(elements, selectedId);
+    if (!ancestorIds?.length) return;
+
+    const frame = requestAnimationFrame(() => {
+      setExpandedIds((current) => {
+        if (ancestorIds.every((id) => current.has(id))) return current;
+        return new Set([...current, ...ancestorIds]);
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [elements, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const frame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      const selectedRow = Array.from(
+        viewport.querySelectorAll<HTMLElement>('[data-slot="layer-row"]'),
+      ).find((row) => row.dataset.elementId === selectedId);
+      if (!selectedRow) return;
+
+      const viewportRect = viewport.getBoundingClientRect();
+      const rowRect = selectedRow.getBoundingClientRect();
+      const isVisible = rowRect.top >= viewportRect.top && rowRect.bottom <= viewportRect.bottom;
+      if (isVisible) return;
+
+      viewport.scrollTo({
+        behavior: "smooth",
+        left: viewport.scrollLeft,
+        top:
+          viewport.scrollTop +
+          rowRect.top -
+          viewportRect.top -
+          (viewport.clientHeight - rowRect.height) / 2,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [items, selectedId]);
+
   return (
-    <ScrollArea className="min-h-0 max-h-none flex-1 px-2 pt-1.5 pb-3">
-      <div className="w-full min-w-0 p-0 [&>ul]:m-0 [&>ul]:w-full [&>ul]:min-w-0 [&>ul]:p-0">
+    <ScrollArea
+      className="min-h-0 max-h-none flex-1 px-2 pt-1.5 pb-3"
+      scrollbars="both"
+      viewportRef={viewportRef}
+    >
+      <div className="w-max min-w-full p-0 [&>ul]:m-0 [&>ul]:w-max [&>ul]:min-w-full [&>ul]:p-0">
         <LayerTreeActionsContext.Provider value={actions}>
           <SortableTree
             TreeItemComponent={LayerTreeItem}

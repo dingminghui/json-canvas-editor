@@ -1,5 +1,6 @@
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { findCanvasElementBounds, getViewportPositionToReveal } from "@/editor/canvas-viewport";
 import { CanvasStage } from "@/editor/components/CanvasStage";
 import { DocumentJsonPreviewDialog } from "@/editor/components/DocumentJsonPreviewDialog";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
@@ -19,9 +20,11 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type Ref,
 } from "react";
 
 const RichTextEditorOverlay = lazy(() => import("@/editor/components/RichTextEditorOverlay"));
@@ -36,6 +39,7 @@ interface EditorWorkspaceProps {
   fitMode: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  workspaceHandleRef: Ref<EditorWorkspaceHandle>;
   onSelect: (elementId: string | null) => void;
   onEditText: (elementId: string) => void;
   onCancelTextEdit: () => void;
@@ -46,6 +50,10 @@ interface EditorWorkspaceProps {
   onSetFitMode: (enabled: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+}
+
+export interface EditorWorkspaceHandle {
+  revealElement: (elementId: string) => void;
 }
 
 interface ContainerSize {
@@ -105,6 +113,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   fitMode,
   canUndo,
   canRedo,
+  workspaceHandleRef,
   onSelect,
   onEditText,
   onCancelTextEdit,
@@ -193,9 +202,31 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     };
   }, []);
 
-  function updateViewportPosition(position: CanvasPoint) {
-    setViewportPositions((positions) => ({ ...positions, [document.id]: position }));
-  }
+  const updateViewportPosition = useCallback(
+    (position: CanvasPoint) => {
+      setViewportPositions((positions) => ({ ...positions, [document.id]: position }));
+    },
+    [document.id],
+  );
+
+  useImperativeHandle(
+    workspaceHandleRef,
+    () => ({
+      revealElement(elementId: string) {
+        if (size.width <= 0 || size.height <= 0) return;
+
+        const bounds = findCanvasElementBounds(document.elements, elementId);
+        if (!bounds) return;
+
+        const nextPosition = getViewportPositionToReveal(bounds, size, viewportPosition, zoom);
+        if (!nextPosition) return;
+
+        updateViewportPosition(nextPosition);
+        if (fitMode) onSetZoom(zoom);
+      },
+    }),
+    [document.elements, fitMode, onSetZoom, size, updateViewportPosition, viewportPosition, zoom],
+  );
 
   function setZoomAroundPoint(nextZoom: number, point: CanvasPoint) {
     const clampedZoom = clampZoom(nextZoom);

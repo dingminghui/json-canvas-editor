@@ -82,7 +82,7 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 grid-rows-[36px_minmax(0,1fr)] bg-[#f8f8f6]">
+        <div className="grid min-h-0 min-w-0 grid-rows-[36px_minmax(0,1fr)] bg-[#f8f8f6]">
           <div className="flex items-center border-b border-border/70 bg-[#f4f4f1] px-4">
             <span className="flex h-full items-center gap-1.5 border-b-2 border-primary px-1 font-mono text-[11px] font-medium text-foreground/80">
               <Braces aria-hidden="true" className="size-3 text-primary" strokeWidth={1.75} />
@@ -93,10 +93,10 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
             </span>
           </div>
 
-          <ScrollArea className="min-h-0" scrollbars="both">
+          <ScrollArea className="min-h-0 min-w-0 max-w-full overflow-hidden" scrollbars="both">
             <pre
               aria-label="当前页面 JSON"
-              className="min-w-max py-3 pr-6 font-mono text-[12px] leading-[1.7] text-[#4d5260] selection:bg-primary/15"
+              className="w-max min-w-full whitespace-pre py-3 pr-6 pb-5 font-mono text-[12px] leading-[1.7] text-[#4d5260] selection:bg-primary/15"
             >
               <code>
                 {lines.map((line, index) => (

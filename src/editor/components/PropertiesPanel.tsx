@@ -44,7 +44,6 @@ import { memo, useId, useRef, useState } from "react";
 interface PropertiesPanelProps {
   selectedElement: CanvasElement | null;
   isLocked: boolean;
-  onPreview: (patch: CanvasElementPatch | null) => void;
   onUpdate: (patch: CanvasElementPatch) => void;
 }
 
@@ -241,43 +240,21 @@ function ColorControl({
   label,
   value,
   disabled,
-  onPreview,
   onChange,
 }: {
   label: string;
   value: string;
   disabled: boolean;
-  onPreview: (value: string | null) => void;
   onChange: (value: string) => void;
 }) {
   const id = useId();
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-
-  function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-    if (nextOpen) return;
-
-    if (draftValue !== null) onChange(draftValue);
-    onPreview(null);
-    setDraftValue(null);
-  }
 
   return (
     <Field>
       <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={id}>
         {label}
       </FieldLabel>
-      <ColorPicker
-        disabled={disabled}
-        open={open}
-        value={draftValue ?? value}
-        onChange={(nextValue) => {
-          setDraftValue(nextValue);
-          onPreview(nextValue);
-        }}
-        onOpenChange={handleOpenChange}
-      >
+      <ColorPicker disabled={disabled} value={value} onChange={onChange}>
         <Button
           aria-label={`${label}选择器`}
           className="h-8 w-full justify-start gap-2 rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] px-2 font-mono text-xs font-normal text-muted-foreground shadow-none"
@@ -353,12 +330,10 @@ function TextAlignmentControl({
 function ElementSpecificFields({
   element,
   disabled,
-  onPreview,
   onUpdate,
 }: {
   element: CanvasLeafElement;
   disabled: boolean;
-  onPreview: (patch: CanvasElementPatch | null) => void;
   onUpdate: (patch: CanvasElementPatch) => void;
 }) {
   const textId = useId();
@@ -376,14 +351,14 @@ function ElementSpecificFields({
               aria-readonly="true"
               className={cn(
                 PROPERTY_CONTROL_CLASS_NAME,
-                "flex h-8 items-center overflow-x-auto overflow-y-hidden px-2.5 text-xs leading-none whitespace-nowrap",
+                "flex min-h-8 items-start overflow-x-hidden px-2.5 py-1.5 text-xs leading-5 whitespace-pre-wrap break-words",
                 disabled && "cursor-not-allowed opacity-50",
               )}
               id={textId}
               role="textbox"
               tabIndex={0}
             >
-              <span className="block w-max min-w-full shrink-0">
+              <span className="block min-w-0 flex-1">
                 {markdownToPlainText(element.text) || ""}
               </span>
             </div>
@@ -421,7 +396,6 @@ function ElementSpecificFields({
             disabled={disabled}
             label="文字颜色"
             value={element.fill}
-            onPreview={(fill) => onPreview(fill ? { fill } : null)}
             onChange={(fill) => onUpdate({ fill })}
           />
         </FieldGroup>
@@ -433,7 +407,6 @@ function ElementSpecificFields({
             disabled={disabled}
             label="填充颜色"
             value={element.fill}
-            onPreview={(fill) => onPreview(fill ? { fill } : null)}
             onChange={(fill) => onUpdate({ fill })}
           />
           <PropertyNumberField
@@ -451,7 +424,6 @@ function ElementSpecificFields({
           disabled={disabled}
           label="填充颜色"
           value={element.fill}
-          onPreview={(fill) => onPreview(fill ? { fill } : null)}
           onChange={(fill) => onUpdate({ fill })}
         />
       );
@@ -478,7 +450,6 @@ function ElementSpecificFields({
 export const PropertiesPanel = memo(function PropertiesPanel({
   selectedElement,
   isLocked,
-  onPreview,
   onUpdate,
 }: PropertiesPanelProps) {
   const nameId = useId();
@@ -613,7 +584,6 @@ export const PropertiesPanel = memo(function PropertiesPanel({
             key={selectedElement.id}
             disabled={isLocked}
             element={selectedElement}
-            onPreview={onPreview}
             onUpdate={onUpdate}
           />
         </section>

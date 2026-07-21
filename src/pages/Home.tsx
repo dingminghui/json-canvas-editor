@@ -1,5 +1,5 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { EditorWorkspace } from "@/editor/components/EditorWorkspace";
+import { EditorWorkspace, type EditorWorkspaceHandle } from "@/editor/components/EditorWorkspace";
 import { LayerSidebar } from "@/editor/components/LayerSidebar";
 import { PropertiesPanel } from "@/editor/components/PropertiesPanel";
 import {
@@ -40,6 +40,7 @@ export function Home() {
   } | null>(null);
   const [textEditing, setTextEditing] = useState<TextEditingSession | null>(null);
   const nextTextEditingSessionIdRef = useRef(0);
+  const editorWorkspaceRef = useRef<EditorWorkspaceHandle>(null);
   const [history, dispatch] = useReducer(
     editorHistoryReducer,
     undefined,
@@ -86,6 +87,14 @@ export function Home() {
     dispatch({ type: "select-element", elementId });
   }, []);
 
+  const selectLayerElement = useCallback(
+    (elementId: string) => {
+      selectElement(elementId);
+      editorWorkspaceRef.current?.revealElement(elementId);
+    },
+    [selectElement],
+  );
+
   const selectTemplate = useCallback((templateId: string) => {
     setHoveredElementId(null);
     setElementPreview(null);
@@ -117,17 +126,6 @@ export function Home() {
   const previewElement = useCallback((elementId: string, patch: CanvasElementPatch | null) => {
     setElementPreview(patch ? { elementId, patch } : null);
   }, []);
-  const previewSelectedElement = useCallback(
-    (patch: CanvasElementPatch | null) => {
-      if (!patch) {
-        setElementPreview(null);
-        return;
-      }
-      if (!state.selectedId || isSelectedLocked) return;
-      setElementPreview({ elementId: state.selectedId, patch });
-    },
-    [isSelectedLocked, state.selectedId],
-  );
   const setFitMode = useCallback(
     (enabled: boolean) => dispatch({ type: "set-fit-mode", enabled }),
     [],
@@ -252,7 +250,7 @@ export function Home() {
             documents={documents}
             onHover={setHoveredElementId}
             onReorder={reorderElements}
-            onSelect={selectElement}
+            onSelect={selectLayerElement}
             onSelectDocument={selectTemplate}
             onToggleLocked={toggleLocked}
             onToggleVisible={toggleVisible}
@@ -277,6 +275,7 @@ export function Home() {
           isSelectedLocked={isSelectedLocked}
           manualZoom={state.manualZoomByTemplate[state.activeTemplateId]}
           selectedId={state.selectedId}
+          workspaceHandleRef={editorWorkspaceRef}
           onCancelTextEdit={cancelTextEditing}
           onCommitTextEdit={commitTextEditing}
           onEditText={beginTextEditing}
@@ -307,7 +306,6 @@ export function Home() {
           <PropertiesPanel
             isLocked={isSelectedLocked}
             selectedElement={displayedSelectedElement}
-            onPreview={previewSelectedElement}
             onUpdate={updateSelectedElement}
           />
         </aside>

@@ -29,7 +29,10 @@ export function EditorIconButton({
           disabled={disabled}
           size="icon-sm"
           variant="ghost"
-          onClick={onPress}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPress();
+          }}
         >
           <span className="grid place-items-center [&_svg]:size-[15px]" data-icon="inline-start">
             {children}

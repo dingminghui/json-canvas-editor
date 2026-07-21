@@ -13,7 +13,10 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     onElementPreview,
     onPanReadyChange,
     onPanStart,
+    onSelect,
+    viewportHeight,
     viewportPosition,
+    viewportWidth,
   }: {
     document: { name: string };
     editingElementId: string | null;
@@ -26,7 +29,10 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     ) => void;
     onPanReadyChange: (ready: boolean) => void;
     onPanStart: (pointerId: number, point: { x: number; y: number }) => void;
+    onSelect: (elementId: string) => void;
+    viewportHeight: number;
     viewportPosition: { x: number; y: number };
+    viewportWidth: number;
   }) => (
     <div
       data-hovered-id={hoveredId ?? ""}
@@ -34,6 +40,8 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       data-testid="canvas-stage"
       data-viewport-x={viewportPosition.x}
       data-viewport-y={viewportPosition.y}
+      data-viewport-height={viewportHeight}
+      data-viewport-width={viewportWidth}
       onPointerDown={(event) => {
         onPanReadyChange(true);
         onPanStart(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -41,6 +49,8 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     >
       {document.name}
       <button onClick={() => onEditText("story-title")}>模拟双击文本</button>
+      <button onClick={() => onSelect("story-title")}>模拟画布选择主标题</button>
+      <button onClick={() => onSelect("story-footer-copyright")}>模拟画布选择版权信息</button>
       <button
         onClick={() =>
           onElementPreview("story-title", {
@@ -113,7 +123,11 @@ describe("Home", () => {
 
     expect(dialog).toHaveTextContent(/肾脏觉醒之路 · 1080 × \d+/);
     expect(dialog).toHaveTextContent("只读预览");
-    expect(dialog.querySelector('[data-slot="scroll-area"]')).toBeInTheDocument();
+    expect(dialog.querySelector('[data-slot="scroll-area"]')).toHaveAttribute(
+      "data-scrollbars",
+      "both",
+    );
+    expect(preview).toHaveClass("w-max", "min-w-full", "whitespace-pre");
     expect(pageDefinition.id).toBe("kidney-awakening-story");
     expect(pageDefinition.name).toBe("肾脏觉醒之路");
     expect(pageDefinition.elements.length).toBeGreaterThan(0);
@@ -159,6 +173,146 @@ describe("Home", () => {
     );
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
+
+    const layerPanel = layerHeading.closest('[data-slot="resizable-panel"]');
+    const layerScrollArea = layerPanel?.querySelector('[data-slot="scroll-area"]');
+    const titleActions = screen
+      .getByRole("button", { name: "主标题" })
+      .closest('[data-slot="layer-row"]')
+      ?.querySelector('[data-slot="layer-row-actions"]');
+
+    expect(layerScrollArea).toHaveAttribute("data-scrollbars", "both");
+    expect(titleActions).toHaveClass("sticky", "right-0");
+  });
+
+  it("centers a canvas-selected layer only when it is outside the visible layer viewport", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const viewport = screen
+      .getByRole("heading", { name: "图层" })
+      .closest('[data-slot="resizable-panel"]')
+      ?.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement | null;
+    const titleRow = document.querySelector(
+      '[data-slot="layer-row"][data-element-id="story-title"]',
+    ) as HTMLDivElement | null;
+    const copyrightRow = document.querySelector(
+      '[data-slot="layer-row"][data-element-id="story-footer-copyright"]',
+    ) as HTMLDivElement | null;
+
+    if (!viewport || !titleRow || !copyrightRow) throw new Error("未找到图层滚动测试节点");
+
+    const scrollTo = vi.fn();
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollLeft: { configurable: true, value: 12, writable: true },
+      scrollTo: { configurable: true, value: scrollTo },
+      scrollTop: { configurable: true, value: 20, writable: true },
+    });
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+      bottom: 300,
+      height: 200,
+      left: 0,
+      right: 240,
+      top: 100,
+      width: 240,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(titleRow, "getBoundingClientRect").mockReturnValue({
+      bottom: 172,
+      height: 32,
+      left: 0,
+      right: 240,
+      top: 140,
+      width: 240,
+      x: 0,
+      y: 140,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(copyrightRow, "getBoundingClientRect").mockReturnValue({
+      bottom: 532,
+      height: 32,
+      left: 0,
+      right: 240,
+      top: 500,
+      width: 240,
+      x: 0,
+      y: 500,
+      toJSON: () => ({}),
+    });
+
+    await user.click(screen.getByRole("button", { name: "模拟画布选择主标题" }));
+    await waitFor(() => expect(titleRow).toHaveAttribute("data-selected", "true"));
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "模拟画布选择版权信息" }));
+    await waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({
+        behavior: "smooth",
+        left: 12,
+        top: 336,
+      }),
+    );
+  });
+
+  it("reveals a canvas-selected layer inside a collapsed group", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "收起 开篇" }));
+    expect(screen.queryByRole("button", { name: "主标题" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "模拟画布选择主标题" }));
+
+    const title = await screen.findByRole("button", { name: "主标题" });
+    expect(title.closest('[data-slot="layer-row"]')).toHaveAttribute("data-selected", "true");
+  });
+
+  it("moves an offscreen canvas element into view when its layer is selected", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+
+    class ImmediateResizeObserver implements ResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+
+      disconnect() {}
+
+      observe(target: Element) {
+        if (target.tagName !== "MAIN") return;
+        this.callback(
+          [{ contentRect: { height: 600, width: 800 }, target } as ResizeObserverEntry],
+          this,
+        );
+      }
+
+      unobserve() {}
+    }
+
+    globalThis.ResizeObserver = ImmediateResizeObserver;
+
+    try {
+      const user = userEvent.setup();
+      render(<App />);
+
+      const canvas = screen.getByTestId("canvas-stage");
+      await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "800"));
+      const initialPosition = {
+        x: Number(canvas.getAttribute("data-viewport-x")),
+        y: Number(canvas.getAttribute("data-viewport-y")),
+      };
+
+      await user.click(screen.getByRole("button", { name: "主标题" }));
+      expect(canvas).toHaveAttribute("data-viewport-x", String(initialPosition.x));
+      expect(canvas).toHaveAttribute("data-viewport-y", String(initialPosition.y));
+
+      await user.click(screen.getByRole("button", { name: "版权信息" }));
+      await waitFor(() =>
+        expect(Number(canvas.getAttribute("data-viewport-y"))).toBeLessThan(-1_000),
+      );
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver;
+    }
   });
 
   it("highlights the matching canvas element while hovering a layer", async () => {
@@ -197,6 +351,33 @@ describe("Home", () => {
 
     await user.click(screen.getByRole("button", { name: "展开 开篇" }));
     expect(screen.getByRole("button", { name: "病例声明" })).toBeInTheDocument();
+  });
+
+  it("selects from the whole layer row without action buttons clicking through", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const backgroundRow = screen
+      .getByRole("button", { name: "纸张背景" })
+      .closest('[data-slot="layer-row"]');
+    const titleRow = screen
+      .getByRole("button", { name: "主标题" })
+      .closest('[data-slot="layer-row"]');
+    if (!backgroundRow || !titleRow) throw new Error("未找到图层行");
+
+    fireEvent.click(backgroundRow);
+    expect(backgroundRow).toHaveAttribute("data-selected", "true");
+
+    await user.click(screen.getByRole("button", { name: "主标题" }));
+    await user.hover(backgroundRow);
+    await user.click(screen.getByRole("button", { name: "隐藏 纸张背景" }));
+
+    expect(titleRow).toHaveAttribute("data-selected", "true");
+    expect(backgroundRow).toHaveAttribute("data-selected", "false");
+
+    await user.click(screen.getByRole("button", { name: "解锁 纸张背景" }));
+    expect(titleRow).toHaveAttribute("data-selected", "true");
+    expect(backgroundRow).toHaveAttribute("data-selected", "false");
   });
 
   it("edits the element name and shows position values with at most two decimals", async () => {
@@ -281,8 +462,14 @@ describe("Home", () => {
     );
     expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveClass(
       "flex",
-      "items-center",
-      "leading-none",
+      "items-start",
+      "overflow-x-hidden",
+      "whitespace-pre-wrap",
+      "break-words",
+    );
+    expect(screen.getByRole("textbox", { name: "文本内容" })).not.toHaveClass(
+      "overflow-x-auto",
+      "whitespace-nowrap",
     );
 
     fireEvent.keyDown(window, { key: "Enter" });
@@ -322,7 +509,7 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
   });
 
-  it("previews color changes and records only the committed color in history", async () => {
+  it("commits color changes immediately without waiting for the popover to close", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -335,11 +522,12 @@ describe("Home", () => {
     });
 
     expect(colorButton).toHaveTextContent("#FF0000");
-    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "撤销" })).toBeEnabled();
 
     await user.click(document.body);
     await waitFor(() => expect(screen.queryByRole("textbox", { name: "Hex 颜色" })).toBeNull());
 
+    expect(colorButton).toHaveTextContent("#FF0000");
     expect(screen.getByRole("button", { name: "撤销" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "撤销" }));
 
