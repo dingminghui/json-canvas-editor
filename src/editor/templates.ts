@@ -193,6 +193,12 @@ function createOriginalCanvasDocument(document: OriginalCanvasDocument): CanvasD
           stroke: element.stroke ?? "#000000",
           strokeWidth: element.strokeWidth ?? 0,
         };
+      case "ellipse":
+      case "line":
+      case "arrow":
+      case "polygon":
+      case "star":
+        return element;
       default: {
         const exhaustiveElement: never = element;
         throw new Error(

@@ -8,13 +8,6 @@ interface MockGestureHandlers {
   onDragMove?: (event: { target: unknown }) => void;
   onTransform?: (event: { target: unknown }) => void;
   onTransformEnd?: (event: { target: unknown }) => void;
-  onPointerDown?: (event: {
-    evt: PointerEvent;
-    pointerId: number;
-    target: { getStage: () => unknown };
-  }) => void;
-  onPointerLeave?: () => void;
-  onPointerMove?: (event: { target: { getStage: () => unknown } }) => void;
 }
 
 interface MockTextRenderProps extends MockGestureHandlers {
@@ -57,10 +50,6 @@ let lastTextFontFamily: string | undefined;
 let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
 let textRenderProps: MockTextRenderProps = {};
-let stagePointerHandlers: Pick<
-  MockGestureHandlers,
-  "onPointerDown" | "onPointerLeave" | "onPointerMove"
-> = {};
 let hoverTransformerProps: MockTransformerProps = {};
 let selectionTransformerProps: MockTransformerProps = {};
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
@@ -75,7 +64,9 @@ vi.mock("react-konva", async () => {
   interface MockContainerProps extends MockGestureHandlers {
     children?: ReactNode;
     clipFunc?: (context: MockClipContext) => void;
+    draggable?: boolean;
     height?: number;
+    listening?: boolean;
     name?: string;
     scaleX?: number;
     scaleY?: number;
@@ -98,16 +89,15 @@ vi.mock("react-konva", async () => {
     {
       children,
       clipFunc,
+      draggable,
       height,
+      listening,
       name,
       onClick,
       onDragEnd,
       onDragMove,
       onTransform,
       onTransformEnd,
-      onPointerDown,
-      onPointerLeave,
-      onPointerMove,
       width,
       x,
       y,
@@ -120,14 +110,12 @@ vi.mock("react-konva", async () => {
       imageGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
       imageClipFunc = clipFunc;
     }
-    if (onPointerDown || onPointerLeave || onPointerMove) {
-      stagePointerHandlers = { onPointerDown, onPointerLeave, onPointerMove };
-    }
-
     return (
       <div
         data-name={name}
         data-height={height}
+        data-draggable={draggable === undefined ? undefined : String(draggable)}
+        data-listening={listening === undefined ? undefined : String(listening)}
         data-scale-x={scaleX}
         data-scale-y={scaleY}
         data-width={width}
@@ -172,15 +160,26 @@ vi.mock("react-konva", async () => {
     return null;
   });
 
+  function ShapePrimitive({ kind, ...props }: Record<string, unknown> & { kind: string }) {
+    return <div data-testid={`shape-${kind}`} data-shape-props={JSON.stringify(props)} />;
+  }
+
   return {
+    Arrow: (props: Record<string, unknown>) => <ShapePrimitive kind="arrow" {...props} />,
+    Ellipse: (props: Record<string, unknown>) => <ShapePrimitive kind="ellipse" {...props} />,
     Group: Container,
     Image: (props: MockImageRenderProps) => {
       if (props.listening === false) imageRenderProps = props;
       return null;
     },
     Layer: Container,
+    Line: (props: Record<string, unknown>) => <ShapePrimitive kind="line" {...props} />,
     Rect,
+    RegularPolygon: (props: Record<string, unknown>) => (
+      <ShapePrimitive kind="polygon" {...props} />
+    ),
     Stage: Container,
+    Star: (props: Record<string, unknown>) => <ShapePrimitive kind="star" {...props} />,
     Text: ({
       draggable,
       fontFamily,
@@ -244,7 +243,6 @@ describe("CanvasStage", () => {
     lastTextFontStyle = undefined;
     textGestureHandlers = {};
     textRenderProps = {};
-    stagePointerHandlers = {};
     hoverTransformerProps = {};
     selectionTransformerProps = {};
     transformerNodeSpies = [];
@@ -284,6 +282,43 @@ describe("CanvasStage", () => {
     fireEvent.click(hitArea);
 
     expect(onSelect).toHaveBeenCalledWith("photo");
+  });
+
+  it("only allows the explicitly selected element to be dragged", () => {
+    const sharedProps = {
+      document,
+      editingElementId: null,
+      hoveredId: null,
+      isSelectedLocked: false,
+      viewportHeight: 620,
+      viewportPosition: { x: 160, y: 140 },
+      viewportWidth: 720,
+      zoom: 1,
+      onEditText: vi.fn(),
+      onElementChange: vi.fn(),
+      onElementPreview: vi.fn(),
+      onSelect: vi.fn(),
+    };
+    const { container, rerender } = render(<CanvasStage {...sharedProps} selectedId={null} />);
+    const imageNode = container.querySelector('[data-name="photo"]');
+
+    expect(imageNode).toHaveAttribute("data-draggable", "false");
+
+    rerender(<CanvasStage {...sharedProps} selectedId="photo" />);
+    expect(imageNode).toHaveAttribute("data-draggable", "true");
+
+    rerender(
+      <CanvasStage
+        {...sharedProps}
+        document={{
+          ...document,
+          elements: [{ ...document.elements[0], locked: true }],
+        }}
+        isSelectedLocked
+        selectedId="photo"
+      />,
+    );
+    expect(imageNode).toHaveAttribute("data-draggable", "false");
   });
 
   it("clips image content to the configured rounded rectangle", () => {
@@ -362,6 +397,161 @@ describe("CanvasStage", () => {
     expect(screen.getByTestId("rect-card")).toHaveAttribute("data-corner-radius", "18");
     expect(screen.getByTestId("rect-card")).toHaveAttribute("data-stroke", "#2948ab");
     expect(screen.getByTestId("rect-card")).toHaveAttribute("data-stroke-width", "5");
+  });
+
+  it("renders ellipse, line, arrow, polygon, star, and a drawing draft", () => {
+    const shapeDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          height: 60,
+          id: "ellipse",
+          locked: false,
+          name: "椭圆",
+          opacity: 1,
+          rotation: 0,
+          type: "ellipse",
+          visible: true,
+          width: 100,
+          x: 10,
+          y: 10,
+          fill: "#D8D4F5",
+          stroke: "#6D5FD4",
+          strokeWidth: 2,
+        },
+        {
+          height: 40,
+          id: "line",
+          lineCap: "round",
+          locked: false,
+          name: "直线",
+          opacity: 1,
+          points: [0, 0, 100, 40],
+          rotation: 0,
+          stroke: "#24382F",
+          strokeWidth: 3,
+          type: "line",
+          visible: true,
+          width: 100,
+          x: 10,
+          y: 80,
+        },
+        {
+          height: 40,
+          id: "arrow",
+          lineCap: "round",
+          locked: false,
+          name: "箭头",
+          opacity: 1,
+          pointerLength: 14,
+          pointerWidth: 12,
+          points: [0, 0, 100, 40],
+          rotation: 0,
+          stroke: "#24382F",
+          strokeWidth: 3,
+          type: "arrow",
+          visible: true,
+          width: 100,
+          x: 10,
+          y: 130,
+        },
+        {
+          cornerRadius: 4,
+          fill: "#D8D4F5",
+          height: 90,
+          id: "polygon",
+          locked: false,
+          name: "多边形",
+          opacity: 1,
+          rotation: 0,
+          sides: 5,
+          stroke: "#6D5FD4",
+          strokeWidth: 2,
+          type: "polygon",
+          visible: true,
+          width: 90,
+          x: 130,
+          y: 10,
+        },
+        {
+          fill: "#D8D4F5",
+          height: 100,
+          id: "star",
+          innerRadius: 21,
+          locked: false,
+          name: "星形",
+          numPoints: 5,
+          opacity: 1,
+          outerRadius: 50,
+          rotation: 0,
+          stroke: "#6D5FD4",
+          strokeWidth: 2,
+          type: "star",
+          visible: true,
+          width: 100,
+          x: 230,
+          y: 10,
+        },
+      ],
+    };
+
+    render(
+      <CanvasStage
+        document={shapeDocument}
+        draftElement={{
+          fill: "#D8D4F5",
+          height: 60,
+          id: "draft",
+          locked: true,
+          name: "草稿",
+          opacity: 0.58,
+          rotation: 0,
+          stroke: "#6D5FD4",
+          strokeWidth: 2,
+          type: "ellipse",
+          visible: true,
+          width: 100,
+          x: 10,
+          y: 10,
+        }}
+        editingElementId={null}
+        hoveredId={null}
+        isCreating
+        isSelectedLocked={false}
+        selectedId="line"
+        viewportHeight={620}
+        viewportPosition={{ x: 0, y: 0 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={vi.fn()}
+        onElementPreview={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByTestId("shape-ellipse")).toHaveLength(2);
+    expect(screen.getAllByTestId("shape-ellipse")[0].parentElement?.parentElement).toHaveAttribute(
+      "data-listening",
+      "false",
+    );
+    expect(screen.getByTestId("shape-line")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"lineCap":"round"'),
+    );
+    expect(screen.getByTestId("shape-arrow")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"pointerLength":14'),
+    );
+    expect(screen.getByTestId("shape-polygon")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"sides":5'),
+    );
+    expect(screen.getByTestId("shape-star")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"numPoints":5'),
+    );
+    expect(selectionTransformerProps.keepRatio).toBe(false);
   });
 
   it("crops a cover image into the element frame instead of overflowing its client bounds", () => {
@@ -785,89 +975,5 @@ describe("CanvasStage", () => {
       borderStrokeWidth: 1.5,
       rotateAnchorOffset: 28,
     });
-  });
-
-  it("starts panning only when the primary pointer is over empty or locked content", () => {
-    const onPanReadyChange = vi.fn();
-    const onPanStart = vi.fn();
-    const stage = { getStage: () => stage };
-    const element = { draggable: () => true, getParent: () => stage, getStage: () => stage };
-    const lockedBackground = {
-      draggable: () => false,
-      getParent: () => stage,
-      getStage: () => stage,
-    };
-
-    render(
-      <CanvasStage
-        document={document}
-        editingElementId={null}
-        hoveredId={null}
-        isSelectedLocked={false}
-        selectedId={null}
-        viewportHeight={620}
-        viewportPosition={{ x: 160, y: 140 }}
-        viewportWidth={720}
-        zoom={2}
-        onEditText={vi.fn()}
-        onElementChange={vi.fn()}
-        onElementPreview={vi.fn()}
-        onPanReadyChange={onPanReadyChange}
-        onPanStart={onPanStart}
-        onSelect={vi.fn()}
-      />,
-    );
-
-    act(() => stagePointerHandlers.onPointerMove?.({ target: stage }));
-    expect(onPanReadyChange).toHaveBeenLastCalledWith(true);
-
-    act(() => stagePointerHandlers.onPointerMove?.({ target: element }));
-    expect(onPanReadyChange).toHaveBeenLastCalledWith(false);
-
-    const blankPointerEvent = new PointerEvent("pointerdown", {
-      button: 0,
-      cancelable: true,
-      clientX: 280,
-      clientY: 190,
-    });
-    act(() =>
-      stagePointerHandlers.onPointerDown?.({
-        evt: blankPointerEvent,
-        pointerId: 9,
-        target: stage,
-      }),
-    );
-
-    expect(blankPointerEvent.defaultPrevented).toBe(false);
-    expect(onPanStart).toHaveBeenCalledWith(9, { x: 280, y: 190 });
-
-    act(() =>
-      stagePointerHandlers.onPointerDown?.({
-        evt: new PointerEvent("pointerdown", { button: 0 }),
-        pointerId: 10,
-        target: lockedBackground,
-      }),
-    );
-    expect(onPanStart).toHaveBeenLastCalledWith(10, { x: 0, y: 0 });
-
-    act(() =>
-      stagePointerHandlers.onPointerDown?.({
-        evt: new PointerEvent("pointerdown", { button: 0 }),
-        pointerId: 11,
-        target: element,
-      }),
-    );
-    act(() =>
-      stagePointerHandlers.onPointerDown?.({
-        evt: new PointerEvent("pointerdown", { button: 2 }),
-        pointerId: 12,
-        target: stage,
-      }),
-    );
-
-    expect(onPanStart).toHaveBeenCalledTimes(2);
-
-    act(() => stagePointerHandlers.onPointerLeave?.());
-    expect(onPanReadyChange).toHaveBeenLastCalledWith(false);
   });
 });

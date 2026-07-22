@@ -58,6 +58,11 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
   text: "文本",
   rect: "矩形",
   circle: "圆形",
+  ellipse: "椭圆",
+  line: "直线",
+  arrow: "箭头",
+  polygon: "多边形",
+  star: "星形",
   image: "图片",
 };
 
@@ -449,6 +454,7 @@ function ElementSpecificFields({
         </FieldGroup>
       );
     case "circle":
+    case "ellipse":
       return (
         <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
           <ColorControl
@@ -470,6 +476,147 @@ function ElementSpecificFields({
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
           />
+        </FieldGroup>
+      );
+    case "line":
+      return (
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
+        </FieldGroup>
+      );
+    case "arrow":
+      return (
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <PropertyNumberField
+              disabled={disabled}
+              label="箭头长度"
+              minValue={1}
+              value={element.pointerLength}
+              onChange={(pointerLength) => onUpdate({ pointerLength })}
+            />
+            <PropertyNumberField
+              disabled={disabled}
+              label="箭头宽度"
+              minValue={1}
+              value={element.pointerWidth}
+              onChange={(pointerWidth) => onUpdate({ pointerWidth })}
+            />
+          </div>
+        </FieldGroup>
+      );
+    case "polygon":
+      return (
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <ColorControl
+            disabled={disabled}
+            label="填充颜色"
+            value={element.fill}
+            onChange={(fill) => onUpdate({ fill })}
+          />
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <PropertyNumberField
+              disabled={disabled}
+              label="边数"
+              minValue={3}
+              value={element.sides}
+              onChange={(sides) => onUpdate({ sides: Math.round(sides) })}
+            />
+            <PropertyNumberField
+              disabled={disabled}
+              label="圆角"
+              minValue={0}
+              value={element.cornerRadius}
+              onChange={(cornerRadius) => onUpdate({ cornerRadius })}
+            />
+          </div>
+        </FieldGroup>
+      );
+    case "star":
+      return (
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <ColorControl
+            disabled={disabled}
+            label="填充颜色"
+            value={element.fill}
+            onChange={(fill) => onUpdate({ fill })}
+          />
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="角数"
+            minValue={2}
+            value={element.numPoints}
+            onChange={(numPoints) => onUpdate({ numPoints: Math.round(numPoints) })}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <PropertyNumberField
+              disabled={disabled}
+              label="内半径"
+              minValue={1}
+              value={element.innerRadius}
+              onChange={(innerRadius) => onUpdate({ innerRadius })}
+            />
+            <PropertyNumberField
+              disabled={disabled}
+              label="外半径"
+              minValue={1}
+              value={element.outerRadius}
+              onChange={(outerRadius) =>
+                onUpdate({ outerRadius, width: outerRadius * 2, height: outerRadius * 2 })
+              }
+            />
+          </div>
         </FieldGroup>
       );
     case "image":

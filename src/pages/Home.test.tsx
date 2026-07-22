@@ -11,8 +11,6 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     onEditText,
     onElementChange,
     onElementPreview,
-    onPanReadyChange,
-    onPanStart,
     onSelect,
     viewportHeight,
     viewportPosition,
@@ -28,8 +26,6 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       elementId: string,
       patch: { height?: number; width?: number; x?: number; y?: number } | null,
     ) => void;
-    onPanReadyChange: (ready: boolean) => void;
-    onPanStart: (pointerId: number, point: { x: number; y: number }) => void;
     onSelect: (elementId: string) => void;
     viewportHeight: number;
     viewportPosition: { x: number; y: number };
@@ -46,10 +42,6 @@ vi.mock("@/editor/components/CanvasStage", () => ({
       data-viewport-height={viewportHeight}
       data-viewport-width={viewportWidth}
       data-zoom={zoom}
-      onPointerDown={(event) => {
-        onPanReadyChange(true);
-        onPanStart(event.pointerId, { x: event.clientX, y: event.clientY });
-      }}
     >
       {document.name}
       <button onClick={() => onEditText("story-title")}>模拟双击文本</button>
@@ -197,7 +189,7 @@ describe("Home", () => {
     expect(titleActions).toHaveClass("sticky", "right-0");
   });
 
-  it("centers a canvas-selected layer only when it is outside the visible layer viewport", async () => {
+  it("does not scroll the layer list when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -205,71 +197,23 @@ describe("Home", () => {
       .getByRole("heading", { name: "图层" })
       .closest('[data-slot="resizable-panel"]')
       ?.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement | null;
-    const titleRow = document.querySelector(
-      '[data-slot="layer-row"][data-element-id="story-title"]',
-    ) as HTMLDivElement | null;
     const copyrightRow = document.querySelector(
       '[data-slot="layer-row"][data-element-id="story-footer-copyright"]',
     ) as HTMLDivElement | null;
 
-    if (!viewport || !titleRow || !copyrightRow) throw new Error("未找到图层滚动测试节点");
+    if (!viewport || !copyrightRow) throw new Error("未找到图层滚动测试节点");
 
     const scrollTo = vi.fn();
     Object.defineProperties(viewport, {
-      clientHeight: { configurable: true, value: 200 },
-      scrollLeft: { configurable: true, value: 12, writable: true },
       scrollTo: { configurable: true, value: scrollTo },
-      scrollTop: { configurable: true, value: 20, writable: true },
     });
-    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
-      bottom: 300,
-      height: 200,
-      left: 0,
-      right: 240,
-      top: 100,
-      width: 240,
-      x: 0,
-      y: 100,
-      toJSON: () => ({}),
-    });
-    vi.spyOn(titleRow, "getBoundingClientRect").mockReturnValue({
-      bottom: 172,
-      height: 32,
-      left: 0,
-      right: 240,
-      top: 140,
-      width: 240,
-      x: 0,
-      y: 140,
-      toJSON: () => ({}),
-    });
-    vi.spyOn(copyrightRow, "getBoundingClientRect").mockReturnValue({
-      bottom: 532,
-      height: 32,
-      left: 0,
-      right: 240,
-      top: 500,
-      width: 240,
-      x: 0,
-      y: 500,
-      toJSON: () => ({}),
-    });
-
-    await user.click(screen.getByRole("button", { name: "模拟画布选择主标题" }));
-    await waitFor(() => expect(titleRow).toHaveAttribute("data-selected", "true"));
-    expect(scrollTo).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "模拟画布选择版权信息" }));
-    await waitFor(() =>
-      expect(scrollTo).toHaveBeenCalledWith({
-        behavior: "smooth",
-        left: 12,
-        top: 336,
-      }),
-    );
+    await waitFor(() => expect(copyrightRow).toHaveAttribute("data-selected", "true"));
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
-  it("reveals a canvas-selected layer inside a collapsed group", async () => {
+  it("does not expand a collapsed group when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -278,8 +222,8 @@ describe("Home", () => {
 
     await user.click(screen.getByRole("button", { name: "模拟画布选择主标题" }));
 
-    const title = await screen.findByRole("button", { name: "主标题" });
-    expect(title.closest('[data-slot="layer-row"]')).toHaveAttribute("data-selected", "true");
+    expect(screen.queryByRole("button", { name: "主标题" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开 开篇" })).toBeVisible();
   });
 
   it("moves an offscreen canvas element into view when its layer is selected", async () => {
@@ -712,6 +656,39 @@ describe("Home", () => {
     expect(viewport).toHaveAttribute("data-panning", "false");
   });
 
+  it("pans with a primary-button drag while Space is held", () => {
+    render(<App />);
+
+    const canvas = screen.getByTestId("canvas-stage");
+    const viewport = canvas.parentElement;
+    if (!viewport) throw new Error("未找到画板视口");
+    Object.assign(viewport, {
+      hasPointerCapture: () => true,
+      releasePointerCapture: vi.fn(),
+      setPointerCapture: vi.fn(),
+    });
+
+    const initialX = Number(canvas.getAttribute("data-viewport-x"));
+    const initialY = Number(canvas.getAttribute("data-viewport-y"));
+    fireEvent.pointerEnter(viewport);
+    fireEvent.keyDown(window, { code: "Space" });
+    expect(viewport).toHaveAttribute("data-pan-ready", "true");
+
+    fireEvent.pointerDown(viewport, {
+      button: 0,
+      clientX: 100,
+      clientY: 120,
+      pointerId: 12,
+    });
+    fireEvent.pointerMove(viewport, { clientX: 130, clientY: 150, pointerId: 12 });
+    expect(canvas).toHaveAttribute("data-viewport-x", String(initialX + 30));
+    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY + 30));
+
+    fireEvent.pointerUp(viewport, { pointerId: 12 });
+    fireEvent.keyUp(window, { code: "Space" });
+    expect(viewport).toHaveAttribute("data-pan-ready", "false");
+  });
+
   it("pans the free canvas in both axes with trackpad scrolling", () => {
     render(<App />);
 
@@ -742,18 +719,12 @@ describe("Home", () => {
     expect(canvas).toHaveAttribute("data-zoom", initialZoom);
   });
 
-  it("pans the canvas by dragging an empty area with the primary mouse button", () => {
+  it("does not pan the canvas or show a grab cursor for a primary-button drag", () => {
     render(<App />);
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;
     if (!viewport) throw new Error("未找到画板视口");
-
-    Object.assign(viewport, {
-      hasPointerCapture: () => true,
-      releasePointerCapture: vi.fn(),
-      setPointerCapture: vi.fn(),
-    });
 
     const initialX = Number(canvas.getAttribute("data-viewport-x"));
     const initialY = Number(canvas.getAttribute("data-viewport-y"));
@@ -764,18 +735,16 @@ describe("Home", () => {
       clientY: 180,
       pointerId: 8,
     });
-    expect(viewport).toHaveAttribute("data-panning", "false");
-
     fireEvent.pointerMove(viewport, {
       clientX: 206,
       clientY: 222,
       pointerId: 8,
     });
 
-    expect(canvas).toHaveAttribute("data-viewport-x", String(initialX - 34));
-    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY + 42));
-    expect(viewport).toHaveAttribute("data-pan-ready", "true");
-    expect(viewport).toHaveAttribute("data-panning", "true");
+    expect(canvas).toHaveAttribute("data-viewport-x", String(initialX));
+    expect(canvas).toHaveAttribute("data-viewport-y", String(initialY));
+    expect(viewport).toHaveAttribute("data-pan-ready", "false");
+    expect(viewport).toHaveAttribute("data-panning", "false");
 
     fireEvent.pointerUp(viewport, { pointerId: 8 });
     expect(viewport).toHaveAttribute("data-panning", "false");

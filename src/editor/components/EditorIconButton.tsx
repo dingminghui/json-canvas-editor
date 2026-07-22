@@ -9,6 +9,7 @@ interface EditorIconButtonProps {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  pressed?: boolean;
   onPress: () => void;
 }
 
@@ -18,6 +19,7 @@ export function EditorIconButton({
   children,
   className,
   disabled = false,
+  pressed,
   onPress,
 }: EditorIconButtonProps) {
   return (
@@ -25,7 +27,8 @@ export function EditorIconButton({
       <TooltipTrigger asChild>
         <Button
           aria-label={label}
-          className={cn(className)}
+          aria-pressed={pressed}
+          className={cn(pressed && "bg-accent text-primary", className)}
           disabled={disabled}
           size="icon-sm"
           variant="ghost"

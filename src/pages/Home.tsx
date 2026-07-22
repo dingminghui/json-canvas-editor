@@ -14,6 +14,7 @@ import {
   isLeafElement,
   type CanvasElement,
   type CanvasElementPatch,
+  type CanvasLeafElement,
   type TextEditingSession,
 } from "@/editor/types";
 import {
@@ -74,6 +75,18 @@ export function Home() {
     [isSelectedLocked, state.selectedId],
   );
 
+  const addElement = useCallback((element: CanvasLeafElement, editText = false) => {
+    setElementPreview(null);
+    dispatch({ type: "add-element", element });
+    if (editText && element.type === "text") {
+      setTextEditing({
+        elementId: element.id,
+        initialText: element.text,
+        sessionId: ++nextTextEditingSessionIdRef.current,
+      });
+    }
+  }, []);
+
   const selectElement = useCallback((elementId: string | null) => {
     setElementPreview(null);
     dispatch({ type: "select-element", elementId });
@@ -88,6 +101,7 @@ export function Home() {
   );
 
   const selectTemplate = useCallback((templateId: string) => {
+    editorWorkspaceRef.current?.cancelCreation();
     setHoveredElementId(null);
     setElementPreview(null);
     setTextEditing(null);
@@ -273,6 +287,7 @@ export function Home() {
           onEditText={beginTextEditing}
           onElementChange={updateElement}
           onElementPreview={previewElement}
+          onAddElement={addElement}
           onSelect={selectElement}
           onSetFitMode={setFitMode}
           onSetZoom={setZoom}

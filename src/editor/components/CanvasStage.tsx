@@ -8,6 +8,7 @@ import {
 import {
   isGroupElement,
   isLeafElement,
+  type ArrowElement,
   type CanvasDocument,
   type CanvasElement,
   type CanvasElementPatch,
@@ -15,19 +16,25 @@ import {
   type CanvasPoint,
   type CanvasTransformPatch,
   type ImageElement,
+  type LineElement,
 } from "@/editor/types";
 import Konva from "konva";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Group, Image, Layer, Rect, Stage, Text, Transformer } from "react-konva";
+import {
+  Arrow,
+  Ellipse,
+  Group,
+  Image,
+  Layer,
+  Line,
+  Rect,
+  RegularPolygon,
+  Stage,
+  Star,
+  Text,
+  Transformer,
+} from "react-konva";
 import useImage from "use-image";
 
 interface CanvasStageProps {
@@ -40,12 +47,12 @@ interface CanvasStageProps {
   viewportWidth: number;
   editingElementId: string | null;
   isSelectedLocked: boolean;
+  draftElement?: CanvasLeafElement | null;
+  isCreating?: boolean;
   onEditText: (elementId: string) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  onPanReadyChange?: (ready: boolean) => void;
-  onPanStart?: (pointerId: number, point: CanvasPoint) => void;
 }
 
 interface RenderElementProps {
@@ -53,6 +60,7 @@ interface RenderElementProps {
   fontRevision: number;
   inheritedLocked: boolean;
   editingElementId: string | null;
+  selectedId: string | null;
   onEditText: (elementId: string) => void;
   onSelect: (elementId: string) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
@@ -228,6 +236,18 @@ function getTransformPatch(element: CanvasLeafElement, node: Konva.Node): Canvas
   };
 }
 
+function getLineTransformPatch(
+  element: LineElement | ArrowElement,
+  node: Konva.Node,
+): CanvasElementPatch {
+  const scaleX = Math.abs(node.scaleX());
+  const scaleY = Math.abs(node.scaleY());
+  return {
+    ...getTransformPatch(element, node),
+    points: element.points.map((point, index) => point * (index % 2 === 0 ? scaleX : scaleY)),
+  };
+}
+
 function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
   const width = Math.max(8, node.width() * Math.abs(node.scaleX()));
   const height = Math.max(8, node.height() * Math.abs(node.scaleY()));
@@ -266,7 +286,10 @@ function commitTransform(
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
 ) {
-  const patch = getTransformPatch(element, node);
+  const patch =
+    element.type === "line" || element.type === "arrow"
+      ? getLineTransformPatch(element, node)
+      : getTransformPatch(element, node);
 
   // Normalize the temporary Transformer scale before committing real dimensions so the
   // selection frame never observes both the new size and the old scale in the same frame.
@@ -292,24 +315,12 @@ function commitTextTransform(
   onElementPreview(elementId, null);
 }
 
-function canStartViewportPan(target: Konva.Node): boolean {
-  const stage = target.getStage();
-  if (!stage) return false;
-
-  let node: Konva.Node | null = target;
-  while (node && node !== stage) {
-    if (node.draggable()) return false;
-    node = node.getParent();
-  }
-
-  return true;
-}
-
 const RenderElement = memo(function RenderElement({
   element,
   fontRevision,
   inheritedLocked,
   editingElementId,
+  selectedId,
   onEditText,
   onSelect,
   onElementChange,
@@ -337,6 +348,7 @@ const RenderElement = memo(function RenderElement({
             editingElementId={editingElementId}
             inheritedLocked={locked}
             key={child.id}
+            selectedId={selectedId}
             setNodeRef={setNodeRef}
             onEditText={onEditText}
             onElementChange={onElementChange}
@@ -350,7 +362,7 @@ const RenderElement = memo(function RenderElement({
 
   const isEditing = editingElementId === element.id;
   const commonProps = {
-    draggable: !locked && !isEditing,
+    draggable: selectedId === element.id && !locked && !isEditing,
     height: element.height,
     name: element.id,
     opacity: element.opacity,
@@ -400,6 +412,81 @@ const RenderElement = memo(function RenderElement({
           strokeWidth={element.strokeWidth}
         />
       );
+    case "ellipse":
+      return (
+        <Group ref={(node) => setNodeRef(element.id, node)} {...commonProps}>
+          <Ellipse
+            fill={element.fill}
+            radiusX={element.width / 2}
+            radiusY={element.height / 2}
+            stroke={element.stroke}
+            strokeWidth={element.strokeWidth}
+            x={element.width / 2}
+            y={element.height / 2}
+          />
+        </Group>
+      );
+    case "line":
+      return (
+        <Group ref={(node) => setNodeRef(element.id, node)} {...commonProps}>
+          <Line
+            hitStrokeWidth={Math.max(12, element.strokeWidth)}
+            lineCap={element.lineCap}
+            points={element.points}
+            stroke={element.stroke}
+            strokeWidth={element.strokeWidth}
+          />
+        </Group>
+      );
+    case "arrow":
+      return (
+        <Group ref={(node) => setNodeRef(element.id, node)} {...commonProps}>
+          <Arrow
+            fill={element.stroke}
+            hitStrokeWidth={Math.max(12, element.strokeWidth)}
+            lineCap={element.lineCap}
+            pointerLength={element.pointerLength}
+            pointerWidth={element.pointerWidth}
+            points={element.points}
+            stroke={element.stroke}
+            strokeWidth={element.strokeWidth}
+          />
+        </Group>
+      );
+    case "polygon":
+      return (
+        <Group ref={(node) => setNodeRef(element.id, node)} {...commonProps}>
+          <RegularPolygon
+            cornerRadius={element.cornerRadius}
+            fill={element.fill}
+            radius={Math.min(element.width, element.height) / 2}
+            sides={element.sides}
+            stroke={element.stroke}
+            strokeWidth={element.strokeWidth}
+            x={element.width / 2}
+            y={element.height / 2}
+          />
+        </Group>
+      );
+    case "star": {
+      const radius = Math.min(element.width, element.height) / 2;
+      const radiusRatio =
+        element.outerRadius > 0 ? element.innerRadius / element.outerRadius : 0.42;
+      return (
+        <Group ref={(node) => setNodeRef(element.id, node)} {...commonProps}>
+          <Star
+            fill={element.fill}
+            innerRadius={radius * radiusRatio}
+            numPoints={element.numPoints}
+            outerRadius={radius}
+            stroke={element.stroke}
+            strokeWidth={element.strokeWidth}
+            x={element.width / 2}
+            y={element.height / 2}
+          />
+        </Group>
+      );
+    }
     case "text":
       return richTextCanvas ? (
         <Image
@@ -456,7 +543,7 @@ const RenderElement = memo(function RenderElement({
     case "image":
       return (
         <CanvasImage
-          draggable={!locked}
+          draggable={selectedId === element.id && !locked}
           element={element}
           setNodeRef={setNodeRef}
           onElementChange={onElementChange}
@@ -481,12 +568,12 @@ export function CanvasStage({
   viewportWidth,
   editingElementId,
   isSelectedLocked,
+  draftElement = null,
+  isCreating = false,
   onEditText,
   onSelect,
   onElementChange,
   onElementPreview,
-  onPanReadyChange,
-  onPanStart,
 }: CanvasStageProps) {
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
@@ -566,21 +653,17 @@ export function CanvasStage({
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
-      onPointerDown={(event) => {
-        if (!canStartViewportPan(event.target) || event.evt.button !== 0) return;
-
-        onPanReadyChange?.(true);
-        onPanStart?.(event.pointerId, { x: event.evt.clientX, y: event.evt.clientY });
-      }}
-      onPointerLeave={() => onPanReadyChange?.(false)}
-      onPointerMove={(event) => {
-        onPanReadyChange?.(canStartViewportPan(event.target));
-      }}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
     >
-      <Layer scaleX={zoom} scaleY={zoom} x={viewportPosition.x} y={viewportPosition.y}>
+      <Layer
+        listening={!isCreating}
+        scaleX={zoom}
+        scaleY={zoom}
+        x={viewportPosition.x}
+        y={viewportPosition.y}
+      >
         <Rect
           fill="#ffffff"
           height={document.height}
@@ -600,6 +683,7 @@ export function CanvasStage({
             editingElementId={editingElementId}
             inheritedLocked={false}
             key={element.id}
+            selectedId={selectedId}
             setNodeRef={setNodeRef}
             onEditText={onEditText}
             onElementChange={onElementChange}
@@ -607,6 +691,20 @@ export function CanvasStage({
             onSelect={onSelect}
           />
         ))}
+        {draftElement ? (
+          <RenderElement
+            element={draftElement}
+            fontRevision={fontRevision}
+            editingElementId={null}
+            inheritedLocked
+            selectedId={null}
+            setNodeRef={() => undefined}
+            onEditText={() => undefined}
+            onElementChange={() => undefined}
+            onElementPreview={() => undefined}
+            onSelect={() => undefined}
+          />
+        ) : null}
         <Transformer
           ref={hoverTransformerRef}
           borderDash={[]}
@@ -629,14 +727,21 @@ export function CanvasStage({
           borderStroke="#6d5fd4"
           borderStrokeWidth={1.5}
           flipEnabled={false}
-          keepRatio={selectedContext?.element.type !== "image"}
+          keepRatio={
+            selectedContext?.element.type !== "image" &&
+            selectedContext?.element.type !== "line" &&
+            selectedContext?.element.type !== "arrow"
+          }
           rotateAnchorOffset={28}
           rotateEnabled
-          boundBoxFunc={(oldBox, newBox) =>
-            Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom
-              ? oldBox
-              : newBox
-          }
+          boundBoxFunc={(oldBox, newBox) => {
+            const isLinear =
+              selectedContext?.element.type === "line" || selectedContext?.element.type === "arrow";
+            const isTooSmall = isLinear
+              ? Math.hypot(newBox.width, newBox.height) < 8 * zoom
+              : Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom;
+            return isTooSmall ? oldBox : newBox;
+          }}
         />
       </Layer>
     </Stage>

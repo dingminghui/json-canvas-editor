@@ -23,6 +23,10 @@ interface StrokedElement extends TransformableElement {
   strokeWidth: number;
 }
 
+interface FilledStrokedElement extends StrokedElement {
+  fill: string;
+}
+
 export interface TextElement extends TransformableElement {
   type: "text";
   /** Restricted inline Markdown: bold, italic, strikethrough, line breaks, and color spans. */
@@ -34,15 +38,43 @@ export interface TextElement extends TransformableElement {
   fill: string;
 }
 
-export interface RectElement extends StrokedElement {
+export interface RectElement extends FilledStrokedElement {
   type: "rect";
-  fill: string;
   cornerRadius: number;
 }
 
-export interface CircleElement extends StrokedElement {
+export interface CircleElement extends FilledStrokedElement {
   type: "circle";
-  fill: string;
+}
+
+export interface EllipseElement extends FilledStrokedElement {
+  type: "ellipse";
+}
+
+export interface LineElement extends StrokedElement {
+  type: "line";
+  /** Points are local to the element's top-left bounding box. */
+  points: number[];
+  lineCap: "butt" | "round" | "square";
+}
+
+export interface ArrowElement extends Omit<LineElement, "type"> {
+  type: "arrow";
+  pointerLength: number;
+  pointerWidth: number;
+}
+
+export interface PolygonElement extends FilledStrokedElement {
+  type: "polygon";
+  sides: number;
+  cornerRadius: number;
+}
+
+export interface StarElement extends FilledStrokedElement {
+  type: "star";
+  numPoints: number;
+  innerRadius: number;
+  outerRadius: number;
 }
 
 export interface ImageElement extends TransformableElement {
@@ -57,7 +89,16 @@ export interface GroupElement extends ElementMeta {
   children: CanvasElement[];
 }
 
-export type CanvasLeafElement = TextElement | RectElement | CircleElement | ImageElement;
+export type CanvasLeafElement =
+  | TextElement
+  | RectElement
+  | CircleElement
+  | EllipseElement
+  | LineElement
+  | ArrowElement
+  | PolygonElement
+  | StarElement
+  | ImageElement;
 export type CanvasElement = CanvasLeafElement | GroupElement;
 export type CanvasTransformPatch = Pick<
   CanvasLeafElement,

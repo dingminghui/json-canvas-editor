@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { findCanvasElementBounds, getViewportPositionToReveal } from "@/editor/canvas-viewport";
@@ -5,15 +7,41 @@ import { CanvasStage } from "@/editor/components/CanvasStage";
 import { DocumentJsonPreviewDialog } from "@/editor/components/DocumentJsonPreviewDialog";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
 import { findElement } from "@/editor/editor-state";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  createElementFromDrag,
+  createImageElement,
+  isPointInsideDocument,
+  MAX_IMAGE_BYTES,
+  type CreationTool,
+  type ShapeCreationTool,
+} from "@/editor/element-creation";
 import { isInteractiveTarget } from "@/editor/interaction";
 import type {
   CanvasDocument,
   CanvasElementPatch,
+  CanvasLeafElement,
   CanvasPoint,
   CanvasTransformPatch,
   TextEditingSession,
 } from "@/editor/types";
-import { Minus, Plus, Redo2, Scan, Undo2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  ArrowUpRight,
+  Check,
+  Circle,
+  ImagePlus,
+  Minus,
+  Plus,
+  Redo2,
+  Scan,
+  Shapes,
+  Square,
+  Star,
+  Triangle,
+  Type,
+  Undo2,
+} from "lucide-react";
 import {
   lazy,
   memo,
@@ -47,6 +75,7 @@ interface EditorWorkspaceProps {
   onCommitTextEdit: (sessionId: number, elementId: string, markdown: string) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  onAddElement: (element: CanvasLeafElement, editText?: boolean) => void;
   onSetZoom: (zoom: number) => void;
   onSetFitMode: (enabled: boolean) => void;
   onUndo: () => void;
@@ -54,6 +83,7 @@ interface EditorWorkspaceProps {
 }
 
 export interface EditorWorkspaceHandle {
+  cancelCreation: () => void;
   revealElement: (elementId: string) => void;
 }
 
@@ -69,7 +99,49 @@ interface PanSession {
   startPosition: CanvasPoint;
 }
 
-const PAN_ACTIVATION_DISTANCE = 3;
+interface DrawSession {
+  documentId: string;
+  pointerId: number;
+  start: CanvasPoint;
+  tool: CreationTool;
+}
+
+const SHAPE_TOOLS: Array<{
+  icon: typeof Square;
+  label: string;
+  tool: ShapeCreationTool;
+}> = [
+  { icon: Square, label: "矩形", tool: "rect" },
+  { icon: Minus, label: "直线", tool: "line" },
+  { icon: ArrowUpRight, label: "箭头", tool: "arrow" },
+  { icon: Circle, label: "椭圆", tool: "ellipse" },
+  { icon: Triangle, label: "多边形", tool: "polygon" },
+  { icon: Star, label: "星形", tool: "star" },
+];
+
+function createElementId(tool: CreationTool | "image") {
+  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  return `${tool}-${suffix}`;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read-failed"));
+    reader.onload = () =>
+      typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("read-failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function decodeImage(src: string): Promise<{ height: number; width: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new globalThis.Image();
+    image.onerror = () => reject(new Error("decode-failed"));
+    image.onload = () => resolve({ height: image.naturalHeight, width: image.naturalWidth });
+    image.src = src;
+  });
+}
 
 function useContainerSize(containerRef: React.RefObject<HTMLDivElement | null>): ContainerSize {
   const [size, setSize] = useState<ContainerSize>({ width: 0, height: 0 });
@@ -121,6 +193,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onCommitTextEdit,
   onElementChange,
   onElementPreview,
+  onAddElement,
   onSetZoom,
   onSetFitMode,
   onUndo,
@@ -129,14 +202,24 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const workspaceRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const panSessionRef = useRef<PanSession | null>(null);
-  const pendingPanSessionRef = useRef<PanSession | null>(null);
+  const drawSessionRef = useRef<DrawSession | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const errorTimerRef = useRef<number | null>(null);
   const viewportHoveredRef = useRef(false);
   const size = useContainerSize(workspaceRef);
-  const [isPanReady, setIsPanReady] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportPositions, setViewportPositions] = useState<Record<string, CanvasPoint>>({});
   const [readyEditingSessionId, setReadyEditingSessionId] = useState<number | null>(null);
+  const [creationTool, setCreationTool] = useState<{
+    documentId: string;
+    tool: CreationTool;
+  } | null>(null);
+  const [draft, setDraft] = useState<{ documentId: string; element: CanvasLeafElement } | null>(
+    null,
+  );
+  const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const availableWidth = Math.max(1, Math.min(MAX_CANVAS_PREVIEW_WIDTH, size.width - 112));
   const availableHeight = Math.max(1, size.height - 174);
   const widthFitZoom = availableWidth / document.width;
@@ -154,6 +237,28 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const editingElement = editingText ? findElement(document.elements, editingText.elementId) : null;
   const visibleEditingElementId =
     editingText?.sessionId === readyEditingSessionId ? editingText.elementId : null;
+  const activeTool = creationTool?.documentId === document.id ? creationTool.tool : null;
+  const draftElement = draft?.documentId === document.id ? draft.element : null;
+
+  useEffect(
+    () => () => {
+      if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
+    },
+    [],
+  );
+
+  const cancelCreation = useCallback(() => {
+    drawSessionRef.current = null;
+    setDraft(null);
+    setCreationTool(null);
+    setShapeMenuOpen(false);
+  }, []);
+
+  function showImageError(message: string) {
+    setImageError(message);
+    if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = window.setTimeout(() => setImageError(null), 3600);
+  }
 
   const handleTextEditorReady = useCallback(
     (elementId: string) => {
@@ -192,7 +297,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       setIsSpacePressed(false);
       setIsPanning(false);
       panSessionRef.current = null;
-      pendingPanSessionRef.current = null;
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -215,6 +319,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   useImperativeHandle(
     workspaceHandleRef,
     () => ({
+      cancelCreation,
       revealElement(elementId: string) {
         if (size.width <= 0 || size.height <= 0) return;
 
@@ -228,7 +333,16 @@ export const EditorWorkspace = memo(function EditorWorkspace({
         if (fitMode) onSetZoom(zoom);
       },
     }),
-    [document.elements, fitMode, onSetZoom, size, updateViewportPosition, viewportPosition, zoom],
+    [
+      cancelCreation,
+      document.elements,
+      fitMode,
+      onSetZoom,
+      size,
+      updateViewportPosition,
+      viewportPosition,
+      zoom,
+    ],
   );
 
   function setZoomAroundPoint(nextZoom: number, point: CanvasPoint) {
@@ -293,7 +407,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     if (!viewport || panSessionRef.current) return false;
 
     viewport.setPointerCapture(session.pointerId);
-    pendingPanSessionRef.current = null;
     panSessionRef.current = session;
     updateViewportPosition(session.startPosition);
     if (fitMode) onSetZoom(zoom);
@@ -305,12 +418,41 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     activatePanning(createPanSession(pointerId, point));
   }
 
-  function preparePanning(pointerId: number, point: CanvasPoint) {
-    if (panSessionRef.current || pendingPanSessionRef.current) return;
-    pendingPanSessionRef.current = createPanSession(pointerId, point);
+  function getWorldPoint(event: ReactPointerEvent<HTMLDivElement>): CanvasPoint {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return {
+      x: (event.clientX - bounds.left - viewportPosition.x) / zoom,
+      y: (event.clientY - bounds.top - viewportPosition.y) / zoom,
+    };
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (activeTool && event.button === 0 && !isSpacePressed) {
+      const start = getWorldPoint(event);
+      if (!isPointInsideDocument(start, document)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drawSessionRef.current = {
+        documentId: document.id,
+        pointerId: event.pointerId,
+        start,
+        tool: activeTool,
+      };
+      const element = createElementFromDrag(
+        activeTool,
+        start,
+        start,
+        document,
+        `${document.id}-draft`,
+      );
+      setDraft(
+        element ? { documentId: document.id, element: { ...element, opacity: 0.58 } } : null,
+      );
+      return;
+    }
+
     const shouldPan = event.button === 1 || (event.button === 0 && isSpacePressed);
     if (!shouldPan) return;
 
@@ -320,18 +462,24 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    let session = panSessionRef.current;
-    if (!session) {
-      const pendingSession = pendingPanSessionRef.current;
-      if (!pendingSession || pendingSession.pointerId !== event.pointerId) return;
-
-      const distance = Math.hypot(
-        event.clientX - pendingSession.startClientX,
-        event.clientY - pendingSession.startClientY,
+    const drawSession = drawSessionRef.current;
+    if (drawSession?.pointerId === event.pointerId && drawSession.documentId === document.id) {
+      event.preventDefault();
+      event.stopPropagation();
+      const element = createElementFromDrag(
+        drawSession.tool,
+        drawSession.start,
+        getWorldPoint(event),
+        document,
+        `${document.id}-draft`,
       );
-      if (distance < PAN_ACTIVATION_DISTANCE || !activatePanning(pendingSession)) return;
-      session = pendingSession;
+      setDraft(
+        element ? { documentId: document.id, element: { ...element, opacity: 0.58 } } : null,
+      );
+      return;
     }
+
+    const session = panSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
 
     event.preventDefault();
@@ -342,15 +490,80 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   }
 
   function finishPanning(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pendingPanSessionRef.current?.pointerId === event.pointerId) {
-      pendingPanSessionRef.current = null;
-    }
     if (panSessionRef.current?.pointerId !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     panSessionRef.current = null;
     setIsPanning(false);
+  }
+
+  function finishDrawing(event: ReactPointerEvent<HTMLDivElement>) {
+    const session = drawSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const element = createElementFromDrag(
+      session.tool,
+      session.start,
+      getWorldPoint(event),
+      document,
+      createElementId(session.tool),
+    );
+    drawSessionRef.current = null;
+    setDraft(null);
+    setCreationTool(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (element) onAddElement(element, element.type === "text");
+    return true;
+  }
+
+  function cancelDrawing(event: ReactPointerEvent<HTMLDivElement>) {
+    if (drawSessionRef.current?.pointerId !== event.pointerId) return;
+    drawSessionRef.current = null;
+    setDraft(null);
+  }
+
+  function toggleCreationTool(tool: CreationTool) {
+    setDraft(null);
+    drawSessionRef.current = null;
+    setCreationTool((current) =>
+      current?.documentId === document.id && current.tool === tool
+        ? null
+        : { documentId: document.id, tool },
+    );
+  }
+
+  async function handleImageFile(file: File | undefined) {
+    if (!file) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
+      showImageError("仅支持 PNG、JPEG 或 WebP 图片");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showImageError("图片不能超过 10MB");
+      return;
+    }
+
+    try {
+      const src = await readFileAsDataUrl(file);
+      const imageSize = await decodeImage(src);
+      const visibleArea = {
+        bottom: (size.height - viewportPosition.y) / zoom,
+        left: -viewportPosition.x / zoom,
+        right: (size.width - viewportPosition.x) / zoom,
+        top: -viewportPosition.y / zoom,
+      };
+      onAddElement(
+        createImageElement(createElementId("image"), src, imageSize, document, visibleArea),
+      );
+      setImageError(null);
+    } catch {
+      showImageError("图片读取失败，请重试");
+    }
   }
 
   const viewportCenter = { x: size.width / 2, y: size.height / 2 };
@@ -378,28 +591,37 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       </header>
 
       <div
-        className="absolute inset-0 cursor-default touch-none overflow-hidden select-none data-[pan-ready=true]:cursor-grab data-[panning=true]:cursor-grabbing [&_canvas]:block"
-        data-pan-ready={isSpacePressed || isPanReady}
+        className="absolute inset-0 cursor-default touch-none overflow-hidden select-none data-[creation-active=true]:cursor-crosshair data-[pan-ready=true]:cursor-grab data-[panning=true]:cursor-grabbing [&_canvas]:block"
+        data-creation-active={Boolean(activeTool)}
+        data-pan-ready={isSpacePressed}
         data-panning={isPanning}
         ref={viewportRef}
-        onLostPointerCapture={finishPanning}
-        onPointerCancelCapture={finishPanning}
+        onLostPointerCapture={(event) => {
+          cancelDrawing(event);
+          finishPanning(event);
+        }}
+        onPointerCancelCapture={(event) => {
+          cancelDrawing(event);
+          finishPanning(event);
+        }}
         onPointerEnter={() => {
           viewportHoveredRef.current = true;
         }}
         onPointerLeave={() => {
           viewportHoveredRef.current = false;
-          setIsPanReady(false);
-          if (!panSessionRef.current) pendingPanSessionRef.current = null;
         }}
         onPointerDownCapture={handlePointerDown}
         onPointerMoveCapture={handlePointerMove}
-        onPointerUpCapture={finishPanning}
+        onPointerUpCapture={(event) => {
+          if (!finishDrawing(event)) finishPanning(event);
+        }}
       >
         <CanvasStage
           document={document}
+          draftElement={draftElement}
           editingElementId={visibleEditingElementId}
           hoveredId={hoveredId}
+          isCreating={Boolean(activeTool)}
           isSelectedLocked={isSelectedLocked}
           selectedId={selectedId}
           viewportHeight={Math.max(1, size.height)}
@@ -409,8 +631,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           onEditText={onEditText}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
-          onPanReadyChange={setIsPanReady}
-          onPanStart={preparePanning}
           onSelect={onSelect}
         />
 
@@ -430,13 +650,112 @@ export const EditorWorkspace = memo(function EditorWorkspace({
         ) : null}
       </div>
 
-      <div className="absolute bottom-4 left-4 z-[8] flex h-[38px] items-center gap-[3px] rounded-sm border border-[color-mix(in_oklch,var(--border)_82%,transparent)] bg-popover p-1 shadow-[0_8px_24px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+      <input
+        accept={ACCEPTED_IMAGE_TYPES.join(",")}
+        aria-hidden="true"
+        className="sr-only"
+        ref={imageInputRef}
+        tabIndex={-1}
+        type="file"
+        onChange={(event) => {
+          void handleImageFile(event.currentTarget.files?.[0]);
+          event.currentTarget.value = "";
+        }}
+      />
+
+      {imageError ? (
+        <div
+          className="absolute bottom-[62px] left-1/2 z-[9] -translate-x-1/2 rounded-sm border border-destructive/25 bg-popover px-3 py-2 text-xs text-destructive shadow-md"
+          role="alert"
+        >
+          {imageError}
+        </div>
+      ) : null}
+
+      <div
+        aria-label="画布操作"
+        className="absolute bottom-4 left-1/2 z-[8] flex h-[38px] max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-[3px] rounded-sm border border-[color-mix(in_oklch,var(--border)_82%,transparent)] bg-popover p-1 shadow-[0_8px_24px_color-mix(in_oklch,var(--foreground)_5%,transparent)]"
+        role="toolbar"
+      >
         <EditorIconButton disabled={!canUndo} label="撤销" onPress={onUndo}>
           <Undo2 aria-hidden="true" strokeWidth={1.75} />
         </EditorIconButton>
 
         <EditorIconButton disabled={!canRedo} label="重做" onPress={onRedo}>
           <Redo2 aria-hidden="true" strokeWidth={1.75} />
+        </EditorIconButton>
+
+        <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+
+        <Popover open={shapeMenuOpen} onOpenChange={setShapeMenuOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              aria-label="图形"
+              aria-pressed={activeTool !== null && activeTool !== "text"}
+              className={
+                activeTool !== null && activeTool !== "text" ? "bg-accent text-primary" : undefined
+              }
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <Shapes aria-hidden="true" className="size-[15px]" strokeWidth={1.75} />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="center"
+            className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
+            side="top"
+            sideOffset={8}
+          >
+            {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
+              const selected = activeTool === tool;
+              return (
+                <button
+                  aria-pressed={selected}
+                  className={cn(
+                    "relative flex h-7 w-full items-center gap-1.5 rounded-sm px-1.5 pr-7 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
+                    selected && "bg-accent/70 text-foreground",
+                  )}
+                  key={tool}
+                  type="button"
+                  onClick={() => {
+                    toggleCreationTool(tool);
+                    setShapeMenuOpen(false);
+                  }}
+                >
+                  <Icon
+                    aria-hidden="true"
+                    className={cn(
+                      "size-3.5 shrink-0 text-muted-foreground",
+                      selected && "text-primary",
+                    )}
+                    strokeWidth={1.75}
+                  />
+                  <span className="truncate">{label}</span>
+                  {selected ? (
+                    <Check
+                      aria-hidden="true"
+                      className="absolute right-1.5 size-3 text-primary"
+                      strokeWidth={2}
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
+
+        <EditorIconButton
+          label="文本"
+          pressed={activeTool === "text"}
+          onPress={() => toggleCreationTool("text")}
+        >
+          <Type aria-hidden="true" strokeWidth={1.75} />
+        </EditorIconButton>
+
+        <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
+          <ImagePlus aria-hidden="true" strokeWidth={1.75} />
         </EditorIconButton>
 
         <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
@@ -450,7 +769,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
 
         <Slider
           aria-label="画布缩放"
-          className="mx-1 w-[94px]"
+          className="mx-1 w-[72px]"
           max={200}
           min={25}
           step={5}

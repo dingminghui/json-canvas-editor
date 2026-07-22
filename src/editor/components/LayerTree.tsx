@@ -23,7 +23,11 @@ import {
   Image as ImageIcon,
   Layers3,
   Lock,
+  Minus,
+  MoveUpRight,
   Square,
+  Star,
+  Triangle,
   Type,
   Unlock,
 } from "lucide-react";
@@ -31,9 +35,7 @@ import {
   createContext,
   forwardRef,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -82,22 +84,6 @@ function collectGroupIds(elements: CanvasElement[]): string[] {
   );
 }
 
-function findAncestorGroupIds(
-  elements: CanvasElement[],
-  elementId: string,
-  ancestors: string[] = [],
-): string[] | null {
-  for (const element of elements) {
-    if (element.id === elementId) return ancestors;
-    if (!isGroupElement(element)) continue;
-
-    const result = findAncestorGroupIds(element.children, elementId, [...ancestors, element.id]);
-    if (result) return result;
-  }
-
-  return null;
-}
-
 function getElementIcon(element: CanvasElement, selected: boolean): ReactNode {
   const props = {
     className: cn("size-3.5 flex-none text-muted-foreground", selected && "text-primary"),
@@ -112,6 +98,16 @@ function getElementIcon(element: CanvasElement, selected: boolean): ReactNode {
       return <Square {...props} />;
     case "circle":
       return <Circle {...props} />;
+    case "ellipse":
+      return <Circle {...props} className={cn(props.className, "scale-x-125")} />;
+    case "line":
+      return <Minus {...props} />;
+    case "arrow":
+      return <MoveUpRight {...props} />;
+    case "polygon":
+      return <Triangle {...props} />;
+    case "star":
+      return <Star {...props} />;
     case "image":
       return <ImageIcon {...props} />;
     default: {
@@ -296,8 +292,6 @@ export function LayerTree({
   onReorder,
 }: LayerTreeProps) {
   const [expandedIds, setExpandedIds] = useState(() => new Set(collectGroupIds(elements)));
-  const revealedSelectionRef = useRef<string | null>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
   const items = useMemo(() => createLayerTreeItems(elements, expandedIds), [elements, expandedIds]);
 
   const actions = useMemo(
@@ -305,64 +299,8 @@ export function LayerTree({
     [onHover, onSelect, onToggleLocked, onToggleVisible, selectedId],
   );
 
-  useEffect(() => {
-    if (!selectedId) {
-      revealedSelectionRef.current = null;
-      return;
-    }
-    if (revealedSelectionRef.current === selectedId) return;
-    revealedSelectionRef.current = selectedId;
-
-    const ancestorIds = findAncestorGroupIds(elements, selectedId);
-    if (!ancestorIds?.length) return;
-
-    const frame = requestAnimationFrame(() => {
-      setExpandedIds((current) => {
-        if (ancestorIds.every((id) => current.has(id))) return current;
-        return new Set([...current, ...ancestorIds]);
-      });
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [elements, selectedId]);
-
-  useEffect(() => {
-    if (!selectedId) return;
-
-    const frame = requestAnimationFrame(() => {
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-
-      const selectedRow = Array.from(
-        viewport.querySelectorAll<HTMLElement>('[data-slot="layer-row"]'),
-      ).find((row) => row.dataset.elementId === selectedId);
-      if (!selectedRow) return;
-
-      const viewportRect = viewport.getBoundingClientRect();
-      const rowRect = selectedRow.getBoundingClientRect();
-      const isVisible = rowRect.top >= viewportRect.top && rowRect.bottom <= viewportRect.bottom;
-      if (isVisible) return;
-
-      viewport.scrollTo({
-        behavior: "smooth",
-        left: viewport.scrollLeft,
-        top:
-          viewport.scrollTop +
-          rowRect.top -
-          viewportRect.top -
-          (viewport.clientHeight - rowRect.height) / 2,
-      });
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [items, selectedId]);
-
   return (
-    <ScrollArea
-      className="min-h-0 max-h-none flex-1 px-2 pt-1.5 pb-3"
-      scrollbars="both"
-      viewportRef={viewportRef}
-    >
+    <ScrollArea className="min-h-0 max-h-none flex-1 px-2 pt-1.5 pb-3" scrollbars="both">
       <div className="w-max min-w-full p-0 [&>ul]:m-0 [&>ul]:w-max [&>ul]:min-w-full [&>ul]:p-0">
         <LayerTreeActionsContext.Provider value={actions}>
           <SortableTree

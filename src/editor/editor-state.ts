@@ -22,6 +22,7 @@ export interface EditorState {
 export type EditorAction =
   | { type: "select-template"; templateId: string }
   | { type: "select-element"; elementId: string | null }
+  | { type: "add-element"; element: CanvasLeafElement }
   | { type: "update-element"; elementId: string; patch: CanvasElementPatch }
   | { type: "duplicate-element"; elementId: string; duplicateId: string }
   | { type: "delete-element"; elementId: string }
@@ -146,6 +147,8 @@ function updateLeafElement(
 ): CanvasElement[] {
   const strokeWidth = "strokeWidth" in patch ? patch.strokeWidth : undefined;
   const cornerRadius = "cornerRadius" in patch ? patch.cornerRadius : undefined;
+  const sides = "sides" in patch ? patch.sides : undefined;
+  const numPoints = "numPoints" in patch ? patch.numPoints : undefined;
   const normalizedPatch = {
     ...patch,
     ...(typeof patch.width === "number" ? { width: Math.max(8, patch.width) } : {}),
@@ -155,6 +158,8 @@ function updateLeafElement(
       : {}),
     ...(typeof strokeWidth === "number" ? { strokeWidth: Math.max(0, strokeWidth) } : {}),
     ...(typeof cornerRadius === "number" ? { cornerRadius: Math.max(0, cornerRadius) } : {}),
+    ...(typeof sides === "number" ? { sides: Math.max(3, Math.round(sides)) } : {}),
+    ...(typeof numPoints === "number" ? { numPoints: Math.max(2, Math.round(numPoints)) } : {}),
   } as CanvasElementPatch;
 
   return mapElements(elements, elementId, (element) => {
@@ -273,6 +278,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return state.selectedId === action.elementId
         ? state
         : { ...state, selectedId: action.elementId };
+    case "add-element": {
+      const nextState = updateActiveElements(state, (elements) => [...elements, action.element]);
+      return { ...nextState, selectedId: action.element.id };
+    }
     case "update-element":
       return updateActiveElements(state, (elements) =>
         updateLeafElement(elements, action.elementId, action.patch),
@@ -334,6 +343,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 
 function isDocumentMutation(action: EditorAction): boolean {
   switch (action.type) {
+    case "add-element":
     case "update-element":
     case "duplicate-element":
     case "delete-element":
