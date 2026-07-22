@@ -86,17 +86,23 @@ describe("EditorWorkspace creation toolbar", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("opens the upward shape menu and marks the active item", async () => {
+  it("shows the default rectangle, opens on hover, and recalls the selected shape", async () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "图形" }));
+    const shapeButton = screen.getByRole("button", { name: "图形" });
+    expect(shapeButton.querySelector(".lucide-square")).toBeInTheDocument();
+    expect(shapeButton.querySelector(".lucide-chevron-down")).toBeInTheDocument();
+
+    fireEvent.click(shapeButton);
+    expect(shapeButton).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByRole("button", { name: "矩形" })).toBeVisible();
     expect(screen.getByRole("button", { name: "星形" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "椭圆" }));
-    expect(screen.getByRole("button", { name: "图形" })).toHaveAttribute("aria-pressed", "true");
+    expect(shapeButton).toHaveAttribute("aria-pressed", "true");
+    expect(shapeButton.querySelector(".lucide-circle")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "图形" }));
+    fireEvent.mouseEnter(shapeButton);
     expect(await screen.findByRole("button", { name: "椭圆" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -105,20 +111,17 @@ describe("EditorWorkspace creation toolbar", () => {
 
   it("draws one shape, selects it through add-element, and resets the tool", async () => {
     const { onAddElement, viewport } = renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "图形" }));
-    fireEvent.click(await screen.findByRole("button", { name: "矩形" }));
+    const shapeButton = screen.getByRole("button", { name: "图形" });
+    fireEvent.mouseEnter(shapeButton);
+    fireEvent.click(await screen.findByRole("button", { name: "星形" }));
 
     fireEvent.pointerDown(viewport, { button: 0, clientX: 250, clientY: 200, pointerId: 3 });
     fireEvent.pointerMove(viewport, { clientX: 370, clientY: 290, pointerId: 3 });
     fireEvent.pointerUp(viewport, { button: 0, clientX: 370, clientY: 290, pointerId: 3 });
 
-    expect(onAddElement).toHaveBeenCalledWith(
-      expect.objectContaining({ height: 90, type: "rect", width: 120, x: 50, y: 50 }),
-      false,
-    );
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "图形" })).toHaveAttribute("aria-pressed", "false"),
-    );
+    expect(onAddElement).toHaveBeenCalledWith(expect.objectContaining({ type: "star" }), false);
+    await waitFor(() => expect(shapeButton).toHaveAttribute("aria-pressed", "false"));
+    expect(shapeButton.querySelector(".lucide-star")).toBeInTheDocument();
   });
 
   it("creates a default text box on click and immediately requests text editing", () => {

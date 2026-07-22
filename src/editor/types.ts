@@ -34,6 +34,8 @@ export interface TextElement extends TransformableElement {
   fontFamily: CanvasFontFamily;
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700" | "800";
+  /** Unitless multiplier applied to each line box. */
+  lineHeight: number;
   align: "left" | "center" | "right";
   fill: string;
 }

@@ -29,13 +29,13 @@ import { cn } from "@/lib/utils";
 import {
   ArrowUpRight,
   Check,
+  ChevronDown,
   Circle,
   ImagePlus,
   Minus,
   Plus,
   Redo2,
   Scan,
-  Shapes,
   Square,
   Star,
   Triangle,
@@ -205,6 +205,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const drawSessionRef = useRef<DrawSession | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const errorTimerRef = useRef<number | null>(null);
+  const shapeMenuCloseTimerRef = useRef<number | null>(null);
   const viewportHoveredRef = useRef(false);
   const size = useContainerSize(workspaceRef);
   const [isPanning, setIsPanning] = useState(false);
@@ -219,6 +220,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     null,
   );
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
+  const [lastShapeTool, setLastShapeTool] = useState<ShapeCreationTool>("rect");
   const [imageError, setImageError] = useState<string | null>(null);
   const availableWidth = Math.max(1, Math.min(MAX_CANVAS_PREVIEW_WIDTH, size.width - 112));
   const availableHeight = Math.max(1, size.height - 174);
@@ -238,11 +240,17 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const visibleEditingElementId =
     editingText?.sessionId === readyEditingSessionId ? editingText.elementId : null;
   const activeTool = creationTool?.documentId === document.id ? creationTool.tool : null;
+  const activeShapeTool = activeTool !== null && activeTool !== "text" ? activeTool : null;
+  const selectedShape = SHAPE_TOOLS.find(({ tool }) => tool === lastShapeTool) ?? SHAPE_TOOLS[0];
+  const SelectedShapeIcon = selectedShape.icon;
   const draftElement = draft?.documentId === document.id ? draft.element : null;
 
   useEffect(
     () => () => {
       if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
+      if (shapeMenuCloseTimerRef.current !== null) {
+        window.clearTimeout(shapeMenuCloseTimerRef.current);
+      }
     },
     [],
   );
@@ -258,6 +266,25 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     setImageError(message);
     if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
     errorTimerRef.current = window.setTimeout(() => setImageError(null), 3600);
+  }
+
+  function cancelShapeMenuClose() {
+    if (shapeMenuCloseTimerRef.current === null) return;
+    window.clearTimeout(shapeMenuCloseTimerRef.current);
+    shapeMenuCloseTimerRef.current = null;
+  }
+
+  function openShapeMenu() {
+    cancelShapeMenuClose();
+    setShapeMenuOpen(true);
+  }
+
+  function scheduleShapeMenuClose() {
+    cancelShapeMenuClose();
+    shapeMenuCloseTimerRef.current = window.setTimeout(() => {
+      setShapeMenuOpen(false);
+      shapeMenuCloseTimerRef.current = null;
+    }, 120);
   }
 
   const handleTextEditorReady = useCallback(
@@ -691,15 +718,21 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           <PopoverTrigger asChild>
             <Button
               aria-label="图形"
-              aria-pressed={activeTool !== null && activeTool !== "text"}
-              className={
-                activeTool !== null && activeTool !== "text" ? "bg-accent text-primary" : undefined
-              }
-              size="icon-sm"
+              aria-pressed={activeShapeTool !== null}
+              className={cn("gap-0.5 px-1.5", activeShapeTool !== null && "bg-accent text-primary")}
+              size="sm"
               type="button"
               variant="ghost"
+              onClick={() => toggleCreationTool(lastShapeTool)}
+              onMouseEnter={openShapeMenu}
+              onMouseLeave={scheduleShapeMenuClose}
             >
-              <Shapes aria-hidden="true" className="size-[15px]" strokeWidth={1.75} />
+              <SelectedShapeIcon aria-hidden="true" className="size-[15px]" strokeWidth={1.75} />
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3 text-muted-foreground"
+                strokeWidth={1.75}
+              />
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -707,6 +740,10 @@ export const EditorWorkspace = memo(function EditorWorkspace({
             className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
             side="top"
             sideOffset={8}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onMouseEnter={cancelShapeMenuClose}
+            onMouseLeave={scheduleShapeMenuClose}
+            onOpenAutoFocus={(event) => event.preventDefault()}
           >
             {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
               const selected = activeTool === tool;
@@ -720,6 +757,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
                   key={tool}
                   type="button"
                   onClick={() => {
+                    setLastShapeTool(tool);
                     toggleCreationTool(tool);
                     setShapeMenuOpen(false);
                   }}

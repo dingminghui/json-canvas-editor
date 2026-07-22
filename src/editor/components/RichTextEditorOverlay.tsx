@@ -214,7 +214,7 @@ export default function RichTextEditorOverlay({
                 fontSize: element.fontSize,
                 fontSynthesis: "weight style",
                 fontWeight: element.fontWeight,
-                lineHeight: 1.04,
+                lineHeight: element.lineHeight,
                 textAlign: element.align,
               } as CSSProperties
             }

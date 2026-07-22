@@ -22,6 +22,7 @@ const element: TextElement = {
   fontFamily: "noto-serif-sc",
   fontSize: 24,
   fontWeight: "600",
+  lineHeight: 1.42,
   height: 80,
   id: "caption",
   locked: false,
@@ -100,6 +101,7 @@ describe("RichTextEditorOverlay", () => {
       fontFamily: '"Noto Serif SC Variable", "Songti SC", serif',
       fontSize: "24px",
       fontWeight: "600",
+      lineHeight: "1.42",
       textAlign: "center",
     });
     expect(onReady).toHaveBeenCalledWith("caption");

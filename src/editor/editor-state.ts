@@ -149,6 +149,7 @@ function updateLeafElement(
   const cornerRadius = "cornerRadius" in patch ? patch.cornerRadius : undefined;
   const sides = "sides" in patch ? patch.sides : undefined;
   const numPoints = "numPoints" in patch ? patch.numPoints : undefined;
+  const lineHeight = "lineHeight" in patch ? patch.lineHeight : undefined;
   const normalizedPatch = {
     ...patch,
     ...(typeof patch.width === "number" ? { width: Math.max(8, patch.width) } : {}),
@@ -160,6 +161,7 @@ function updateLeafElement(
     ...(typeof cornerRadius === "number" ? { cornerRadius: Math.max(0, cornerRadius) } : {}),
     ...(typeof sides === "number" ? { sides: Math.max(3, Math.round(sides)) } : {}),
     ...(typeof numPoints === "number" ? { numPoints: Math.max(2, Math.round(numPoints)) } : {}),
+    ...(typeof lineHeight === "number" ? { lineHeight: Math.max(0.5, lineHeight) } : {}),
   } as CanvasElementPatch;
 
   return mapElements(elements, elementId, (element) => {

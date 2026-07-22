@@ -133,6 +133,7 @@ export function createElementFromDrag(
         fontFamily: "noto-sans-sc",
         fontSize: 24,
         fontWeight: "400",
+        lineHeight: 1.04,
         text: "新建文本",
         type: "text",
       } satisfies TextElement;
@@ -146,6 +147,7 @@ export function createElementFromDrag(
       fontFamily: "noto-sans-sc",
       fontSize: 24,
       fontWeight: "400",
+      lineHeight: 1.04,
       text: "新建文本",
       type: "text",
     } satisfies TextElement;

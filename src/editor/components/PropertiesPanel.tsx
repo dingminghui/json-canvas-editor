@@ -409,6 +409,13 @@ function ElementSpecificFields({
               }
             />
           </div>
+          <PropertyNumberField
+            disabled={disabled}
+            label="行高"
+            minValue={0.5}
+            value={element.lineHeight}
+            onChange={(lineHeight) => onUpdate({ lineHeight })}
+          />
           <TextAlignmentControl
             disabled={disabled}
             value={element.align}

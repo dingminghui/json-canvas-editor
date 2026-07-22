@@ -135,7 +135,15 @@ describe("element creation", () => {
   it("creates default and dragged text boxes", () => {
     expect(
       createElementFromDrag("text", { x: 700, y: 580 }, { x: 701, y: 581 }, document, "text-click"),
-    ).toMatchObject({ height: 56, text: "新建文本", type: "text", width: 320, x: 480, y: 544 });
+    ).toMatchObject({
+      height: 56,
+      lineHeight: 1.04,
+      text: "新建文本",
+      type: "text",
+      width: 320,
+      x: 480,
+      y: 544,
+    });
     expect(
       createElementFromDrag("text", { x: 300, y: 250 }, { x: 120, y: 100 }, document, "text-drag"),
     ).toMatchObject({ height: 150, type: "text", width: 180, x: 120, y: 100 });

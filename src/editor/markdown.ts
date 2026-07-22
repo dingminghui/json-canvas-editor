@@ -125,6 +125,7 @@ function getCanvasCacheKey(
     element.fontFamily,
     element.fontSize,
     element.fontWeight,
+    element.lineHeight,
     element.align,
     pixelRatio,
     renderRevision,
@@ -180,7 +181,7 @@ export function renderMarkdownToCanvas(
         font-size: ${element.fontSize}px;
         font-weight: ${element.fontWeight};
         font-synthesis: weight style;
-        line-height: 1.04;
+        line-height: ${element.lineHeight};
         overflow-wrap: break-word;
         text-align: ${element.align};
         white-space: pre-wrap;

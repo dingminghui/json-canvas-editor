@@ -12,6 +12,7 @@ interface MockGestureHandlers {
 
 interface MockTextRenderProps extends MockGestureHandlers {
   draggable?: boolean;
+  lineHeight?: number;
   onDblClick?: (event: { cancelBubble: boolean }) => void;
   visible?: boolean;
 }
@@ -184,6 +185,7 @@ vi.mock("react-konva", async () => {
       draggable,
       fontFamily,
       fontStyle,
+      lineHeight,
       onDblClick,
       onTransform,
       onTransformEnd,
@@ -192,6 +194,7 @@ vi.mock("react-konva", async () => {
       draggable?: boolean;
       fontFamily?: string;
       fontStyle?: string;
+      lineHeight?: number;
       onDblClick?: MockTextRenderProps["onDblClick"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
@@ -200,7 +203,7 @@ vi.mock("react-konva", async () => {
       lastTextFontFamily = fontFamily;
       lastTextFontStyle = fontStyle;
       textGestureHandlers = { onTransform, onTransformEnd };
-      textRenderProps = { draggable, onDblClick, visible };
+      textRenderProps = { draggable, lineHeight, onDblClick, visible };
       return null;
     },
     Transformer,
@@ -599,6 +602,7 @@ describe("CanvasStage", () => {
           fontFamily: "noto-serif-sc",
           fontSize: 24,
           fontWeight: "600",
+          lineHeight: 1.2,
           height: 40,
           id: "caption",
           locked: false,
@@ -635,6 +639,7 @@ describe("CanvasStage", () => {
 
     expect(lastTextFontStyle).toBe("600");
     expect(lastTextFontFamily).toBe('"Noto Serif SC Variable", "Songti SC", serif');
+    expect(textRenderProps.lineHeight).toBe(1.2);
   });
 
   it("opens unlocked text on double click and hides its canvas node while editing", () => {
@@ -647,6 +652,7 @@ describe("CanvasStage", () => {
           fontFamily: "noto-sans-sc",
           fontSize: 24,
           fontWeight: "600",
+          lineHeight: 1.2,
           height: 80,
           id: "caption",
           locked: false,
@@ -719,6 +725,7 @@ describe("CanvasStage", () => {
           fontFamily: "noto-sans-sc",
           fontSize: 24,
           fontWeight: "600",
+          lineHeight: 1.2,
           height: 80,
           id: "caption",
           locked: false,

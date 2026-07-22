@@ -76,6 +76,7 @@ describe("Markdown text helpers", () => {
       fontFamily: "noto-serif-sc",
       fontSize: 48,
       fontWeight: "600",
+      lineHeight: 1.42,
       height: 100,
       id: "colored-strike",
       locked: false,
@@ -108,5 +109,6 @@ describe("Markdown text helpers", () => {
     expect(renderMock.mock.lastCall?.[0].html).toContain(
       'font-family: "Noto Serif SC Variable", "Songti SC", serif;',
     );
+    expect(renderMock.mock.lastCall?.[0].html).toContain("line-height: 1.42;");
   });
 });

@@ -33,10 +33,10 @@ describe("layer tree conversion", () => {
 
   it("rebuilds a cross-group hierarchy without changing element properties", () => {
     const elements = structuredClone(EDITOR_TEMPLATES[0].elements);
-    const items = createLayerTreeItems(elements, new Set(["story-hero-group", "chapter-1-group"]));
-    const heroGroup = findTreeItem(items, "story-hero-group");
+    const items = createLayerTreeItems(elements, new Set(["hero-group", "chapter-1-group"]));
+    const heroGroup = findTreeItem(items, "hero-group");
     const chapterGroup = findTreeItem(items, "chapter-1-group");
-    const title = findTreeItem(items, "story-title");
+    const title = findTreeItem(items, "symbicort-006");
 
     expect(heroGroup?.canHaveChildren).toBe(true);
     expect(title?.canHaveChildren).toBe(false);
@@ -47,25 +47,25 @@ describe("layer tree conversion", () => {
     chapterGroup.children = [title, ...(chapterGroup.children ?? [])];
 
     const nextElements = createCanvasElements(items);
-    const nextHeroGroup = findElement(nextElements, "story-hero-group");
+    const nextHeroGroup = findElement(nextElements, "hero-group");
     const nextChapterGroup = findElement(nextElements, "chapter-1-group");
-    const nextTitle = findElement(nextElements, "story-title");
+    const nextTitle = findElement(nextElements, "symbicort-006");
 
     expect(
       nextChapterGroup && isGroupElement(nextChapterGroup)
         ? nextChapterGroup.children.map((element) => element.id)
         : [],
-    ).toContain("story-title");
+    ).toContain("symbicort-006");
     expect(
       nextHeroGroup && isGroupElement(nextHeroGroup)
         ? nextHeroGroup.children.map((element) => element.id)
         : [],
-    ).not.toContain("story-title");
+    ).not.toContain("symbicort-006");
     expect(nextTitle).toMatchObject({
-      id: "story-title",
+      id: "symbicort-006",
       type: "text",
-      x: 140,
-      y: 144,
+      x: 452,
+      y: 155,
     });
   });
 });

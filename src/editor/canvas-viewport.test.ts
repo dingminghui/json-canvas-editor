@@ -42,6 +42,7 @@ const elements: CanvasElement[] = [
         fontFamily: "noto-sans-sc",
         fontSize: 16,
         fontWeight: "400",
+        lineHeight: 1.04,
         align: "left",
         fill: "#111",
       },
