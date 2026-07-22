@@ -7,7 +7,6 @@ import {
   editorHistoryReducer,
   findElementContext,
   getActiveDocument,
-  previewDocumentElement,
 } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
 import { EDITOR_TEMPLATES } from "@/editor/templates";
@@ -48,13 +47,6 @@ export function Home() {
   );
   const state = history.present;
   const activeDocument = getActiveDocument(state);
-  const displayedDocument = useMemo(
-    () =>
-      elementPreview
-        ? previewDocumentElement(activeDocument, elementPreview.elementId, elementPreview.patch)
-        : activeDocument,
-    [activeDocument, elementPreview],
-  );
   const selectedElementContext = useMemo(
     () => findElementContext(activeDocument.elements, state.selectedId),
     [activeDocument.elements, state.selectedId],
@@ -268,7 +260,7 @@ export function Home() {
         <EditorWorkspace
           canRedo={history.future.length > 0}
           canUndo={history.past.length > 0}
-          document={displayedDocument}
+          document={activeDocument}
           editingText={textEditing}
           fitMode={state.fitMode}
           hoveredId={hoveredElementId}

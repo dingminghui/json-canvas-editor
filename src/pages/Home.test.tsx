@@ -19,7 +19,7 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     viewportWidth,
     zoom,
   }: {
-    document: { name: string };
+    document: { name: string; elements: unknown[] };
     editingElementId: string | null;
     hoveredId: string | null;
     onEditText: (elementId: string) => void;
@@ -39,6 +39,7 @@ vi.mock("@/editor/components/CanvasStage", () => ({
     <div
       data-hovered-id={hoveredId ?? ""}
       data-editing-id={editingElementId ?? ""}
+      data-document={JSON.stringify(document)}
       data-testid="canvas-stage"
       data-viewport-x={viewportPosition.x}
       data-viewport-y={viewportPosition.y}
@@ -416,7 +417,7 @@ describe("Home", () => {
     expect(backgroundRow).toHaveAttribute("data-selected", "false");
   });
 
-  it("edits the element name and shows position values with at most two decimals", async () => {
+  it("previews rounded transform values without feeding them back into the canvas", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -427,12 +428,14 @@ describe("Home", () => {
 
     await user.clear(nameInput);
     await user.type(nameInput, "封面标题");
+    const canvasDocumentBeforePreview = screen.getByTestId("canvas-stage").dataset.document;
     await user.click(screen.getByRole("button", { name: "模拟实时变换" }));
 
     expect(screen.getByLabelText("X")).toHaveValue(83.46);
     expect(screen.getByLabelText("Y")).toHaveValue(91.23);
     expect(screen.getByLabelText("宽")).toHaveValue(333.46);
     expect(screen.getByLabelText("高")).toHaveValue(55.68);
+    expect(screen.getByTestId("canvas-stage").dataset.document).toBe(canvasDocumentBeforePreview);
 
     await user.click(screen.getByRole("button", { name: "模拟画布变换" }));
 

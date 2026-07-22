@@ -28,6 +28,7 @@ interface MockTransformerProps {
   anchorSize?: number;
   anchorStrokeWidth?: number;
   borderStrokeWidth?: number;
+  keepRatio?: boolean;
   padding?: number;
   resizeEnabled?: boolean;
   rotateAnchorOffset?: number;
@@ -39,8 +40,19 @@ interface MockClipContext {
   roundRect: (x: number, y: number, width: number, height: number, radius: number) => void;
 }
 
+interface MockImageRenderProps {
+  crop?: { height: number; width: number; x: number; y: number };
+  height?: number;
+  listening?: boolean;
+  width?: number;
+  x?: number;
+  y?: number;
+}
+
 let imageGestureHandlers: MockGestureHandlers = {};
 let imageClipFunc: ((context: MockClipContext) => void) | undefined;
+let imageRenderProps: MockImageRenderProps = {};
+let loadedImage: { height: number; width: number } | undefined;
 let lastTextFontFamily: string | undefined;
 let lastTextFontStyle: string | undefined;
 let textGestureHandlers: MockGestureHandlers = {};
@@ -54,7 +66,7 @@ let selectionTransformerProps: MockTransformerProps = {};
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
 vi.mock("use-image", () => ({
-  default: () => [undefined],
+  default: () => [loadedImage],
 }));
 
 vi.mock("react-konva", async () => {
@@ -155,7 +167,10 @@ vi.mock("react-konva", async () => {
 
   return {
     Group: Container,
-    Image: () => null,
+    Image: (props: MockImageRenderProps) => {
+      if (props.listening === false) imageRenderProps = props;
+      return null;
+    },
     Layer: Container,
     Rect,
     Stage: Container,
@@ -216,6 +231,8 @@ describe("CanvasStage", () => {
   beforeEach(() => {
     imageClipFunc = undefined;
     imageGestureHandlers = {};
+    imageRenderProps = {};
+    loadedImage = undefined;
     lastTextFontFamily = undefined;
     lastTextFontStyle = undefined;
     textGestureHandlers = {};
@@ -291,6 +308,41 @@ describe("CanvasStage", () => {
     expect(context.beginPath).toHaveBeenCalledOnce();
     expect(context.roundRect).toHaveBeenCalledWith(0, 0, 180, 120, 12);
     expect(context.closePath).toHaveBeenCalledOnce();
+  });
+
+  it("crops a cover image into the element frame instead of overflowing its client bounds", () => {
+    const imageElement = document.elements[0];
+    if (imageElement.type !== "image") throw new Error("图片测试文档缺少图片元素");
+    loadedImage = { height: 400, width: 400 };
+
+    render(
+      <CanvasStage
+        document={{
+          ...document,
+          elements: [{ ...imageElement, height: 100, width: 200 }],
+        }}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId="photo"
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={vi.fn()}
+        onElementPreview={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(imageRenderProps).toMatchObject({
+      crop: { height: 200, width: 400, x: 0, y: 100 },
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
   });
 
   it("uses the selected numeric font weight when drawing text", () => {
@@ -632,7 +684,7 @@ describe("CanvasStage", () => {
       x: 36.789,
       y: 41.234,
     });
-    expect(actionOrder).toEqual(["commit", "reset-x", "reset-y"]);
+    expect(actionOrder).toEqual(["reset-x", "reset-y", "commit"]);
     expect(onElementPreview).toHaveBeenLastCalledWith("photo", null);
   });
 
@@ -662,6 +714,7 @@ describe("CanvasStage", () => {
       anchorSize: 12,
       anchorStrokeWidth: 1,
       borderStrokeWidth: 1.5,
+      keepRatio: false,
       rotateAnchorOffset: 28,
     });
 

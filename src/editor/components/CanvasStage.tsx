@@ -17,7 +17,15 @@ import {
   type ImageElement,
 } from "@/editor/types";
 import Konva from "konva";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { Group, Image, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import useImage from "use-image";
@@ -58,6 +66,14 @@ interface FontLoadRequest {
   text: string;
 }
 
+interface ImageRenderGeometry {
+  crop?: { height: number; width: number; x: number; y: number };
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
 function getDocumentFontLoadRequests(elements: CanvasElement[]): FontLoadRequest[] {
   const requests = new Map<string, FontLoadRequest>();
 
@@ -86,6 +102,48 @@ function getDocumentFontLoadRequests(elements: CanvasElement[]): FontLoadRequest
   return Array.from(requests.values());
 }
 
+function getImageRenderGeometry(
+  image: { height: number; width: number } | undefined,
+  element: ImageElement,
+): ImageRenderGeometry {
+  if (!image || image.width <= 0 || image.height <= 0) {
+    return { height: element.height, width: element.width, x: 0, y: 0 };
+  }
+
+  if (element.fit === "contain") {
+    const scale = Math.min(element.width / image.width, element.height / image.height);
+    const width = image.width * scale;
+    const height = image.height * scale;
+
+    return {
+      height,
+      width,
+      x: (element.width - width) / 2,
+      y: (element.height - height) / 2,
+    };
+  }
+
+  const frameAspectRatio = element.width / element.height;
+  const imageAspectRatio = image.width / image.height;
+  const cropWidth =
+    imageAspectRatio > frameAspectRatio ? image.height * frameAspectRatio : image.width;
+  const cropHeight =
+    imageAspectRatio > frameAspectRatio ? image.height : image.width / frameAspectRatio;
+
+  return {
+    crop: {
+      height: cropHeight,
+      width: cropWidth,
+      x: (image.width - cropWidth) / 2,
+      y: (image.height - cropHeight) / 2,
+    },
+    height: element.height,
+    width: element.width,
+    x: 0,
+    y: 0,
+  };
+}
+
 function CanvasImage({
   element,
   draggable,
@@ -102,13 +160,7 @@ function CanvasImage({
   setNodeRef: (elementId: string, node: Konva.Node | null) => void;
 }) {
   const [image] = useImage(element.src);
-  const imageScale = image
-    ? element.fit === "contain"
-      ? Math.min(element.width / image.width, element.height / image.height)
-      : Math.max(element.width / image.width, element.height / image.height)
-    : 1;
-  const imageWidth = image ? image.width * imageScale : element.width;
-  const imageHeight = image ? image.height * imageScale : element.height;
+  const imageGeometry = getImageRenderGeometry(image, element);
 
   return (
     <Group
@@ -154,12 +206,13 @@ function CanvasImage({
         width={element.width}
       />
       <Image
-        height={imageHeight}
+        crop={imageGeometry.crop}
+        height={imageGeometry.height}
         image={image}
         listening={false}
-        width={imageWidth}
-        x={(element.width - imageWidth) / 2}
-        y={(element.height - imageHeight) / 2}
+        width={imageGeometry.width}
+        x={imageGeometry.x}
+        y={imageGeometry.y}
       />
     </Group>
   );
@@ -215,12 +268,13 @@ function commitTransform(
 ) {
   const patch = getTransformPatch(element, node);
 
-  // Keep the scaled Konva node visible until React has applied the normalized dimensions.
+  // Normalize the temporary Transformer scale before committing real dimensions so the
+  // selection frame never observes both the new size and the old scale in the same frame.
+  node.scaleX(1);
+  node.scaleY(1);
   flushSync(() => {
     onElementChange(element.id, patch);
   });
-  node.scaleX(1);
-  node.scaleY(1);
   onElementPreview(element.id, null);
 }
 
@@ -437,6 +491,10 @@ export function CanvasStage({
     () => getDocumentFontLoadRequests(document.elements),
     [document.elements],
   );
+  const selectedContext = useMemo(
+    () => findElementContext(document.elements, selectedId),
+    [document.elements, selectedId],
+  );
   const [fontRevision, setFontRevision] = useState(0);
 
   useEffect(() => {
@@ -475,11 +533,10 @@ export function CanvasStage({
     transformer.getLayer()?.batchDraw();
   }, [document, editingElementId, hoveredId, selectedId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const transformer = transformerRef.current;
     if (!transformer) return;
 
-    const selectedContext = findElementContext(document.elements, selectedId);
     const selectedNode =
       selectedId &&
       selectedContext &&
@@ -491,7 +548,7 @@ export function CanvasStage({
       selectedNode && !isSelectedLocked && selectedId !== editingElementId ? [selectedNode] : [],
     );
     transformer.getLayer()?.batchDraw();
-  }, [document, editingElementId, isSelectedLocked, selectedId]);
+  }, [editingElementId, isSelectedLocked, selectedContext, selectedId]);
 
   const setNodeRef = useCallback((elementId: string, node: Konva.Node | null) => {
     if (node) nodeRefs.current.set(elementId, node);
@@ -568,6 +625,7 @@ export function CanvasStage({
           borderStroke="#6d5fd4"
           borderStrokeWidth={1.5}
           flipEnabled={false}
+          keepRatio={selectedContext?.element.type !== "image"}
           rotateAnchorOffset={28}
           rotateEnabled
           boundBoxFunc={(oldBox, newBox) =>
