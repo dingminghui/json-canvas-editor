@@ -5,7 +5,7 @@ import { Toolbar as ToolbarPrimitive } from "radix-ui";
 import * as React from "react";
 
 const toolbarButtonVariants = cva(
-  "inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-sm font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-checked:bg-accent aria-checked:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:size-4",
+  "inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-checked:bg-accent aria-checked:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:size-4",
   {
     variants: {
       variant: {

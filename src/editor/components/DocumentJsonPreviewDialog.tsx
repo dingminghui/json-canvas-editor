@@ -73,7 +73,7 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
               <Braces aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
             </span>
             <DialogTitle>页面结构</DialogTitle>
-            <span className="rounded-full border bg-muted/45 px-2 py-0.5 text-[10px] font-medium leading-none tracking-wide text-muted-foreground">
+            <span className="rounded-full border bg-muted/45 px-2 py-0.5 text-[10px] leading-none tracking-wide text-muted-foreground">
               只读预览
             </span>
           </div>
@@ -84,7 +84,7 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
 
         <div className="grid min-h-0 min-w-0 grid-rows-[36px_minmax(0,1fr)] bg-[#f8f8f6]">
           <div className="flex items-center border-b border-border/70 bg-[#f4f4f1] px-4">
-            <span className="flex h-full items-center gap-1.5 border-b-2 border-primary px-1 font-mono text-[11px] font-medium text-foreground/80">
+            <span className="flex h-full items-center gap-1.5 border-b-2 border-primary px-1 font-mono text-[11px] text-foreground/80">
               <Braces aria-hidden="true" className="size-3 text-primary" strokeWidth={1.75} />
               page.json
             </span>

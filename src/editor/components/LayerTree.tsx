@@ -235,8 +235,7 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
             {getElementIcon(element, selected)}
             <span
               className={cn(
-                "w-max flex-none text-left text-xs font-[550] whitespace-nowrap",
-                isGroup && "font-[650]",
+                "w-max flex-none text-left text-xs whitespace-nowrap",
                 selected && "text-primary",
               )}
             >

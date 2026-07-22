@@ -366,9 +366,9 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           className="flex min-w-0 max-w-[min(420px,calc(100%-20px))] items-center gap-[7px] px-2"
           role="group"
         >
-          <strong className="overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap">
+          <span className="overflow-hidden text-xs text-ellipsis whitespace-nowrap">
             {document.name}
-          </strong>
+          </span>
           <span className="font-mono text-xs text-muted-foreground">
             {document.width} × {document.height}
           </span>

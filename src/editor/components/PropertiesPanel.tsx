@@ -62,7 +62,7 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
 };
 
 const TWO_DECIMAL_NUMBER_PATTERN = /^-?\d*(?:\.\d{0,2})?$/;
-const PROPERTY_LABEL_CLASS_NAME = "text-xs font-[550] text-muted-foreground";
+const PROPERTY_LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const PROPERTY_CONTROL_CLASS_NAME =
   "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring";
 const COMPACT_FIELD_GROUP_CLASS_NAME = "gap-2.5";
@@ -261,7 +261,7 @@ function ColorControl({
       <ColorPicker disabled={disabled} value={value} onChange={onChange}>
         <Button
           aria-label={`${label}选择器`}
-          className="h-8 w-full justify-start gap-2 rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] px-2 font-mono text-xs font-normal text-muted-foreground shadow-none"
+          className="h-8 w-full justify-start gap-2 rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] px-2 font-mono text-xs text-muted-foreground shadow-none"
           disabled={disabled}
           id={id}
           type="button"
@@ -490,7 +490,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-12 min-h-12 flex-none items-center justify-between border-b border-border px-3.5">
-        <h2 className="m-0 max-w-[210px] overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap">
+        <h2 className="m-0 max-w-[210px] overflow-hidden text-xs text-ellipsis whitespace-nowrap">
           {selectedElement.name}
         </h2>
         <Badge className="text-xs" variant="secondary">
@@ -511,7 +511,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
       <ScrollArea className="min-h-0 flex-1">
         <section className="flex flex-col gap-3 p-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="m-0 text-xs font-bold">位置与尺寸</h3>
+            <h3 className="m-0 text-xs">位置与尺寸</h3>
           </div>
           <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
             <Field>
@@ -568,7 +568,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
 
         <section className="flex flex-col gap-3 p-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="m-0 text-xs font-bold">外观</h3>
+            <h3 className="m-0 text-xs">外观</h3>
             <span className="font-mono text-xs text-muted-foreground">
               {Math.round(selectedElement.opacity * 100)}%
             </span>
@@ -593,9 +593,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
 
         <section className="flex flex-col gap-3 p-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="m-0 text-xs font-bold">
-              {selectedElement.type === "text" ? "文字" : "元素样式"}
-            </h3>
+            <h3 className="m-0 text-xs">{selectedElement.type === "text" ? "文字" : "元素样式"}</h3>
           </div>
           <ElementSpecificFields
             key={selectedElement.id}

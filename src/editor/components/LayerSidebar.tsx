@@ -53,7 +53,7 @@ function PageList({ activeDocument, documents, onSelectDocument }: PageListProps
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex min-h-12 items-center px-3.5">
-        <h2 className="m-0 text-xs font-[650]">页面</h2>
+        <h2 className="m-0 text-xs">页面</h2>
       </header>
       <ScrollArea className="min-h-0 flex-1 px-2 pb-2">
         <div className="flex flex-col gap-px">
@@ -93,8 +93,8 @@ function PageList({ activeDocument, documents, onSelectDocument }: PageListProps
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span
                     className={cn(
-                      "overflow-hidden text-xs font-[550] text-ellipsis whitespace-nowrap",
-                      active && "font-[650] text-primary",
+                      "overflow-hidden text-xs text-ellipsis whitespace-nowrap",
+                      active && "text-primary",
                     )}
                   >
                     {page.name}
@@ -147,7 +147,7 @@ export const LayerSidebar = memo(function LayerSidebar({
       <ResizablePanel className="min-h-0" id="layer-list-panel" minSize={176}>
         <div className="flex h-full min-h-0 flex-col">
           <header className="flex min-h-12 items-center px-3.5">
-            <h2 className="m-0 text-xs font-[650]">图层</h2>
+            <h2 className="m-0 text-xs">图层</h2>
           </header>
           <LayerTree
             elements={document.elements}
