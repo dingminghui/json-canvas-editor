@@ -90,8 +90,12 @@ describe("EditorWorkspace creation toolbar", () => {
     renderWorkspace();
 
     const shapeButton = screen.getByRole("button", { name: "图形" });
-    expect(shapeButton.querySelector(".lucide-square")).toBeInTheDocument();
+    const defaultShapeIcon = shapeButton.querySelector(".lucide-square");
+    expect(defaultShapeIcon).toBeInTheDocument();
+    expect(defaultShapeIcon).toHaveClass("size-4");
     expect(shapeButton.querySelector(".lucide-chevron-down")).toBeInTheDocument();
+    expect(shapeButton).toHaveAttribute("aria-pressed", "false");
+    expect(shapeButton).not.toHaveClass("bg-accent", "text-primary");
 
     fireEvent.click(shapeButton);
     expect(shapeButton).toHaveAttribute("aria-pressed", "true");

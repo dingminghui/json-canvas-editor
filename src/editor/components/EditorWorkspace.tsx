@@ -727,7 +727,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
               onMouseEnter={openShapeMenu}
               onMouseLeave={scheduleShapeMenuClose}
             >
-              <SelectedShapeIcon aria-hidden="true" className="size-[15px]" strokeWidth={1.75} />
+              <SelectedShapeIcon aria-hidden="true" className="size-4" strokeWidth={1.75} />
               <ChevronDown
                 aria-hidden="true"
                 className="size-3 text-muted-foreground"
