@@ -2,6 +2,7 @@ import { DEFAULT_CANVAS_FONT_FAMILY, type CanvasFontFamily } from "@/editor/font
 import type {
   CanvasDocument,
   CanvasElement,
+  CircleElement,
   GroupElement,
   ImageElement,
   RectElement,
@@ -96,11 +97,19 @@ interface StoryFontPresets {
 }
 
 type OriginalTextElement = Omit<TextElement, "fontFamily"> & { fontFamily: string };
+type OriginalRectElement = Omit<RectElement, "stroke" | "strokeWidth"> &
+  Partial<Pick<RectElement, "stroke" | "strokeWidth">>;
+type OriginalCircleElement = Omit<CircleElement, "stroke" | "strokeWidth"> &
+  Partial<Pick<CircleElement, "stroke" | "strokeWidth">>;
 type OriginalGroupElement = Omit<GroupElement, "children"> & {
   children: OriginalCanvasElement[];
 };
 type OriginalCanvasElement =
-  Exclude<CanvasElement, GroupElement | TextElement> | OriginalGroupElement | OriginalTextElement;
+  | Exclude<CanvasElement, CircleElement | GroupElement | RectElement | TextElement>
+  | OriginalCircleElement
+  | OriginalGroupElement
+  | OriginalRectElement
+  | OriginalTextElement;
 interface OriginalCanvasDocument extends Omit<CanvasDocument, "elements"> {
   elements: OriginalCanvasElement[];
 }
@@ -179,7 +188,11 @@ function createOriginalCanvasDocument(document: OriginalCanvasDocument): CanvasD
       }
       case "circle":
       case "rect":
-        return element;
+        return {
+          ...element,
+          stroke: element.stroke ?? "#000000",
+          strokeWidth: element.strokeWidth ?? 0,
+        };
       default: {
         const exhaustiveElement: never = element;
         throw new Error(
@@ -245,6 +258,8 @@ function createRect(
     ...baseLeaf(id, name, x, y, width, height),
     type: "rect",
     fill,
+    stroke: "#000000",
+    strokeWidth: 0,
     cornerRadius,
   };
 }

@@ -53,15 +53,21 @@ describe("editorReducer", () => {
     });
   });
 
-  it("normalizes dimensions and opacity updates", () => {
+  it("normalizes dimensions, opacity, and non-negative appearance updates", () => {
     const state = editorReducer(createInitialEditorState(), {
       type: "update-element",
-      elementId: "story-title",
-      patch: { width: 2, height: -1, opacity: 2 },
+      elementId: "story-background",
+      patch: { width: 2, height: -1, opacity: 2, cornerRadius: -4, strokeWidth: -2 },
     });
 
-    const title = findElement(getActiveDocument(state).elements, "story-title");
-    expect(title).toMatchObject({ width: 8, height: 8, opacity: 1 });
+    const background = findElement(getActiveDocument(state).elements, "story-background");
+    expect(background).toMatchObject({
+      width: 8,
+      height: 8,
+      opacity: 1,
+      cornerRadius: 0,
+      strokeWidth: 0,
+    });
   });
 
   it("builds the Symbicort page through the shared story template", () => {

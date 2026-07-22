@@ -499,6 +499,44 @@ describe("Home", () => {
     expect(fontSizeInput).toHaveValue(8);
   });
 
+  it("edits shape stroke and rounded corners from the properties panel", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "开篇分隔线" }));
+
+    const strokeWidthInput = screen.getByLabelText("描边宽度");
+    const cornerRadiusInput = screen.getByLabelText("圆角");
+    const strokeColorButton = screen.getByRole("button", { name: "描边颜色选择器" });
+
+    expect(strokeWidthInput).toHaveValue(0);
+    expect(cornerRadiusInput).toHaveValue(0);
+    expect(strokeColorButton).toHaveTextContent("#000000");
+
+    await user.clear(strokeWidthInput);
+    await user.type(strokeWidthInput, "5");
+    await user.tab();
+    await user.clear(cornerRadiusInput);
+    await user.type(cornerRadiusInput, "14");
+    await user.tab();
+    await user.click(strokeColorButton);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Hex 颜色" }), {
+      target: { value: "#2948ab" },
+    });
+
+    expect(strokeWidthInput).toHaveValue(5);
+    expect(cornerRadiusInput).toHaveValue(14);
+    expect(strokeColorButton).toHaveTextContent("#2948AB");
+
+    const imageRow = document.querySelector(
+      '[data-slot="layer-row"][data-element-id="chapter-1-image-2"]',
+    );
+    if (!imageRow) throw new Error("未找到图片图层");
+    fireEvent.click(imageRow);
+
+    expect(screen.getByLabelText("圆角")).toHaveValue(12);
+  });
+
   it("changes the selected text box font as one undoable property update", async () => {
     const user = userEvent.setup();
     render(<App />);

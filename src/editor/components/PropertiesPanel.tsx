@@ -426,6 +426,19 @@ function ElementSpecificFields({
             value={element.fill}
             onChange={(fill) => onUpdate({ fill })}
           />
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
           <PropertyNumberField
             disabled={disabled}
             label="圆角"
@@ -437,25 +450,49 @@ function ElementSpecificFields({
       );
     case "circle":
       return (
-        <ColorControl
-          disabled={disabled}
-          label="填充颜色"
-          value={element.fill}
-          onChange={(fill) => onUpdate({ fill })}
-        />
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <ColorControl
+            disabled={disabled}
+            label="填充颜色"
+            value={element.fill}
+            onChange={(fill) => onUpdate({ fill })}
+          />
+          <ColorControl
+            disabled={disabled}
+            label="描边颜色"
+            value={element.stroke}
+            onChange={(stroke) => onUpdate({ stroke })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="描边宽度"
+            minValue={0}
+            value={element.strokeWidth}
+            onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+          />
+        </FieldGroup>
       );
     case "image":
       return (
-        <EditorSelect
-          disabled={disabled}
-          label="图片填充"
-          options={[
-            { id: "cover", label: "裁切填充" },
-            { id: "contain", label: "完整显示" },
-          ]}
-          value={element.fit}
-          onChange={(fit) => onUpdate({ fit: fit as typeof element.fit })}
-        />
+        <FieldGroup className={COMPACT_FIELD_GROUP_CLASS_NAME}>
+          <EditorSelect
+            disabled={disabled}
+            label="图片填充"
+            options={[
+              { id: "cover", label: "裁切填充" },
+              { id: "contain", label: "完整显示" },
+            ]}
+            value={element.fit}
+            onChange={(fit) => onUpdate({ fit: fit as typeof element.fit })}
+          />
+          <PropertyNumberField
+            disabled={disabled}
+            label="圆角"
+            minValue={0}
+            value={element.cornerRadius}
+            onChange={(cornerRadius) => onUpdate({ cornerRadius })}
+          />
+        </FieldGroup>
       );
     default: {
       const exhaustiveElement: never = element;

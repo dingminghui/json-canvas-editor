@@ -385,6 +385,8 @@ const RenderElement = memo(function RenderElement({
           {...commonProps}
           cornerRadius={element.cornerRadius}
           fill={element.fill}
+          stroke={element.stroke}
+          strokeWidth={element.strokeWidth}
         />
       );
     case "circle":
@@ -394,6 +396,8 @@ const RenderElement = memo(function RenderElement({
           {...commonProps}
           cornerRadius={Math.min(element.width, element.height) / 2}
           fill={element.fill}
+          stroke={element.stroke}
+          strokeWidth={element.strokeWidth}
         />
       );
     case "text":

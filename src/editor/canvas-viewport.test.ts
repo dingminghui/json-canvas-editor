@@ -22,6 +22,8 @@ const elements: CanvasElement[] = [
         rotation: 90,
         opacity: 1,
         fill: "#fff",
+        stroke: "#000",
+        strokeWidth: 0,
         cornerRadius: 0,
       },
       {

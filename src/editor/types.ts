@@ -18,6 +18,11 @@ interface TransformableElement extends ElementMeta {
   opacity: number;
 }
 
+interface StrokedElement extends TransformableElement {
+  stroke: string;
+  strokeWidth: number;
+}
+
 export interface TextElement extends TransformableElement {
   type: "text";
   /** Restricted inline Markdown: bold, italic, strikethrough, line breaks, and color spans. */
@@ -29,13 +34,13 @@ export interface TextElement extends TransformableElement {
   fill: string;
 }
 
-export interface RectElement extends TransformableElement {
+export interface RectElement extends StrokedElement {
   type: "rect";
   fill: string;
   cornerRadius: number;
 }
 
-export interface CircleElement extends TransformableElement {
+export interface CircleElement extends StrokedElement {
   type: "circle";
   fill: string;
 }

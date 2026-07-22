@@ -86,8 +86,12 @@ vi.mock("react-konva", async () => {
   }
 
   interface MockRectProps {
+    cornerRadius?: number;
     fill?: string;
     listening?: boolean;
+    name?: string;
+    stroke?: string;
+    strokeWidth?: number;
   }
 
   const Container = React.forwardRef<HTMLDivElement, MockContainerProps>(function Container(
@@ -141,13 +145,16 @@ vi.mock("react-konva", async () => {
   });
 
   const Rect = React.forwardRef<HTMLDivElement, MockRectProps>(function Rect(
-    { fill, listening = true },
+    { cornerRadius, fill, listening = true, name, stroke, strokeWidth },
     ref,
   ) {
     return (
       <div
+        data-corner-radius={cornerRadius}
         data-listening={String(listening)}
-        data-testid={fill === "#e5e3dd" ? "image-hit-area" : undefined}
+        data-stroke={stroke}
+        data-stroke-width={strokeWidth}
+        data-testid={fill === "#e5e3dd" ? "image-hit-area" : name ? `rect-${name}` : undefined}
         ref={ref}
       />
     );
@@ -308,6 +315,53 @@ describe("CanvasStage", () => {
     expect(context.beginPath).toHaveBeenCalledOnce();
     expect(context.roundRect).toHaveBeenCalledWith(0, 0, 180, 120, 12);
     expect(context.closePath).toHaveBeenCalledOnce();
+  });
+
+  it("renders rectangle stroke and rounded corners from the document definition", () => {
+    const rectDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          cornerRadius: 18,
+          fill: "#ffffff",
+          height: 80,
+          id: "card",
+          locked: false,
+          name: "描边卡片",
+          opacity: 1,
+          rotation: 0,
+          stroke: "#2948ab",
+          strokeWidth: 5,
+          type: "rect",
+          visible: true,
+          width: 160,
+          x: 20,
+          y: 20,
+        },
+      ],
+    };
+
+    render(
+      <CanvasStage
+        document={rectDocument}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId={null}
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={vi.fn()}
+        onElementPreview={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("rect-card")).toHaveAttribute("data-corner-radius", "18");
+    expect(screen.getByTestId("rect-card")).toHaveAttribute("data-stroke", "#2948ab");
+    expect(screen.getByTestId("rect-card")).toHaveAttribute("data-stroke-width", "5");
   });
 
   it("crops a cover image into the element frame instead of overflowing its client bounds", () => {

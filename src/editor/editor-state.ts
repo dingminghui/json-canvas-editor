@@ -144,6 +144,8 @@ function updateLeafElement(
   elementId: string,
   patch: CanvasElementPatch,
 ): CanvasElement[] {
+  const strokeWidth = "strokeWidth" in patch ? patch.strokeWidth : undefined;
+  const cornerRadius = "cornerRadius" in patch ? patch.cornerRadius : undefined;
   const normalizedPatch = {
     ...patch,
     ...(typeof patch.width === "number" ? { width: Math.max(8, patch.width) } : {}),
@@ -151,6 +153,8 @@ function updateLeafElement(
     ...(typeof patch.opacity === "number"
       ? { opacity: Math.min(1, Math.max(0, patch.opacity)) }
       : {}),
+    ...(typeof strokeWidth === "number" ? { strokeWidth: Math.max(0, strokeWidth) } : {}),
+    ...(typeof cornerRadius === "number" ? { cornerRadius: Math.max(0, cornerRadius) } : {}),
   } as CanvasElementPatch;
 
   return mapElements(elements, elementId, (element) => {
