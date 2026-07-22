@@ -17,8 +17,17 @@ import lymphomaProgressionUrl from "../../mock/assets/07-lymphoma-progression.jp
 import rchopTreatmentPlanUrl from "../../mock/assets/08-rchop-treatment-plan.jpg";
 import chemotherapySupportUrl from "../../mock/assets/09-chemotherapy-support.jpg";
 import springParkRecoveryUrl from "../../mock/assets/10-spring-park-recovery.jpg";
+import symbicortHeroUrl from "../../mock/assets/11-symbicort-hero.webp";
+import airwayMechanismUrl from "../../mock/assets/12-airway-mechanism.webp";
+import ginaProtectionUrl from "../../mock/assets/13-gina-protection.webp";
+import icsLabaDuoUrl from "../../mock/assets/14-ics-laba-duo.webp";
+import inhalerStepsUrl from "../../mock/assets/15-inhaler-steps.webp";
+import followupReviewUrl from "../../mock/assets/16-followup-review.webp";
+import urgentCareUrl from "../../mock/assets/17-urgent-care.webp";
 import rawKidneyStoryMock from "../../mock/kidney-awakening-story.json";
 import rawLymphomaStoryMock from "../../mock/lymphoma-transformation-story.json";
+import rawSymbicortOriginalMock from "../../mock/symbicort-longform-original.json";
+import rawSymbicortStoryMock from "../../mock/symbicort-longform-story.json";
 
 interface StoryAsset {
   id: string;
@@ -86,8 +95,20 @@ interface StoryFontPresets {
   technical: CanvasFontFamily;
 }
 
+type OriginalTextElement = Omit<TextElement, "fontFamily"> & { fontFamily: string };
+type OriginalGroupElement = Omit<GroupElement, "children"> & {
+  children: OriginalCanvasElement[];
+};
+type OriginalCanvasElement =
+  Exclude<CanvasElement, GroupElement | TextElement> | OriginalGroupElement | OriginalTextElement;
+interface OriginalCanvasDocument extends Omit<CanvasDocument, "elements"> {
+  elements: OriginalCanvasElement[];
+}
+
 const kidneyStoryMock = rawKidneyStoryMock as unknown as StoryMock;
 const lymphomaStoryMock = rawLymphomaStoryMock as unknown as StoryMock;
+const symbicortStoryMock = rawSymbicortStoryMock as unknown as StoryMock;
+const symbicortOriginalMock = rawSymbicortOriginalMock as unknown as OriginalCanvasDocument;
 
 const PAGE_WIDTH = 1080;
 const CONTENT_X = 140;
@@ -117,7 +138,59 @@ const assetUrls: Record<string, string> = {
   "rchop-treatment-plan": rchopTreatmentPlanUrl,
   "chemotherapy-support": chemotherapySupportUrl,
   "spring-park-recovery": springParkRecoveryUrl,
+  "symbicort-hero": symbicortHeroUrl,
+  "airway-mechanism": airwayMechanismUrl,
+  "gina-protection": ginaProtectionUrl,
+  "ics-laba-duo": icsLabaDuoUrl,
+  "inhaler-steps": inhalerStepsUrl,
+  "followup-review": followupReviewUrl,
+  "urgent-care": urgentCareUrl,
 };
+
+const originalSymbicortAssetUrls: Record<string, string> = {
+  "/assets/medical-comic/hero-real.webp": symbicortHeroUrl,
+  "/assets/medical-comic/mechanism-real.webp": airwayMechanismUrl,
+  "/assets/medical-comic/gina-protection-real.webp": ginaProtectionUrl,
+  "/assets/medical-comic/ics-laba-duo-real.webp": icsLabaDuoUrl,
+  "/assets/medical-comic/inhaler-steps-real.webp": inhalerStepsUrl,
+  "/assets/medical-comic/followup-warning-real.webp": followupReviewUrl,
+  "/assets/medical-comic/urgent-care-real.webp": urgentCareUrl,
+};
+
+const originalFontFamilies: Record<string, CanvasFontFamily> = {
+  Arial: "inter",
+  "Microsoft YaHei": "noto-sans-sc",
+};
+
+function createOriginalCanvasDocument(document: OriginalCanvasDocument): CanvasDocument {
+  function resolveElement(element: OriginalCanvasElement): CanvasElement {
+    switch (element.type) {
+      case "group":
+        return { ...element, children: element.children.map(resolveElement) };
+      case "text": {
+        const fontFamily = originalFontFamilies[element.fontFamily];
+        if (!fontFamily) throw new Error(`Unsupported original font: ${element.fontFamily}`);
+        return { ...element, fontFamily };
+      }
+      case "image": {
+        const src = originalSymbicortAssetUrls[element.src];
+        if (!src) throw new Error(`Missing original canvas asset: ${element.src}`);
+        return { ...element, src };
+      }
+      case "circle":
+      case "rect":
+        return element;
+      default: {
+        const exhaustiveElement: never = element;
+        throw new Error(
+          `Unsupported original canvas element: ${JSON.stringify(exhaustiveElement)}`,
+        );
+      }
+    }
+  }
+
+  return { ...document, elements: document.elements.map(resolveElement) };
+}
 
 function baseLeaf(id: string, name: string, x: number, y: number, width: number, height: number) {
   return {
@@ -830,4 +903,6 @@ function createStoryDocument(story: StoryMock): CanvasDocument {
 export const EDITOR_TEMPLATES: CanvasDocument[] = [
   createStoryDocument(kidneyStoryMock),
   createStoryDocument(lymphomaStoryMock),
+  createStoryDocument(symbicortStoryMock),
+  createOriginalCanvasDocument(symbicortOriginalMock),
 ];

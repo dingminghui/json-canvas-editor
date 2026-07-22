@@ -1,0 +1,187 @@
+{
+  "id": "symbicort-longform-medical-comic",
+  "name": "信必可：从 GINA 原则看懂哮喘长期管理",
+  "description": "面向成人与青少年哮喘患者及家属的健康科普长图；不构成诊断、处方或个体化用药建议。",
+  "width": 1080,
+  "height": 5993,
+  "elements": [
+    {
+      "id": "background",
+      "name": "长图背景",
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 5993,
+      "rotation": 0,
+      "opacity": 1,
+      "visible": true,
+      "locked": true,
+      "type": "rect",
+      "fill": "#55B9EA",
+      "cornerRadius": 0
+    },
+    {
+      "id": "hero-group",
+      "type": "group",
+      "name": "封面",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "hero-deep-blue", "name": "封面深蓝底", "x": 0, "y": 610, "width": 1080, "height": 250, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 0 },
+        { "id": "hero-label-bg", "name": "栏目标签底", "x": 70, "y": 54, "width": 300, "height": 62, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 31 },
+        { "id": "hero-label", "name": "栏目标签", "x": 90, "y": 64, "width": 260, "height": 38, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "呼吸健康小讲堂", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "hero-topic", "name": "封面主题词", "x": 462, "y": 65, "width": 510, "height": 76, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "信必可", "fontFamily": "Microsoft YaHei", "fontSize": 58, "fontWeight": "700", "align": "left", "fill": "#16307D" },
+        { "id": "hero-title", "name": "封面主标题", "x": 452, "y": 155, "width": 560, "height": 142, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "不只在“喘”的时候", "fontFamily": "Microsoft YaHei", "fontSize": 50, "fontWeight": "700", "align": "left", "fill": "#16307D" },
+        { "id": "hero-image", "name": "封面原创插画", "x": 58, "y": 134, "width": 370, "height": 208, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/hero-real.webp", "fit": "cover", "cornerRadius": 22 },
+        { "id": "hero-question-bg", "name": "核心问题横幅", "x": 392, "y": 312, "width": 618, "height": 112, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 28 },
+        { "id": "hero-question", "name": "核心问题", "x": 426, "y": 338, "width": 548, "height": 54, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "今天不喘，为什么还要继续管理？", "fontFamily": "Microsoft YaHei", "fontSize": 28, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "hero-checklist-bg", "name": "自测卡", "x": 92, "y": 438, "width": 896, "height": 282, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 32 },
+        { "id": "hero-checklist-title", "name": "自测标题", "x": 142, "y": 462, "width": 740, "height": 52, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "你是否也有这些习惯？", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#16307D" },
+        { "id": "hero-check-1", "name": "自测选项 1", "x": 142, "y": 536, "width": 700, "height": 40, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "✓  症状少了就自行停药", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "500", "align": "left", "fill": "#244766" },
+        { "id": "hero-check-2", "name": "自测选项 2", "x": 142, "y": 592, "width": 700, "height": 40, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "✓  只在胸闷气短时才处理", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "500", "align": "left", "fill": "#244766" },
+        { "id": "hero-check-3", "name": "自测选项 3", "x": 142, "y": 648, "width": 700, "height": 40, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "✓  很久没有复查吸入技术", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "500", "align": "left", "fill": "#244766" },
+        { "id": "hero-guide", "name": "封面引导", "x": 110, "y": 774, "width": 860, "height": 50, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "继续往下，看懂长期管理 ↓", "fontFamily": "Microsoft YaHei", "fontSize": 28, "fontWeight": "700", "align": "center", "fill": "#FFFFFF" }
+      ]
+    },
+    {
+      "id": "intro-group",
+      "type": "group",
+      "name": "导语",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "intro-card", "name": "导语白卡", "x": 58, "y": 900, "width": 920, "height": 248, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 32 },
+        { "id": "intro-mark", "name": "导语提示", "x": 88, "y": 958, "width": 104, "height": 104, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 52 },
+        { "id": "intro-mark-text", "name": "导语感叹号", "x": 110, "y": 964, "width": 60, "height": 82, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "!", "fontFamily": "Arial", "fontSize": 74, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "intro-title", "name": "导语标题", "x": 222, "y": 934, "width": 690, "height": 54, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "先记住：症状平稳 ≠ 管理结束", "fontFamily": "Microsoft YaHei", "fontSize": 31, "fontWeight": "700", "align": "left", "fill": "#16307D" },
+        { "id": "intro-body", "name": "导语正文", "x": 222, "y": 1006, "width": 690, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "哮喘控制不只是让当下舒服一点，还要降低未来急性发作和肺功能受损的风险。症状暂时平稳，并不等于气道炎症已经消失。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" }
+      ]
+    },
+    {
+      "id": "chapter-1-group",
+      "type": "group",
+      "name": "一 · 不只控制症状，更要降低风险",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "ch1-number-bg", "name": "章节 1 序号底", "x": 58, "y": 1198, "width": 108, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch1-number", "name": "章节 1 序号", "x": 58, "y": 1215, "width": 108, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "01", "fontFamily": "Arial", "fontSize": 36, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch1-title-bg", "name": "章节 1 标题条", "x": 174, "y": 1198, "width": 836, "height": 98, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 22 },
+        { "id": "ch1-eyebrow", "name": "章节 1 小眉题", "x": 214, "y": 1207, "width": 690, "height": 26, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "先看清长期目标", "fontFamily": "Microsoft YaHei", "fontSize": 18, "fontWeight": "400", "align": "left", "fill": "#DDF5FF" },
+        { "id": "ch1-title", "name": "章节 1 标题", "x": 214, "y": 1238, "width": 700, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "不只控制症状，更要降低风险", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "ch1-card", "name": "章节 1 内容卡", "x": 58, "y": 1320, "width": 950, "height": 586, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 28 },
+        { "id": "ch1-body", "name": "章节 1 正文", "x": 98, "y": 1354, "width": 400, "height": 180, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "GINA 将哮喘管理目标分为当前症状控制和未来风险降低两个维度。规律评估、规范使用含 ICS 的方案，有助于减少严重急性发作风险。", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch1-image", "name": "章节 1 插画", "x": 522, "y": 1352, "width": 430, "height": 242, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/mechanism-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "ch1-goals", "name": "章节 1 目标底", "x": 104, "y": 1622, "width": 852, "height": 72, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 30 },
+        { "id": "ch1-goal-current", "name": "章节 1 当前控制", "x": 126, "y": 1640, "width": 270, "height": 34, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "当前控制", "fontFamily": "Microsoft YaHei", "fontSize": 23, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch1-goal-risk", "name": "章节 1 未来风险", "x": 654, "y": 1640, "width": 270, "height": 34, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "未来风险", "fontFamily": "Microsoft YaHei", "fontSize": 23, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch1-callout-bg", "name": "章节 1 总结气泡", "x": 140, "y": 1776, "width": 800, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch1-callout", "name": "章节 1 总结", "x": 188, "y": 1800, "width": 704, "height": 48, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "“不喘了”是好消息，但不是自行停药的信号。", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "700", "align": "center", "fill": "#16307D" }
+      ]
+    },
+    {
+      "id": "chapter-2-group",
+      "type": "group",
+      "name": "二 · 长期管理，以含 ICS 治疗为基础",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "ch2-number-bg", "name": "章节 2 序号底", "x": 58, "y": 1960, "width": 108, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch2-number", "name": "章节 2 序号", "x": 58, "y": 1977, "width": 108, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "02", "fontFamily": "Arial", "fontSize": 36, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch2-title-bg", "name": "章节 2 标题条", "x": 174, "y": 1960, "width": 836, "height": 98, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 22 },
+        { "id": "ch2-eyebrow", "name": "章节 2 小眉题", "x": 214, "y": 1969, "width": 690, "height": 26, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "读懂 GINA 原则", "fontFamily": "Microsoft YaHei", "fontSize": 18, "fontWeight": "400", "align": "left", "fill": "#DDF5FF" },
+        { "id": "ch2-title", "name": "章节 2 标题", "x": 214, "y": 2000, "width": 700, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "长期管理，以含 ICS 治疗为基础", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "ch2-card", "name": "章节 2 内容卡", "x": 58, "y": 2082, "width": 950, "height": 586, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 28 },
+        { "id": "ch2-body-a", "name": "章节 2 正文前段", "x": 98, "y": 2114, "width": 864, "height": 62, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "GINA 不建议成人和青少年仅使用短效支气管舒张剂（SABA）治疗。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch2-body-emphasis", "name": "章节 2 强调文字", "x": 98, "y": 2180, "width": 864, "height": 38, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "含吸入性糖皮质激素（ICS）的方案是降低风险的重要基础", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "left", "fill": "#16307D" },
+        { "id": "ch2-body-b", "name": "章节 2 正文后段", "x": 98, "y": 2228, "width": 864, "height": 38, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "具体路径应由医生评估。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch2-image", "name": "章节 2 插画", "x": 98, "y": 2300, "width": 500, "height": 281, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/gina-protection-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "ch2-principles-bg", "name": "章节 2 原则卡", "x": 628, "y": 2300, "width": 334, "height": 281, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 20 },
+        { "id": "ch2-principles-title", "name": "章节 2 原则标题", "x": 660, "y": 2328, "width": 270, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "GINA 核心提醒", "fontFamily": "Microsoft YaHei", "fontSize": 26, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch2-principles-list", "name": "章节 2 原则列表", "x": 672, "y": 2400, "width": 246, "height": 130, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "01  含 ICS 治疗\n02  不只依赖 SABA\n03  方案因人而异", "fontFamily": "Microsoft YaHei", "fontSize": 22, "fontWeight": "700", "align": "left", "fill": "#244766" },
+        { "id": "ch2-callout-bg", "name": "章节 2 总结气泡", "x": 140, "y": 2538, "width": 800, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch2-callout", "name": "章节 2 总结", "x": 188, "y": 2552, "width": 704, "height": 60, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "指南推荐的是管理原则，不等于所有人都使用同一种药。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" }
+      ]
+    },
+    {
+      "id": "chapter-3-group",
+      "type": "group",
+      "name": "三 · 信必可：两种成分，各司其职",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "ch3-number-bg", "name": "章节 3 序号底", "x": 58, "y": 2722, "width": 108, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch3-number", "name": "章节 3 序号", "x": 58, "y": 2739, "width": 108, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "03", "fontFamily": "Arial", "fontSize": 36, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch3-title-bg", "name": "章节 3 标题条", "x": 174, "y": 2722, "width": 836, "height": 98, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 22 },
+        { "id": "ch3-title", "name": "章节 3 标题", "x": 214, "y": 2761, "width": 700, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "信必可：两种成分，各司其职", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "ch3-card", "name": "章节 3 内容卡", "x": 58, "y": 2844, "width": 950, "height": 586, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 28 },
+        { "id": "ch3-body", "name": "章节 3 正文", "x": 98, "y": 2872, "width": 864, "height": 104, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "信必可为布地奈德与福莫特罗的复方制剂：布地奈德属于 ICS，用于抗炎；福莫特罗属于长效 β₂ 受体激动剂（LABA），帮助支气管舒张。适用方案以说明书和医嘱为准。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch3-image", "name": "章节 3 插画", "x": 98, "y": 3014, "width": 420, "height": 236, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/ics-laba-duo-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "ch3-ics-bg", "name": "章节 3 ICS 卡", "x": 544, "y": 3014, "width": 200, "height": 236, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 18 },
+        { "id": "ch3-ics", "name": "章节 3 ICS", "x": 564, "y": 3050, "width": 160, "height": 144, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "ICS\n布地奈德\n抗炎基础", "fontFamily": "Microsoft YaHei", "fontSize": 23, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch3-laba-bg", "name": "章节 3 LABA 卡", "x": 762, "y": 3014, "width": 200, "height": 236, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#E7F8EE", "cornerRadius": 18 },
+        { "id": "ch3-laba", "name": "章节 3 LABA", "x": 782, "y": 3050, "width": 160, "height": 144, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "LABA\n福莫特罗\n帮助舒张", "fontFamily": "Microsoft YaHei", "fontSize": 23, "fontWeight": "700", "align": "center", "fill": "#276A59" },
+        { "id": "ch3-callout-bg", "name": "章节 3 总结气泡", "x": 140, "y": 3300, "width": 800, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch3-callout", "name": "章节 3 总结", "x": 188, "y": 3318, "width": 704, "height": 54, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "“抗炎 + 舒张”是组合逻辑，不是自行加量的理由。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" }
+      ]
+    },
+    {
+      "id": "chapter-4-group",
+      "type": "group",
+      "name": "四 · 正确吸入，比记得用了更重要",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "ch4-number-bg", "name": "章节 4 序号底", "x": 58, "y": 3484, "width": 108, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch4-number", "name": "章节 4 序号", "x": 58, "y": 3501, "width": 108, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "04", "fontFamily": "Arial", "fontSize": 36, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch4-title-bg", "name": "章节 4 标题条", "x": 174, "y": 3484, "width": 836, "height": 98, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 22 },
+        { "id": "ch4-title", "name": "章节 4 标题", "x": 214, "y": 3523, "width": 700, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "正确吸入，比“记得用了”更重要", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "ch4-card", "name": "章节 4 内容卡", "x": 58, "y": 3606, "width": 950, "height": 586, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 28 },
+        { "id": "ch4-body", "name": "章节 4 正文", "x": 98, "y": 3632, "width": 864, "height": 76, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "装置准备、充分呼气、含紧吸嘴并按装置要求吸入、屏气、使用后漱口，都是影响效果的关键环节。不同装置操作不同，应请医护人员现场核对。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch4-image", "name": "章节 4 插画", "x": 98, "y": 3752, "width": 864, "height": 304, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/inhaler-steps-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "ch4-steps", "name": "章节 4 步骤标签", "x": 126, "y": 4016, "width": 808, "height": 44, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "准备  →  呼气  →  吸入并屏气  →  漱口", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch4-callout-bg", "name": "章节 4 总结气泡", "x": 140, "y": 4062, "width": 800, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch4-callout", "name": "章节 4 总结", "x": 188, "y": 4080, "width": 704, "height": 54, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "每次复诊，都可以请医生或药师重新检查吸入动作。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" }
+      ]
+    },
+    {
+      "id": "chapter-5-group",
+      "type": "group",
+      "name": "五 · 规律使用，记录症状，按时复诊",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "ch5-number-bg", "name": "章节 5 序号底", "x": 58, "y": 4246, "width": 108, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch5-number", "name": "章节 5 序号", "x": 58, "y": 4263, "width": 108, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "05", "fontFamily": "Arial", "fontSize": 36, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch5-title-bg", "name": "章节 5 标题条", "x": 174, "y": 4246, "width": 836, "height": 98, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 22 },
+        { "id": "ch5-title", "name": "章节 5 标题", "x": 214, "y": 4285, "width": 700, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "规律使用，记录症状，按时复诊", "fontFamily": "Microsoft YaHei", "fontSize": 30, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "ch5-card", "name": "章节 5 内容卡", "x": 58, "y": 4368, "width": 950, "height": 586, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 28 },
+        { "id": "ch5-image", "name": "章节 5 插画", "x": 94, "y": 4400, "width": 430, "height": 242, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/followup-warning-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "ch5-body", "name": "章节 5 正文", "x": 570, "y": 4402, "width": 400, "height": 180, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "记录日间和夜间症状、活动受限、缓解药使用及急性发作情况。医生会结合控制水平、依从性和吸入技术，决定是否维持或调整方案。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "ch5-goals-bg", "name": "章节 5 目标底", "x": 104, "y": 4670, "width": 852, "height": 72, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#DDF5FF", "cornerRadius": 30 },
+        { "id": "ch5-goals", "name": "章节 5 目标", "x": 126, "y": 4684, "width": 800, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "记录症状                 →                 复诊评估", "fontFamily": "Microsoft YaHei", "fontSize": 23, "fontWeight": "700", "align": "center", "fill": "#16307D" },
+        { "id": "ch5-callout-bg", "name": "章节 5 总结气泡", "x": 140, "y": 4824, "width": 800, "height": 108, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFFFFF", "cornerRadius": 54 },
+        { "id": "ch5-callout", "name": "章节 5 总结", "x": 188, "y": 4842, "width": 704, "height": 54, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "调整治疗要有评估依据，不自行停药、换药或加减剂量。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "center", "fill": "#16307D" }
+      ]
+    },
+    {
+      "id": "ending-group",
+      "type": "group",
+      "name": "就医提醒、参考资料与免责声明",
+      "visible": true,
+      "locked": false,
+      "children": [
+        { "id": "warning-bg", "name": "就医提醒背景", "x": 58, "y": 5016, "width": 964, "height": 282, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#FFF0E8", "cornerRadius": 28 },
+        { "id": "warning-image", "name": "就医提醒插画", "x": 76, "y": 5058, "width": 382, "height": 215, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "image", "src": "/assets/medical-comic/urgent-care-real.webp", "fit": "contain", "cornerRadius": 18 },
+        { "id": "warning-title", "name": "就医提醒标题", "x": 500, "y": 5046, "width": 430, "height": 48, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "这些情况，请及时就医", "fontFamily": "Microsoft YaHei", "fontSize": 29, "fontWeight": "700", "align": "left", "fill": "#A93A22" },
+        { "id": "warning-body", "name": "就医提醒正文", "x": 500, "y": 5132, "width": 452, "height": 122, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "呼吸困难迅速加重、说话困难、口唇发紫，或按既定急救方案处理后仍无改善，应立即寻求急诊医疗帮助。", "fontFamily": "Microsoft YaHei", "fontSize": 24, "fontWeight": "700", "align": "left", "fill": "#7B3426" },
+        { "id": "takeaway-bg", "name": "核心结论条", "x": 58, "y": 5334, "width": 964, "height": 112, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 28 },
+        { "id": "takeaway", "name": "核心结论", "x": 92, "y": 5357, "width": 896, "height": 62, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "长期管理 = 含 ICS 的规范方案 + 正确吸入 + 定期评估", "fontFamily": "Microsoft YaHei", "fontSize": 29, "fontWeight": "700", "align": "center", "fill": "#FFFFFF" },
+        { "id": "references-title-bg", "name": "参考文献标题栏", "x": 58, "y": 5484, "width": 964, "height": 58, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "rect", "fill": "#16307D", "cornerRadius": 8 },
+        { "id": "references-title", "name": "参考文献标题", "x": 82, "y": 5492, "width": 260, "height": 40, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "参考资料", "fontFamily": "Microsoft YaHei", "fontSize": 25, "fontWeight": "700", "align": "left", "fill": "#FFFFFF" },
+        { "id": "references", "name": "参考文献", "x": 78, "y": 5564, "width": 924, "height": 287, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "[1] Global Initiative for Asthma (GINA). Global Strategy for Asthma Management and Prevention. 2026 update. https://ginasthma.org/wp-content/uploads/2026/05/GINA-2026-Strategy-Report-WMS.pdf（访问日期：2026-07-13）\n[2] Global Initiative for Asthma (GINA). Summary Guide for Asthma Management and Prevention. 2025 update. https://ginasthma.org/wp-content/uploads/2025/06/GINA-Summary-Guide-2025-WEB_FINAL-WMS.pdf（访问日期：2026-07-13）\n[3] electronic Medicines Compendium (emc), AstraZeneca UK Limited. Symbicort Turbohaler 100/6, Inhalation powder — SmPC. Last updated 18 September 2025. https://www.medicines.org.uk/emc/product/1326/smpc（访问日期：2026-07-13）", "fontFamily": "Microsoft YaHei", "fontSize": 16, "fontWeight": "400", "align": "left", "fill": "#244766" },
+        { "id": "disclaimer", "name": "免责声明", "x": 70, "y": 5861, "width": 940, "height": 82, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "type": "text", "text": "本内容仅作健康科普，不替代诊断、处方或个体化哮喘行动计划。信必可是否适用及具体用法，请遵从呼吸专科医生建议。", "fontFamily": "Microsoft YaHei", "fontSize": 18, "fontWeight": "400", "align": "center", "fill": "#244766" }
+      ]
+    }
+  ]
+}

@@ -152,7 +152,7 @@ describe("Home", () => {
     });
   });
 
-  it("renders both stories with the kidney case selected by default", () => {
+  it("renders all templates with the kidney case selected by default", () => {
     render(<App />);
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
@@ -167,7 +167,7 @@ describe("Home", () => {
     expect(screen.getByText("选择一个元素")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-stage")).toHaveTextContent("肾脏觉醒之路");
     expect(currentPageInfo).toHaveTextContent(/肾脏觉醒之路1080 × \d+/);
-    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "打开页面 肾脏觉醒之路" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -175,6 +175,14 @@ describe("Home", () => {
     expect(screen.getByRole("button", { name: "打开页面 淋巴瘤转化之路" })).not.toHaveAttribute(
       "aria-current",
     );
+    expect(
+      screen.getByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
+    ).not.toHaveAttribute("aria-current");
+    expect(
+      screen.getByRole("button", {
+        name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理（标准模板）",
+      }),
+    ).not.toHaveAttribute("aria-current");
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
 

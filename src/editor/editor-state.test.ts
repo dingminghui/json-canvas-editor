@@ -10,11 +10,13 @@ import {
 import { isGroupElement } from "@/editor/types";
 
 describe("editorReducer", () => {
-  it("initializes both stories with the kidney case active", () => {
+  it("initializes all templates with the kidney case active", () => {
     let state = createInitialEditorState();
     expect(Object.keys(state.documents)).toEqual([
       "kidney-awakening-story",
       "lymphoma-transformation-story",
+      "symbicort-longform-story-template",
+      "symbicort-longform-medical-comic",
     ]);
     expect(state.activeTemplateId).toBe("kidney-awakening-story");
 
@@ -60,6 +62,48 @@ describe("editorReducer", () => {
 
     const title = findElement(getActiveDocument(state).elements, "story-title");
     expect(title).toMatchObject({ width: 8, height: 8, opacity: 1 });
+  });
+
+  it("builds the Symbicort page through the shared story template", () => {
+    const template = createInitialEditorState().documents["symbicort-longform-story-template"];
+
+    expect(template).toMatchObject({
+      description: "信必可：从 GINA 原则看懂哮喘长期管理",
+      width: 1080,
+    });
+    expect(findElement(template.elements, "story-title")).toMatchObject({
+      fontFamily: "noto-serif-sc",
+      type: "text",
+      text: "不只在“喘”的时候",
+    });
+    expect(findElement(template.elements, "symbicort-chapter-1-group")).toMatchObject({
+      name: "第一章 · 不只控制症状，更要降低风险",
+      type: "group",
+    });
+    expect(findElement(template.elements, "story-hero-image-0")).toMatchObject({
+      type: "image",
+      src: expect.stringContaining("11-symbicort-hero.webp"),
+    });
+  });
+
+  it("loads the unmodified Symbicort canvas as a separate page", () => {
+    const template = createInitialEditorState().documents["symbicort-longform-medical-comic"];
+
+    expect(template).toMatchObject({
+      height: 5993,
+      name: "信必可：从 GINA 原则看懂哮喘长期管理",
+      width: 1080,
+    });
+    expect(findElement(template.elements, "hero-title")).toMatchObject({
+      text: "不只在“喘”的时候",
+      type: "text",
+      x: 452,
+      y: 155,
+    });
+    expect(findElement(template.elements, "hero-image")).toMatchObject({
+      src: expect.stringContaining("11-symbicort-hero.webp"),
+      type: "image",
+    });
   });
 
   it("preserves untouched branches and ignores no-op mutations", () => {
