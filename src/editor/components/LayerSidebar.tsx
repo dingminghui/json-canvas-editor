@@ -90,7 +90,13 @@ function PageList({
   onSelectPage,
   onOpenOverview,
 }: PageListProps) {
-  const [expandedDocumentIds, setExpandedDocumentIds] = useState<Set<string>>(() => new Set());
+  const [expandedDocumentIds, setExpandedDocumentIds] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const doc of documents) {
+      if (doc.documentType === "pptx") initial.add(doc.id);
+    }
+    return initial;
+  });
 
   function selectDocument(document: CanvasDocument) {
     onSelectDocument(document.id);
