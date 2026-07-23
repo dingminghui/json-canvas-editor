@@ -112,6 +112,7 @@ describe("Home", () => {
     const dialog = screen.getByRole("dialog", { name: "页面结构" });
     const preview = screen.getByLabelText("当前页面 JSON");
     const pageDefinition = JSON.parse(preview.textContent ?? "") as {
+      documentType: string;
       id: string;
       name: string;
       elements: unknown[];
@@ -125,6 +126,7 @@ describe("Home", () => {
     );
     expect(preview).toHaveClass("w-max", "min-w-full", "whitespace-pre");
     expect(pageDefinition.id).toBe("symbicort-longform-medical-comic");
+    expect(pageDefinition.documentType).toBe("longform");
     expect(pageDefinition.name).toBe("信必可：从 GINA 原则看懂哮喘长期管理");
     expect(pageDefinition.elements.length).toBeGreaterThan(0);
 
@@ -132,7 +134,8 @@ describe("Home", () => {
     expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
   });
 
-  it("renders the imported Symbicort template as the only page", () => {
+  it("renders the imported Symbicort template and PPT template 2", async () => {
+    const user = userEvent.setup();
     render(<App />);
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
@@ -149,10 +152,14 @@ describe("Home", () => {
       "信必可：从 GINA 原则看懂哮喘长期管理",
     );
     expect(currentPageInfo).toHaveTextContent(/信必可：从 GINA 原则看懂哮喘长期管理1080 × 5993/);
-    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "导出图片" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
     ).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
 
@@ -165,6 +172,34 @@ describe("Home", () => {
 
     expect(layerScrollArea).toHaveAttribute("data-scrollbars", "both");
     expect(titleActions).toHaveClass("sticky", "right-0");
+
+    await user.click(
+      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    );
+
+    expect(screen.getByTestId("canvas-stage")).toHaveTextContent("PPT模板2：哮喘长期管理沟通简报");
+    expect(currentPageInfo).toHaveTextContent(
+      /PPT模板2：哮喘长期管理沟通简报 \/ 01 欢迎页1600 × 900/,
+    );
+    expect(screen.getByRole("button", { name: "打开幻灯片 01 欢迎页" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "打开幻灯片 03 核心问题" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "幻灯片总览" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "导出 PPT" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开幻灯片 03 核心问题" }));
+    expect(screen.getByTestId("canvas-stage")).toHaveTextContent(
+      "PPT模板2：哮喘长期管理沟通简报 / 03 核心问题",
+    );
+    expect(screen.getByRole("button", { name: "核心问题标题" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "欢迎页标题" })).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "幻灯片总览" })[0]);
+    expect(screen.getByText("幻灯片总览 · 8 页")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回当前幻灯片" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^编辑幻灯片 / })).toHaveLength(8);
   });
 
   it("does not scroll the layer list when an element is selected on the canvas", async () => {
@@ -347,7 +382,7 @@ describe("Home", () => {
     expect(backgroundRow).toHaveAttribute("data-selected", "false");
   });
 
-  it("previews rounded transform values without feeding them back into the canvas", async () => {
+  it("feeds live transform dimensions back into the canvas without changing font size", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -365,7 +400,11 @@ describe("Home", () => {
     expect(screen.getByLabelText("Y")).toHaveValue(91.23);
     expect(screen.getByLabelText("宽")).toHaveValue(333.46);
     expect(screen.getByLabelText("高")).toHaveValue(55.68);
-    expect(screen.getByTestId("canvas-stage").dataset.document).toBe(canvasDocumentBeforePreview);
+    const canvasDocumentDuringPreview = screen.getByTestId("canvas-stage").dataset.document;
+    expect(canvasDocumentDuringPreview).not.toBe(canvasDocumentBeforePreview);
+    expect(canvasDocumentDuringPreview).toContain('"x":83.456');
+    expect(canvasDocumentDuringPreview).toContain('"width":333.456');
+    expect(canvasDocumentDuringPreview).toContain('"fontSize":49');
 
     await user.click(screen.getByRole("button", { name: "模拟画布变换" }));
 

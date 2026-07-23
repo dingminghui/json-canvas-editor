@@ -22,6 +22,7 @@ interface MockTransformerProps {
   anchorSize?: number;
   anchorStrokeWidth?: number;
   borderStrokeWidth?: number;
+  enabledAnchors?: string[];
   keepRatio?: boolean;
   padding?: number;
   resizeEnabled?: boolean;
@@ -186,6 +187,8 @@ vi.mock("react-konva", async () => {
       fontFamily,
       fontStyle,
       lineHeight,
+      onDragEnd,
+      onDragMove,
       onDblClick,
       onTransform,
       onTransformEnd,
@@ -196,13 +199,15 @@ vi.mock("react-konva", async () => {
       fontStyle?: string;
       lineHeight?: number;
       onDblClick?: MockTextRenderProps["onDblClick"];
+      onDragEnd?: MockGestureHandlers["onDragEnd"];
+      onDragMove?: MockGestureHandlers["onDragMove"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
       visible?: boolean;
     }) => {
       lastTextFontFamily = fontFamily;
       lastTextFontStyle = fontStyle;
-      textGestureHandlers = { onTransform, onTransformEnd };
+      textGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
       textRenderProps = { draggable, lineHeight, onDblClick, visible };
       return null;
     },
@@ -212,6 +217,7 @@ vi.mock("react-konva", async () => {
 
 const document: CanvasDocument = {
   description: "图片命中区域测试",
+  documentType: "longform",
   elements: [
     {
       cornerRadius: 12,
@@ -534,10 +540,9 @@ describe("CanvasStage", () => {
     );
 
     expect(screen.getAllByTestId("shape-ellipse")).toHaveLength(2);
-    expect(screen.getAllByTestId("shape-ellipse")[0].parentElement?.parentElement).toHaveAttribute(
-      "data-listening",
-      "false",
-    );
+    expect(
+      screen.getAllByTestId("shape-ellipse")[0].closest('[data-listening="false"]'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("shape-line")).toHaveAttribute(
       "data-shape-props",
       expect.stringContaining('"lineCap":"round"'),
@@ -715,7 +720,7 @@ describe("CanvasStage", () => {
     expect(onEditText).not.toHaveBeenCalled();
   });
 
-  it("reflows text using real dimensions instead of stretching its glyphs", () => {
+  it("reflows text horizontally without changing its font metrics", () => {
     const textDocument: CanvasDocument = {
       ...document,
       elements: [
@@ -790,11 +795,11 @@ describe("CanvasStage", () => {
     act(() => textGestureHandlers.onTransform?.({ target: node }));
 
     expect(width).toBe(100);
-    expect(height).toBe(60);
+    expect(height).toBe(80);
     expect(scaleX).toBe(1);
     expect(scaleY).toBe(1);
     expect(onElementPreview).toHaveBeenLastCalledWith("caption", {
-      height: 60,
+      height: 80,
       rotation: 5,
       width: 100,
       x: 24,
@@ -804,13 +809,76 @@ describe("CanvasStage", () => {
     act(() => textGestureHandlers.onTransformEnd?.({ target: node }));
 
     expect(onElementChange).toHaveBeenCalledWith("caption", {
-      height: 60,
+      height: 80,
       rotation: 5,
       width: 100,
       x: 24,
       y: 36,
     });
     expect(onElementPreview).toHaveBeenLastCalledWith("caption", null);
+    expect(selectionTransformerProps.enabledAnchors).toEqual(["middle-left", "middle-right"]);
+    expect(selectionTransformerProps.keepRatio).toBe(false);
+  });
+
+  it("moves text without changing its size or font properties", () => {
+    const textDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          align: "left",
+          fill: "#000000",
+          fontFamily: "noto-sans-sc",
+          fontSize: 24,
+          fontWeight: "600",
+          lineHeight: 1.2,
+          height: 80,
+          id: "caption",
+          locked: false,
+          name: "说明",
+          opacity: 1,
+          rotation: 0,
+          text: "拖动后字号不变",
+          type: "text",
+          visible: true,
+          width: 200,
+          x: 10,
+          y: 10,
+        },
+      ],
+    };
+    const onElementChange = vi.fn();
+    const onElementPreview = vi.fn();
+    const node = {
+      x: () => 96,
+      y: () => 128,
+    };
+
+    render(
+      <CanvasStage
+        document={textDocument}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId="caption"
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={onElementChange}
+        onElementPreview={onElementPreview}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    act(() => textGestureHandlers.onDragMove?.({ target: node }));
+    expect(onElementPreview).toHaveBeenLastCalledWith("caption", { x: 96, y: 128 });
+
+    act(() => textGestureHandlers.onDragEnd?.({ target: node }));
+    expect(onElementChange).toHaveBeenLastCalledWith("caption", { x: 96, y: 128 });
+    expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("fontSize");
+    expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("height");
+    expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("width");
   });
 
   it("does not attach editable transform handles to groups or hidden elements", () => {

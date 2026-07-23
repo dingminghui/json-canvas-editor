@@ -57,11 +57,11 @@ function mergeBounds(bounds: CanvasBounds[]): CanvasBounds | null {
   };
 }
 
-function getElementBounds(element: CanvasElement): CanvasBounds | null {
+export function getCanvasElementBounds(element: CanvasElement): CanvasBounds | null {
   return isGroupElement(element)
     ? mergeBounds(
         element.children
-          .map((child) => getElementBounds(child))
+          .map((child) => getCanvasElementBounds(child))
           .filter((bounds): bounds is CanvasBounds => bounds !== null),
       )
     : getLeafBounds(element);
@@ -72,7 +72,7 @@ export function findCanvasElementBounds(
   elementId: string,
 ): CanvasBounds | null {
   for (const element of elements) {
-    if (element.id === elementId) return getElementBounds(element);
+    if (element.id === elementId) return getCanvasElementBounds(element);
     if (!isGroupElement(element)) continue;
 
     const bounds = findCanvasElementBounds(element.children, elementId);

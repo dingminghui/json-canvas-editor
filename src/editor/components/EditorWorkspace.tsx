@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { findCanvasElementBounds, getViewportPositionToReveal } from "@/editor/canvas-viewport";
-import { CanvasStage } from "@/editor/components/CanvasStage";
+import { CanvasStage, type CanvasStageHandle } from "@/editor/components/CanvasStage";
 import { DocumentJsonPreviewDialog } from "@/editor/components/DocumentJsonPreviewDialog";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
 import { findElement } from "@/editor/editor-state";
@@ -16,6 +16,7 @@ import {
   type CreationTool,
   type ShapeCreationTool,
 } from "@/editor/element-creation";
+import { getExportFileName } from "@/editor/export-file";
 import { isInteractiveTarget } from "@/editor/interaction";
 import type {
   CanvasDocument,
@@ -31,7 +32,10 @@ import {
   Check,
   ChevronDown,
   Circle,
+  Download,
   ImagePlus,
+  LayoutGrid,
+  Loader2,
   Minus,
   Plus,
   Redo2,
@@ -60,6 +64,7 @@ const MAX_CANVAS_PREVIEW_WIDTH = 890;
 
 interface EditorWorkspaceProps {
   document: CanvasDocument;
+  exportDocument?: CanvasDocument;
   hoveredId: string | null;
   selectedId: string | null;
   editingText: TextEditingSession | null;
@@ -80,6 +85,7 @@ interface EditorWorkspaceProps {
   onSetFitMode: (enabled: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onOpenOverview?: () => void;
 }
 
 export interface EditorWorkspaceHandle {
@@ -143,6 +149,15 @@ function decodeImage(src: string): Promise<{ height: number; width: number }> {
   });
 }
 
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const link = globalThis.document.createElement("a");
+  link.download = fileName;
+  link.href = dataUrl;
+  globalThis.document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function useContainerSize(containerRef: React.RefObject<HTMLDivElement | null>): ContainerSize {
   const [size, setSize] = useState<ContainerSize>({ width: 0, height: 0 });
 
@@ -178,6 +193,7 @@ function getCenteredPosition(
 
 export const EditorWorkspace = memo(function EditorWorkspace({
   document,
+  exportDocument = document,
   hoveredId,
   selectedId,
   editingText,
@@ -198,9 +214,11 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onSetFitMode,
   onUndo,
   onRedo,
+  onOpenOverview,
 }: EditorWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const canvasStageRef = useRef<CanvasStageHandle>(null);
   const panSessionRef = useRef<PanSession | null>(null);
   const drawSessionRef = useRef<DrawSession | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -221,7 +239,8 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   );
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
   const [lastShapeTool, setLastShapeTool] = useState<ShapeCreationTool>("rect");
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const availableWidth = Math.max(1, Math.min(MAX_CANVAS_PREVIEW_WIDTH, size.width - 112));
   const availableHeight = Math.max(1, size.height - 174);
   const widthFitZoom = availableWidth / document.width;
@@ -244,6 +263,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const selectedShape = SHAPE_TOOLS.find(({ tool }) => tool === lastShapeTool) ?? SHAPE_TOOLS[0];
   const SelectedShapeIcon = selectedShape.icon;
   const draftElement = draft?.documentId === document.id ? draft.element : null;
+  const exportLabel = exportDocument.documentType === "pptx" ? "导出 PPT" : "导出图片";
 
   useEffect(
     () => () => {
@@ -262,10 +282,10 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     setShapeMenuOpen(false);
   }, []);
 
-  function showImageError(message: string) {
-    setImageError(message);
+  function showOperationError(message: string) {
+    setOperationError(message);
     if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
-    errorTimerRef.current = window.setTimeout(() => setImageError(null), 3600);
+    errorTimerRef.current = window.setTimeout(() => setOperationError(null), 3600);
   }
 
   function cancelShapeMenuClose() {
@@ -567,11 +587,11 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   async function handleImageFile(file: File | undefined) {
     if (!file) return;
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
-      showImageError("仅支持 PNG、JPEG 或 WebP 图片");
+      showOperationError("仅支持 PNG、JPEG 或 WebP 图片");
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      showImageError("图片不能超过 10MB");
+      showOperationError("图片不能超过 10MB");
       return;
     }
 
@@ -587,9 +607,32 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       onAddElement(
         createImageElement(createElementId("image"), src, imageSize, document, visibleArea),
       );
-      setImageError(null);
+      setOperationError(null);
     } catch {
-      showImageError("图片读取失败，请重试");
+      showOperationError("图片读取失败，请重试");
+    }
+  }
+
+  async function handleExport() {
+    if (exporting) return;
+
+    setExporting(true);
+    try {
+      if (exportDocument.documentType === "pptx") {
+        const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
+        await exportCanvasDocumentToPptx(exportDocument);
+      } else {
+        const dataUrl = canvasStageRef.current?.exportImage({ pixelRatio: 2 });
+        if (!dataUrl) throw new Error("image-export-failed");
+        downloadDataUrl(dataUrl, getExportFileName(document));
+      }
+      setOperationError(null);
+    } catch {
+      showOperationError(
+        exportDocument.documentType === "pptx" ? "PPT 导出失败，请重试" : "图片导出失败，请重试",
+      );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -614,7 +657,38 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           </span>
         </div>
 
-        <DocumentJsonPreviewDialog document={document} />
+        <div className="pointer-events-auto flex items-center gap-1">
+          {exportDocument.documentType === "pptx" && onOpenOverview ? (
+            <Button
+              aria-label="幻灯片总览"
+              className="h-7 gap-1.5 rounded-sm px-2 text-xs text-muted-foreground hover:text-foreground"
+              size="sm"
+              type="button"
+              variant="ghost"
+              onClick={onOpenOverview}
+            >
+              <LayoutGrid aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+              <span>总览</span>
+            </Button>
+          ) : null}
+          <Button
+            aria-label={exportLabel}
+            className="h-7 gap-1.5 rounded-sm px-2 text-xs text-muted-foreground hover:text-foreground"
+            disabled={exporting}
+            size="sm"
+            type="button"
+            variant="ghost"
+            onClick={() => void handleExport()}
+          >
+            {exporting ? (
+              <Loader2 aria-hidden="true" className="size-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <Download aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+            )}
+            <span>{exporting ? "导出中" : exportLabel}</span>
+          </Button>
+          <DocumentJsonPreviewDialog document={exportDocument} />
+        </div>
       </header>
 
       <div
@@ -651,6 +725,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           isCreating={Boolean(activeTool)}
           isSelectedLocked={isSelectedLocked}
           selectedId={selectedId}
+          stageHandleRef={canvasStageRef}
           viewportHeight={Math.max(1, size.height)}
           viewportPosition={viewportPosition}
           viewportWidth={Math.max(1, size.width)}
@@ -690,12 +765,12 @@ export const EditorWorkspace = memo(function EditorWorkspace({
         }}
       />
 
-      {imageError ? (
+      {operationError ? (
         <div
           className="absolute bottom-[62px] left-1/2 z-[9] -translate-x-1/2 rounded-sm border border-destructive/25 bg-popover px-3 py-2 text-xs text-destructive shadow-md"
           role="alert"
         >
-          {imageError}
+          {operationError}
         </div>
       ) : null}
 

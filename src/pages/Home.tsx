@@ -2,11 +2,16 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { EditorWorkspace, type EditorWorkspaceHandle } from "@/editor/components/EditorWorkspace";
 import { LayerSidebar } from "@/editor/components/LayerSidebar";
 import { PropertiesPanel } from "@/editor/components/PropertiesPanel";
+import { SlideOverview } from "@/editor/components/SlideOverview";
+import { getDocumentPages } from "@/editor/document-pages";
 import {
   createInitialEditorHistoryState,
   editorHistoryReducer,
   findElementContext,
   getActiveDocument,
+  getActivePageDocument,
+  getActivePageId,
+  patchCanvasDocumentElement,
 } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
 import { EDITOR_TEMPLATES } from "@/editor/templates";
@@ -39,6 +44,7 @@ export function Home() {
     patch: CanvasElementPatch;
   } | null>(null);
   const [textEditing, setTextEditing] = useState<TextEditingSession | null>(null);
+  const [showSlideOverview, setShowSlideOverview] = useState(false);
   const nextTextEditingSessionIdRef = useRef(0);
   const editorWorkspaceRef = useRef<EditorWorkspaceHandle>(null);
   const [history, dispatch] = useReducer(
@@ -48,11 +54,26 @@ export function Home() {
   );
   const state = history.present;
   const activeDocument = getActiveDocument(state);
+  const activePageId = getActivePageId(state);
+  const activePageDocument = getActivePageDocument(state);
   const selectedElementContext = useMemo(
-    () => findElementContext(activeDocument.elements, state.selectedId),
-    [activeDocument.elements, state.selectedId],
+    () => findElementContext(activePageDocument.elements, state.selectedId),
+    [activePageDocument.elements, state.selectedId],
   );
   const selectedElement = selectedElementContext?.element ?? null;
+  const canvasPageDocument = useMemo(
+    () =>
+      selectedElement?.type === "text" &&
+      elementPreview?.elementId === selectedElement.id &&
+      ("width" in elementPreview.patch || "height" in elementPreview.patch)
+        ? patchCanvasDocumentElement(
+            activePageDocument,
+            elementPreview.elementId,
+            elementPreview.patch,
+          )
+        : activePageDocument,
+    [activePageDocument, elementPreview, selectedElement],
+  );
   const displayedSelectedElement =
     selectedElement &&
     isLeafElement(selectedElement) &&
@@ -105,8 +126,28 @@ export function Home() {
     setHoveredElementId(null);
     setElementPreview(null);
     setTextEditing(null);
+    setShowSlideOverview(false);
     dispatch({ type: "select-template", templateId });
   }, []);
+
+  const selectPage = useCallback((templateId: string, pageId: string) => {
+    editorWorkspaceRef.current?.cancelCreation();
+    setHoveredElementId(null);
+    setElementPreview(null);
+    setTextEditing(null);
+    setShowSlideOverview(false);
+    dispatch({ type: "select-page", templateId, pageId });
+  }, []);
+
+  const openSlideOverview = useCallback(() => {
+    if (activeDocument.documentType !== "pptx") return;
+    editorWorkspaceRef.current?.cancelCreation();
+    setHoveredElementId(null);
+    setElementPreview(null);
+    setTextEditing(null);
+    dispatch({ type: "select-element", elementId: null });
+    setShowSlideOverview(true);
+  }, [activeDocument.documentType]);
 
   const undo = useCallback(() => dispatch({ type: "undo" }), []);
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
@@ -124,10 +165,10 @@ export function Home() {
   );
   const updateElement = useCallback(
     (elementId: string, patch: CanvasElementPatch) => {
-      if (findElementContext(activeDocument.elements, elementId)?.effectivelyLocked) return;
+      if (findElementContext(activePageDocument.elements, elementId)?.effectivelyLocked) return;
       dispatch({ type: "update-element", elementId, patch });
     },
-    [activeDocument.elements],
+    [activePageDocument.elements],
   );
   const previewElement = useCallback((elementId: string, patch: CanvasElementPatch | null) => {
     setElementPreview(patch ? { elementId, patch } : null);
@@ -140,7 +181,7 @@ export function Home() {
 
   const beginTextEditing = useCallback(
     (elementId: string) => {
-      const context = findElementContext(activeDocument.elements, elementId);
+      const context = findElementContext(activePageDocument.elements, elementId);
       if (
         context?.element.type !== "text" ||
         context.effectivelyLocked ||
@@ -157,7 +198,7 @@ export function Home() {
         sessionId: ++nextTextEditingSessionIdRef.current,
       });
     },
-    [activeDocument.elements],
+    [activePageDocument.elements],
   );
 
   const cancelTextEditing = useCallback(() => {
@@ -169,11 +210,11 @@ export function Home() {
       if (textEditing?.sessionId !== sessionId || textEditing.elementId !== elementId) return;
 
       setTextEditing(null);
-      const context = findElementContext(activeDocument.elements, elementId);
+      const context = findElementContext(activePageDocument.elements, elementId);
       if (context?.element.type !== "text" || context.effectivelyLocked) return;
       dispatch({ type: "update-element", elementId, patch: { text: markdown } });
     },
-    [activeDocument.elements, textEditing],
+    [activePageDocument.elements, textEditing],
   );
 
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -188,7 +229,26 @@ export function Home() {
     if (isInteractiveTarget(event.target)) return;
 
     if (event.key === "Escape") {
+      if (showSlideOverview) {
+        setShowSlideOverview(false);
+        return;
+      }
       selectElement(null);
+      return;
+    }
+
+    if (
+      activeDocument.documentType === "pptx" &&
+      (event.key === "PageUp" || event.key === "PageDown")
+    ) {
+      const pages = getDocumentPages(activeDocument);
+      const currentIndex = pages.findIndex((page) => page.id === activePageId);
+      const direction = event.key === "PageUp" ? -1 : 1;
+      const nextPage = pages[Math.min(pages.length - 1, Math.max(0, currentIndex + direction))];
+      if (nextPage && nextPage.id !== activePageId) {
+        event.preventDefault();
+        selectPage(activeDocument.id, nextPage.id);
+      }
       return;
     }
 
@@ -253,11 +313,15 @@ export function Home() {
         <aside className="relative z-10 h-full min-w-0 bg-card">
           <LayerSidebar
             document={activeDocument}
+            pageDocument={activePageDocument}
             documents={documents}
+            activePageId={activePageId}
             onHover={setHoveredElementId}
+            onOpenOverview={openSlideOverview}
             onReorder={reorderElements}
             onSelect={selectLayerElement}
             onSelectDocument={selectTemplate}
+            onSelectPage={selectPage}
             onToggleLocked={toggleLocked}
             onToggleVisible={toggleVisible}
             selectedId={state.selectedId}
@@ -271,29 +335,41 @@ export function Home() {
       />
 
       <ResizablePanel className="h-full min-w-0" id="canvas-panel" minSize={480}>
-        <EditorWorkspace
-          canRedo={history.future.length > 0}
-          canUndo={history.past.length > 0}
-          document={activeDocument}
-          editingText={textEditing}
-          fitMode={state.fitMode}
-          hoveredId={hoveredElementId}
-          isSelectedLocked={isSelectedLocked}
-          manualZoom={state.manualZoomByTemplate[state.activeTemplateId]}
-          selectedId={state.selectedId}
-          workspaceHandleRef={editorWorkspaceRef}
-          onCancelTextEdit={cancelTextEditing}
-          onCommitTextEdit={commitTextEditing}
-          onEditText={beginTextEditing}
-          onElementChange={updateElement}
-          onElementPreview={previewElement}
-          onAddElement={addElement}
-          onSelect={selectElement}
-          onSetFitMode={setFitMode}
-          onSetZoom={setZoom}
-          onRedo={redo}
-          onUndo={undo}
-        />
+        {showSlideOverview && activeDocument.documentType === "pptx" ? (
+          <SlideOverview
+            activePageId={activePageId}
+            document={activeDocument}
+            onClose={() => setShowSlideOverview(false)}
+            onReorderPages={(pageIds) => dispatch({ type: "reorder-pages", pageIds })}
+            onSelectPage={(pageId) => selectPage(activeDocument.id, pageId)}
+          />
+        ) : (
+          <EditorWorkspace
+            canRedo={history.future.length > 0}
+            canUndo={history.past.length > 0}
+            document={canvasPageDocument}
+            editingText={textEditing}
+            exportDocument={activeDocument}
+            fitMode={state.fitMode}
+            hoveredId={hoveredElementId}
+            isSelectedLocked={isSelectedLocked}
+            manualZoom={state.manualZoomByTemplate[state.activeTemplateId]}
+            selectedId={state.selectedId}
+            workspaceHandleRef={editorWorkspaceRef}
+            onCancelTextEdit={cancelTextEditing}
+            onCommitTextEdit={commitTextEditing}
+            onEditText={beginTextEditing}
+            onElementChange={updateElement}
+            onElementPreview={previewElement}
+            onAddElement={addElement}
+            onOpenOverview={openSlideOverview}
+            onSelect={selectElement}
+            onSetFitMode={setFitMode}
+            onSetZoom={setZoom}
+            onRedo={redo}
+            onUndo={undo}
+          />
+        )}
       </ResizablePanel>
 
       <ResizableHandle

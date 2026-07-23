@@ -2,6 +2,7 @@
   "id": "symbicort-longform-medical-comic",
   "name": "信必可：从 GINA 原则看懂哮喘长期管理",
   "description": "面向成人与青少年哮喘患者及家属的健康科普长图；不构成诊断、处方或个体化用药建议。",
+  "documentType": "longform",
   "width": 1080,
   "height": 5993,
   "elements": [

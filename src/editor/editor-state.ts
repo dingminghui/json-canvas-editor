@@ -1,3 +1,9 @@
+import {
+  createPageDocument,
+  getDocumentPage,
+  getDocumentPages,
+  getFirstPageId,
+} from "@/editor/document-pages";
 import { EDITOR_TEMPLATES } from "@/editor/templates";
 import {
   isGroupElement,
@@ -5,6 +11,7 @@ import {
   type CanvasElement,
   type CanvasElementPatch,
   type CanvasLeafElement,
+  type GroupElement,
 } from "@/editor/types";
 
 const MIN_ZOOM = 0.25;
@@ -14,6 +21,7 @@ const MAX_HISTORY_ENTRIES = 100;
 export interface EditorState {
   documents: Record<string, CanvasDocument>;
   activeTemplateId: string;
+  activePageIdByTemplate: Record<string, string>;
   selectedId: string | null;
   manualZoomByTemplate: Record<string, number>;
   fitMode: boolean;
@@ -21,6 +29,7 @@ export interface EditorState {
 
 export type EditorAction =
   | { type: "select-template"; templateId: string }
+  | { type: "select-page"; templateId: string; pageId: string }
   | { type: "select-element"; elementId: string | null }
   | { type: "add-element"; element: CanvasLeafElement }
   | { type: "update-element"; elementId: string; patch: CanvasElementPatch }
@@ -29,6 +38,7 @@ export type EditorAction =
   | { type: "toggle-visible"; elementId: string }
   | { type: "toggle-locked"; elementId: string }
   | { type: "reorder-elements"; elements: CanvasElement[] }
+  | { type: "reorder-pages"; pageIds: string[] }
   | { type: "set-zoom"; zoom: number }
   | { type: "set-fit-mode"; enabled: boolean };
 
@@ -54,6 +64,9 @@ export function createInitialEditorState(): EditorState {
   return {
     documents,
     activeTemplateId: EDITOR_TEMPLATES[0].id,
+    activePageIdByTemplate: Object.fromEntries(
+      EDITOR_TEMPLATES.map((template) => [template.id, getFirstPageId(template)]),
+    ),
     selectedId: null,
     manualZoomByTemplate: Object.fromEntries(
       EDITOR_TEMPLATES.map((template) => [template.id, template.width > 1200 ? 0.4 : 0.5]),
@@ -72,6 +85,16 @@ export function createInitialEditorHistoryState(): EditorHistoryState {
 
 export function getActiveDocument(state: EditorState): CanvasDocument {
   return state.documents[state.activeTemplateId];
+}
+
+export function getActivePageId(state: EditorState): string {
+  const document = getActiveDocument(state);
+  return state.activePageIdByTemplate[document.id] ?? getFirstPageId(document);
+}
+
+export function getActivePageDocument(state: EditorState): CanvasDocument {
+  const document = getActiveDocument(state);
+  return createPageDocument(document, getActivePageId(state));
 }
 
 export interface CanvasElementContext {
@@ -138,6 +161,17 @@ function mapElements(
   });
 
   return changed ? nextElements : elements;
+}
+
+export function patchCanvasDocumentElement(
+  document: CanvasDocument,
+  elementId: string,
+  patch: CanvasElementPatch,
+): CanvasDocument {
+  const elements = mapElements(document.elements, elementId, (element) =>
+    isGroupElement(element) ? element : ({ ...element, ...patch } as CanvasLeafElement),
+  );
+  return elements === document.elements ? document : { ...document, elements };
 }
 
 function updateLeafElement(
@@ -257,7 +291,20 @@ function updateActiveElements(
   update: (elements: CanvasElement[]) => CanvasElement[],
 ): EditorState {
   return updateActiveDocument(state, (document) => {
-    const nextElements = update(document.elements);
+    const activePageId = getActivePageId(state);
+    const nextElements =
+      document.documentType === "longform"
+        ? update(document.elements)
+        : document.elements.map((element) => {
+            if (!isGroupElement(element) || element.id !== activePageId) return element;
+
+            const children = update(element.children);
+            const childrenUnchanged =
+              children === element.children ||
+              (children.length === element.children.length &&
+                children.every((child, index) => child === element.children[index]));
+            return childrenUnchanged ? element : { ...element, children };
+          });
     const elementsUnchanged =
       nextElements === document.elements ||
       (nextElements.length === document.elements.length &&
@@ -267,15 +314,90 @@ function updateActiveElements(
   });
 }
 
+function renumberPresentationPage(
+  page: GroupElement,
+  pageIndex: number,
+  pageCount: number,
+): GroupElement {
+  const pageNumber = String(pageIndex + 1).padStart(2, "0");
+  const totalPages = String(pageCount).padStart(2, "0");
+
+  function updatePageNumber(elements: CanvasElement[]): CanvasElement[] {
+    return elements.map((element) => {
+      if (isGroupElement(element)) {
+        return { ...element, children: updatePageNumber(element.children) };
+      }
+      if (
+        element.type === "text" &&
+        element.name.includes("页码") &&
+        /^\s*\d+\s*\/\s*\d+\s*$/.test(element.text)
+      ) {
+        return { ...element, text: `${pageNumber} / ${totalPages}` };
+      }
+      return element;
+    });
+  }
+
+  return {
+    ...page,
+    children: updatePageNumber(page.children),
+    name: `${pageNumber} ${page.name.replace(/^\d+\s*/, "")}`,
+  };
+}
+
+function reorderActiveDocumentPages(document: CanvasDocument, pageIds: string[]): CanvasDocument {
+  if (document.documentType !== "pptx") return document;
+
+  const pages = document.elements.filter((element): element is GroupElement =>
+    isGroupElement(element),
+  );
+  if (
+    pages.length !== pageIds.length ||
+    pageIds.some((pageId) => !pages.some((page) => page.id === pageId))
+  ) {
+    return document;
+  }
+
+  const pageById = new Map(pages.map((page) => [page.id, page]));
+  const reorderedPages = pageIds.map((pageId) => pageById.get(pageId) as GroupElement);
+  if (reorderedPages.every((page, index) => page === pages[index])) return document;
+
+  return {
+    ...document,
+    elements: reorderedPages.map((page, index) =>
+      renumberPresentationPage(page, index, reorderedPages.length),
+    ),
+  };
+}
+
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case "select-template":
+      if (!state.documents[action.templateId]) return state;
       if (state.activeTemplateId === action.templateId && state.selectedId === null) return state;
       return {
         ...state,
         activeTemplateId: action.templateId,
         selectedId: null,
       };
+    case "select-page": {
+      const document = state.documents[action.templateId];
+      if (!document || !getDocumentPages(document).some((page) => page.id === action.pageId)) {
+        return state;
+      }
+      const pageUnchanged = state.activePageIdByTemplate[action.templateId] === action.pageId;
+      if (state.activeTemplateId === action.templateId && pageUnchanged && !state.selectedId) {
+        return state;
+      }
+      return {
+        ...state,
+        activeTemplateId: action.templateId,
+        activePageIdByTemplate: pageUnchanged
+          ? state.activePageIdByTemplate
+          : { ...state.activePageIdByTemplate, [action.templateId]: action.pageId },
+        selectedId: null,
+      };
+    }
     case "select-element":
       return state.selectedId === action.elementId
         ? state
@@ -320,6 +442,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       );
     case "reorder-elements":
       return updateActiveElements(state, () => action.elements);
+    case "reorder-pages":
+      return updateActiveDocument(state, (document) =>
+        reorderActiveDocumentPages(document, action.pageIds),
+      );
     case "set-zoom": {
       const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, action.zoom));
       if (!state.fitMode && state.manualZoomByTemplate[state.activeTemplateId] === zoom) {
@@ -352,8 +478,10 @@ function isDocumentMutation(action: EditorAction): boolean {
     case "toggle-visible":
     case "toggle-locked":
     case "reorder-elements":
+    case "reorder-pages":
       return true;
     case "select-template":
+    case "select-page":
     case "select-element":
     case "set-zoom":
     case "set-fit-mode":
@@ -367,10 +495,13 @@ function isDocumentMutation(action: EditorAction): boolean {
 
 function restoreDocuments(state: EditorState, documents: EditorDocuments): EditorState {
   const activeDocument = documents[state.activeTemplateId];
+  const activePageId = activeDocument
+    ? (state.activePageIdByTemplate[activeDocument.id] ?? getFirstPageId(activeDocument))
+    : null;
+  const activePage =
+    activeDocument && activePageId ? getDocumentPage(activeDocument, activePageId) : null;
   const selectedId =
-    activeDocument && findElement(activeDocument.elements, state.selectedId)
-      ? state.selectedId
-      : null;
+    activePage && findElement(activePage.elements, state.selectedId) ? state.selectedId : null;
 
   return { ...state, documents, selectedId };
 }

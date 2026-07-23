@@ -1,6 +1,7 @@
 import type { CanvasFontFamily } from "@/editor/fonts";
 
 export type ElementId = string;
+export type CanvasDocumentType = "longform" | "pptx";
 
 interface ElementMeta {
   id: ElementId;
@@ -116,6 +117,7 @@ export interface CanvasDocument {
   id: string;
   name: string;
   description: string;
+  documentType: CanvasDocumentType;
   width: number;
   height: number;
   elements: CanvasElement[];

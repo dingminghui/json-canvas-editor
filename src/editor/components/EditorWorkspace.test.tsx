@@ -1,19 +1,34 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EditorWorkspace } from "@/editor/components/EditorWorkspace";
+import { exportCanvasDocumentToPptx } from "@/editor/pptx-export";
 import type { CanvasDocument, CanvasLeafElement } from "@/editor/types";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef } from "react";
+import { createRef, useImperativeHandle, type Ref } from "react";
 
 vi.mock("@/editor/components/CanvasStage", () => ({
-  CanvasStage: () => <div data-testid="canvas-stage" />,
+  CanvasStage: ({
+    stageHandleRef,
+  }: {
+    stageHandleRef?: Ref<{ exportImage: () => string | null }>;
+  }) => {
+    useImperativeHandle(stageHandleRef, () => ({
+      exportImage: () => "data:image/png;base64,dGVzdA==",
+    }));
+    return <div data-testid="canvas-stage" />;
+  },
 }));
 
 vi.mock("@/editor/components/DocumentJsonPreviewDialog", () => ({
   DocumentJsonPreviewDialog: () => <button type="button">JSON</button>,
 }));
 
+vi.mock("@/editor/pptx-export", () => ({
+  exportCanvasDocumentToPptx: vi.fn(),
+}));
+
 const document: CanvasDocument = {
   description: "创建工具测试",
+  documentType: "longform",
   elements: [],
   height: 300,
   id: "workspace-test",
@@ -23,13 +38,14 @@ const document: CanvasDocument = {
 
 function renderWorkspace(
   onAddElement = vi.fn<(element: CanvasLeafElement, editText?: boolean) => void>(),
+  workspaceDocument = document,
 ) {
   const result = render(
     <TooltipProvider>
       <EditorWorkspace
         canRedo={false}
         canUndo={false}
-        document={document}
+        document={workspaceDocument}
         editingText={null}
         fitMode={false}
         hoveredId={null}
@@ -64,6 +80,8 @@ function renderWorkspace(
 
 describe("EditorWorkspace creation toolbar", () => {
   beforeEach(() => {
+    vi.mocked(exportCanvasDocumentToPptx).mockReset();
+
     class ResizeObserverMock {
       private readonly callback: ResizeObserverCallback;
 
@@ -194,5 +212,21 @@ describe("EditorWorkspace creation toolbar", () => {
         }),
       ),
     );
+  });
+
+  it("exports PPT documents and exposes a useful failure message", async () => {
+    const pptDocument: CanvasDocument = {
+      ...document,
+      documentType: "pptx",
+      id: "ppt-workspace-test",
+    };
+    vi.mocked(exportCanvasDocumentToPptx).mockRejectedValueOnce(new Error("export failed"));
+    renderWorkspace(vi.fn(), pptDocument);
+
+    fireEvent.click(screen.getByRole("button", { name: "导出 PPT" }));
+
+    await waitFor(() => expect(exportCanvasDocumentToPptx).toHaveBeenCalledWith(pptDocument));
+    expect(await screen.findByRole("alert")).toHaveTextContent("PPT 导出失败，请重试");
+    expect(screen.getByRole("button", { name: "导出 PPT" })).toBeEnabled();
   });
 });

@@ -19,7 +19,17 @@ import {
   type LineElement,
 } from "@/editor/types";
 import Konva from "konva";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   Arrow,
@@ -49,10 +59,16 @@ interface CanvasStageProps {
   isSelectedLocked: boolean;
   draftElement?: CanvasLeafElement | null;
   isCreating?: boolean;
+  readOnly?: boolean;
+  stageHandleRef?: Ref<CanvasStageHandle>;
   onEditText: (elementId: string) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+}
+
+export interface CanvasStageHandle {
+  exportImage: (options?: { pixelRatio?: number }) => string | null;
 }
 
 interface RenderElementProps {
@@ -248,14 +264,16 @@ function getLineTransformPatch(
   };
 }
 
-function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
+function normalizeTextTransform(
+  element: Extract<CanvasLeafElement, { type: "text" }>,
+  node: Konva.Shape,
+): CanvasTransformPatch {
   const width = Math.max(8, node.width() * Math.abs(node.scaleX()));
-  const height = Math.max(8, node.height() * Math.abs(node.scaleY()));
 
-  // Text needs real dimensions during the gesture so Konva can reflow it instead of
-  // stretching the already-rendered glyphs with scaleX/scaleY.
+  // Konva Transformer changes scale values. Text boxes intentionally resize only
+  // horizontally, so their font size and line box height remain stable while reflowing.
   node.width(width);
-  node.height(height);
+  node.height(element.height);
   node.scaleX(1);
   node.scaleY(1);
 
@@ -263,7 +281,7 @@ function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
     x: node.x(),
     y: node.y(),
     width,
-    height,
+    height: element.height,
     rotation: node.rotation(),
   };
 }
@@ -302,17 +320,17 @@ function commitTransform(
 }
 
 function commitTextTransform(
-  elementId: string,
+  element: Extract<CanvasLeafElement, { type: "text" }>,
   node: Konva.Shape,
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
 ) {
-  const patch = normalizeTextTransform(node);
+  const patch = normalizeTextTransform(element, node);
 
   flushSync(() => {
-    onElementChange(elementId, patch);
+    onElementChange(element.id, patch);
   });
-  onElementPreview(elementId, null);
+  onElementPreview(element.id, null);
 }
 
 const RenderElement = memo(function RenderElement({
@@ -499,11 +517,14 @@ const RenderElement = memo(function RenderElement({
             if (!locked) onEditText(element.id);
           }}
           onTransform={(event) =>
-            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Image))
+            onElementPreview(
+              element.id,
+              normalizeTextTransform(element, event.target as Konva.Image),
+            )
           }
           onTransformEnd={(event) =>
             commitTextTransform(
-              element.id,
+              element,
               event.target as Konva.Image,
               onElementChange,
               onElementPreview,
@@ -528,11 +549,14 @@ const RenderElement = memo(function RenderElement({
             if (!locked) onEditText(element.id);
           }}
           onTransform={(event) =>
-            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Text))
+            onElementPreview(
+              element.id,
+              normalizeTextTransform(element, event.target as Konva.Text),
+            )
           }
           onTransformEnd={(event) =>
             commitTextTransform(
-              element.id,
+              element,
               event.target as Konva.Text,
               onElementChange,
               onElementPreview,
@@ -570,11 +594,14 @@ export function CanvasStage({
   isSelectedLocked,
   draftElement = null,
   isCreating = false,
+  readOnly = false,
+  stageHandleRef,
   onEditText,
   onSelect,
   onElementChange,
   onElementPreview,
 }: CanvasStageProps) {
+  const documentGroupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
@@ -646,6 +673,25 @@ export function CanvasStage({
     else nodeRefs.current.delete(elementId);
   }, []);
 
+  useImperativeHandle(
+    stageHandleRef,
+    () => ({
+      exportImage(options) {
+        return (
+          documentGroupRef.current?.toDataURL({
+            height: document.height,
+            mimeType: "image/png",
+            pixelRatio: options?.pixelRatio ?? 2,
+            width: document.width,
+            x: 0,
+            y: 0,
+          }) ?? null
+        );
+      },
+    }),
+    [document.height, document.width],
+  );
+
   return (
     <Stage
       height={viewportHeight}
@@ -658,7 +704,7 @@ export function CanvasStage({
       }}
     >
       <Layer
-        listening={!isCreating}
+        listening={!isCreating && !readOnly}
         scaleX={zoom}
         scaleY={zoom}
         x={viewportPosition.x}
@@ -676,21 +722,24 @@ export function CanvasStage({
           strokeWidth={1 / zoom}
           width={document.width}
         />
-        {document.elements.map((element) => (
-          <RenderElement
-            element={element}
-            fontRevision={fontRevision}
-            editingElementId={editingElementId}
-            inheritedLocked={false}
-            key={element.id}
-            selectedId={selectedId}
-            setNodeRef={setNodeRef}
-            onEditText={onEditText}
-            onElementChange={onElementChange}
-            onElementPreview={onElementPreview}
-            onSelect={onSelect}
-          />
-        ))}
+        <Group ref={documentGroupRef}>
+          <Rect fill="#ffffff" height={document.height} listening={false} width={document.width} />
+          {document.elements.map((element) => (
+            <RenderElement
+              element={element}
+              fontRevision={fontRevision}
+              editingElementId={editingElementId}
+              inheritedLocked={false}
+              key={element.id}
+              selectedId={selectedId}
+              setNodeRef={setNodeRef}
+              onEditText={onEditText}
+              onElementChange={onElementChange}
+              onElementPreview={onElementPreview}
+              onSelect={onSelect}
+            />
+          ))}
+        </Group>
         {draftElement ? (
           <RenderElement
             element={draftElement}
@@ -705,44 +754,55 @@ export function CanvasStage({
             onSelect={() => undefined}
           />
         ) : null}
-        <Transformer
-          ref={hoverTransformerRef}
-          borderDash={[]}
-          borderStroke="rgba(109, 95, 212, 0.72)"
-          borderStrokeWidth={1.25}
-          enabledAnchors={[]}
-          listening={false}
-          padding={2}
-          resizeEnabled={false}
-          rotateEnabled={false}
-        />
-        <Transformer
-          ref={transformerRef}
-          anchorCornerRadius={4}
-          anchorFill="#ffffff"
-          anchorSize={12}
-          anchorStroke="#6d5fd4"
-          anchorStrokeWidth={1}
-          borderDash={[]}
-          borderStroke="#6d5fd4"
-          borderStrokeWidth={1.5}
-          flipEnabled={false}
-          keepRatio={
-            selectedContext?.element.type !== "image" &&
-            selectedContext?.element.type !== "line" &&
-            selectedContext?.element.type !== "arrow"
-          }
-          rotateAnchorOffset={28}
-          rotateEnabled
-          boundBoxFunc={(oldBox, newBox) => {
-            const isLinear =
-              selectedContext?.element.type === "line" || selectedContext?.element.type === "arrow";
-            const isTooSmall = isLinear
-              ? Math.hypot(newBox.width, newBox.height) < 8 * zoom
-              : Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom;
-            return isTooSmall ? oldBox : newBox;
-          }}
-        />
+        {readOnly ? null : (
+          <>
+            <Transformer
+              ref={hoverTransformerRef}
+              borderDash={[]}
+              borderStroke="rgba(109, 95, 212, 0.72)"
+              borderStrokeWidth={1.25}
+              enabledAnchors={[]}
+              listening={false}
+              padding={2}
+              resizeEnabled={false}
+              rotateEnabled={false}
+            />
+            <Transformer
+              ref={transformerRef}
+              anchorCornerRadius={4}
+              anchorFill="#ffffff"
+              anchorSize={12}
+              anchorStroke="#6d5fd4"
+              anchorStrokeWidth={1}
+              borderDash={[]}
+              borderStroke="#6d5fd4"
+              borderStrokeWidth={1.5}
+              enabledAnchors={
+                selectedContext?.element.type === "text"
+                  ? ["middle-left", "middle-right"]
+                  : undefined
+              }
+              flipEnabled={false}
+              keepRatio={
+                selectedContext?.element.type !== "image" &&
+                selectedContext?.element.type !== "line" &&
+                selectedContext?.element.type !== "arrow" &&
+                selectedContext?.element.type !== "text"
+              }
+              rotateAnchorOffset={28}
+              rotateEnabled
+              boundBoxFunc={(oldBox, newBox) => {
+                const isLinear =
+                  selectedContext?.element.type === "line" ||
+                  selectedContext?.element.type === "arrow";
+                const isTooSmall = isLinear
+                  ? Math.hypot(newBox.width, newBox.height) < 8 * zoom
+                  : Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom;
+                return isTooSmall ? oldBox : newBox;
+              }}
+            />
+          </>
+        )}
       </Layer>
     </Stage>
   );
