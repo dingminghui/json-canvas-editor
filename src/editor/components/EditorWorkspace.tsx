@@ -673,11 +673,10 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           ) : null}
           <Button
             aria-label={exportLabel}
-            className="h-7 gap-1.5 rounded-sm px-2 text-xs text-muted-foreground hover:text-foreground"
+            className="h-7 gap-1.5 rounded-sm px-2 text-xs"
             disabled={exporting}
             size="sm"
             type="button"
-            variant="ghost"
             onClick={() => void handleExport()}
           >
             {exporting ? (
