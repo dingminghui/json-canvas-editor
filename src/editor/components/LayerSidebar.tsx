@@ -249,7 +249,7 @@ export const LayerSidebar = memo(function LayerSidebar({
     <ResizablePanelGroup className="h-full min-h-0" orientation="vertical">
       <ResizablePanel
         className="min-h-0"
-        defaultSize={248}
+        defaultSize={348}
         groupResizeBehavior="preserve-pixel-size"
         id="pages-panel"
         minSize={152}
