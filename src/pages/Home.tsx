@@ -11,7 +11,6 @@ function TemplateCard({ template }: { template: TemplateMeta }) {
     <Link
       className="group flex flex-col gap-2 rounded-xl border bg-card p-5 text-left shadow-sm transition-all hover:shadow-md hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       to={`/${template.id}`}
-      target="_blank"
     >
       <h2 className="text-base font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
         {template.name}
