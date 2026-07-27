@@ -72,7 +72,7 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
 const TWO_DECIMAL_NUMBER_PATTERN = /^-?\d*(?:\.\d{0,2})?$/;
 const PROPERTY_LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const PROPERTY_CONTROL_CLASS_NAME =
-  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring";
+  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
 const COMPACT_FIELD_GROUP_CLASS_NAME = "gap-2.5";
 
 function roundToTwoDecimals(value: number) {

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CANVAS_FONT_FAMILIES, type CanvasFontFamily } from "@/editor/fonts";
 import type {
   CanvasElementPatch,
   ChartElement,
@@ -33,14 +34,47 @@ import { BarChart3, Grid2X2, Plus, Rows3, Table2, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 const CONTROL_CLASS_NAME =
-  "w-full rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring";
+  "w-full rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
 const LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const GRID_INPUT_CLASS_NAME =
-  "h-8 rounded-none border-0 border-r border-b bg-background px-2 text-xs shadow-none focus-visible:relative focus-visible:z-10 focus-visible:ring-2";
+  "h-8 rounded-none border-0 border-r border-b bg-background px-2 text-xs shadow-none focus-visible:relative focus-visible:z-10 focus-visible:ring-2 md:text-xs";
 const CHART_COLORS = ["#4F46E5", "#059669", "#F59E0B", "#DC2626", "#0284C7", "#7C3AED"];
 const TWO_DECIMAL_DIMENSION_PATTERN = /^\d*(?:\.\d{0,2})?$/;
 const NUMBER_INPUT_CLASS_NAME =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none";
+
+interface TableStyleSelectOption<TValue extends string> {
+  label: string;
+  value: TValue;
+  fontFamily?: string;
+}
+
+const TABLE_FONT_FAMILY_OPTIONS: readonly TableStyleSelectOption<CanvasFontFamily>[] =
+  CANVAS_FONT_FAMILIES.map((font) => ({
+    fontFamily: font.cssFamily,
+    label: font.label,
+    value: font.id,
+  }));
+
+const TABLE_FONT_WEIGHT_OPTIONS: readonly TableStyleSelectOption<TableCellStyle["fontWeight"]>[] = [
+  { label: "400", value: "400" },
+  { label: "500", value: "500" },
+  { label: "600", value: "600" },
+  { label: "700", value: "700" },
+  { label: "800", value: "800" },
+];
+
+const TABLE_TEXT_ALIGN_OPTIONS: readonly TableStyleSelectOption<TableCellStyle["align"]>[] = [
+  { label: "左对齐", value: "left" },
+  { label: "居中", value: "center" },
+  { label: "右对齐", value: "right" },
+];
+
+const TABLE_VERTICAL_ALIGN_OPTIONS: readonly TableStyleSelectOption<TableCellStyle["valign"]>[] = [
+  { label: "顶部", value: "top" },
+  { label: "居中", value: "middle" },
+  { label: "底部", value: "bottom" },
+];
 
 function createSemanticId(prefix: string) {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -1062,12 +1096,184 @@ function StyleColorControl({
   );
 }
 
+function hasTableStyleOptionValue<TValue extends string>(
+  value: string,
+  options: readonly TableStyleSelectOption<TValue>[],
+): value is TValue {
+  return options.some((option) => option.value === value);
+}
+
+function TableStyleSelect<TValue extends string>({
+  disabled,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  disabled: boolean;
+  label: string;
+  options: readonly TableStyleSelectOption<TValue>[];
+  value: TValue;
+  onChange: (value: TValue) => void;
+}) {
+  const id = useId();
+
+  return (
+    <label className="flex flex-col gap-2 text-xs text-muted-foreground" htmlFor={id}>
+      {label}
+      <Select
+        disabled={disabled}
+        value={value}
+        onValueChange={(nextValue) => {
+          if (hasTableStyleOptionValue(nextValue, options)) onChange(nextValue);
+        }}
+      >
+        <SelectTrigger className={CONTROL_CLASS_NAME} id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                <span style={option.fontFamily ? { fontFamily: option.fontFamily } : undefined}>
+                  {option.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </label>
+  );
+}
+
+function TableStyleNumberControl({
+  disabled,
+  label,
+  minValue,
+  value,
+  onChange,
+}: {
+  disabled: boolean;
+  label: string;
+  minValue: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const id = useId();
+
+  return (
+    <label className="flex flex-col gap-2 text-xs text-muted-foreground" htmlFor={id}>
+      {label}
+      <Input
+        className={cn(CONTROL_CLASS_NAME, NUMBER_INPUT_CLASS_NAME, "font-mono")}
+        disabled={disabled}
+        id={id}
+        min={minValue}
+        type="number"
+        value={value}
+        onChange={(event) => {
+          const nextValue = Number(event.currentTarget.value);
+          if (!Number.isFinite(nextValue)) return;
+          onChange(Math.max(minValue, nextValue));
+        }}
+      />
+    </label>
+  );
+}
+
 function patchTableStyle(
   element: TableElement,
   key: "cellStyle" | "headerStyle",
   patch: Partial<TableCellStyle>,
 ): CanvasElementPatch {
   return { [key]: { ...element[key], ...patch } } as CanvasElementPatch;
+}
+
+function TableCellStyleFields({
+  disabled,
+  style,
+  title,
+  onChange,
+}: {
+  disabled: boolean;
+  style: TableCellStyle;
+  title: string;
+  onChange: (patch: Partial<TableCellStyle>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <h4 className="m-0 text-xs font-medium">{title}</h4>
+      <div className="grid grid-cols-2 gap-2">
+        <StyleColorControl
+          disabled={disabled}
+          label="背景色"
+          value={style.fill}
+          onChange={(fill) => onChange({ fill })}
+        />
+        <StyleColorControl
+          disabled={disabled}
+          label="文字色"
+          value={style.color}
+          onChange={(color) => onChange({ color })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <TableStyleSelect
+          disabled={disabled}
+          label="字体"
+          options={TABLE_FONT_FAMILY_OPTIONS}
+          value={style.fontFamily}
+          onChange={(fontFamily) => onChange({ fontFamily })}
+        />
+        <TableStyleSelect
+          disabled={disabled}
+          label="字重"
+          options={TABLE_FONT_WEIGHT_OPTIONS}
+          value={style.fontWeight}
+          onChange={(fontWeight) => onChange({ fontWeight })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <TableStyleNumberControl
+          disabled={disabled}
+          label="字号"
+          minValue={8}
+          value={style.fontSize}
+          onChange={(fontSize) => onChange({ fontSize })}
+        />
+        <TableStyleSelect
+          disabled={disabled}
+          label="水平对齐"
+          options={TABLE_TEXT_ALIGN_OPTIONS}
+          value={style.align}
+          onChange={(align) => onChange({ align })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <TableStyleSelect
+          disabled={disabled}
+          label="垂直对齐"
+          options={TABLE_VERTICAL_ALIGN_OPTIONS}
+          value={style.valign}
+          onChange={(valign) => onChange({ valign })}
+        />
+        <TableStyleNumberControl
+          disabled={disabled}
+          label="边框宽度"
+          minValue={0}
+          value={style.borderWidth}
+          onChange={(borderWidth) => onChange({ borderWidth })}
+        />
+      </div>
+      <StyleColorControl
+        disabled={disabled}
+        label="边框色"
+        value={style.borderColor}
+        onChange={(borderColor) => onChange({ borderColor })}
+      />
+    </div>
+  );
 }
 
 export function TableFields({
@@ -1079,9 +1285,6 @@ export function TableFields({
   element: TableElement;
   onUpdate: (patch: CanvasElementPatch) => void;
 }) {
-  const fontSizeId = useId();
-  const borderWidthId = useId();
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -1094,65 +1297,24 @@ export function TableFields({
         <TableDataEditor disabled={disabled} element={element} onUpdate={onUpdate} />
       </div>
 
-      <div className="flex flex-col gap-2.5 border-t pt-4">
+      <div className="flex flex-col gap-4 border-t pt-4">
         <div className="flex items-center gap-2">
           <BarChart3 aria-hidden="true" className="size-3.5 text-muted-foreground" />
           <span className={LABEL_CLASS_NAME}>表格样式</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <StyleColorControl
+        <TableCellStyleFields
+          disabled={disabled}
+          style={element.headerStyle}
+          title="表头样式"
+          onChange={(patch) => onUpdate(patchTableStyle(element, "headerStyle", patch))}
+        />
+        <div className="border-t pt-4">
+          <TableCellStyleFields
             disabled={disabled}
-            label="表头填充"
-            value={element.headerStyle.fill}
-            onChange={(fill) => onUpdate(patchTableStyle(element, "headerStyle", { fill }))}
+            style={element.cellStyle}
+            title="单元格样式"
+            onChange={(patch) => onUpdate(patchTableStyle(element, "cellStyle", patch))}
           />
-          <StyleColorControl
-            disabled={disabled}
-            label="单元格填充"
-            value={element.cellStyle.fill}
-            onChange={(fill) => onUpdate(patchTableStyle(element, "cellStyle", { fill }))}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-2 text-xs text-muted-foreground" htmlFor={fontSizeId}>
-            字号
-            <Input
-              className={cn(CONTROL_CLASS_NAME, "font-mono")}
-              disabled={disabled}
-              id={fontSizeId}
-              min={8}
-              type="number"
-              value={element.cellStyle.fontSize}
-              onChange={(event) =>
-                onUpdate(
-                  patchTableStyle(element, "cellStyle", {
-                    fontSize: Math.max(8, Number(event.currentTarget.value)),
-                  }),
-                )
-              }
-            />
-          </label>
-          <label
-            className="flex flex-col gap-2 text-xs text-muted-foreground"
-            htmlFor={borderWidthId}
-          >
-            边框
-            <Input
-              className={cn(CONTROL_CLASS_NAME, "font-mono")}
-              disabled={disabled}
-              id={borderWidthId}
-              min={0}
-              type="number"
-              value={element.cellStyle.borderWidth}
-              onChange={(event) =>
-                onUpdate(
-                  patchTableStyle(element, "cellStyle", {
-                    borderWidth: Math.max(0, Number(event.currentTarget.value)),
-                  }),
-                )
-              }
-            />
-          </label>
         </div>
       </div>
     </div>

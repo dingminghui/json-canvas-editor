@@ -27,6 +27,49 @@ const polygon: PolygonElement = {
   y: 50,
 };
 
+function createTableElementForTest(): TableElement {
+  return {
+    cellStyle: {
+      align: "center",
+      borderColor: "#CBD5E1",
+      borderWidth: 1,
+      color: "#334155",
+      fill: "#FFFFFF",
+      fontFamily: "noto-sans-sc",
+      fontSize: 16,
+      fontWeight: "400",
+      valign: "middle",
+    },
+    columns: [
+      { id: "col-1", name: "指标", width: 160 },
+      { id: "col-2", name: "当前值", width: 160 },
+    ],
+    headerStyle: {
+      align: "center",
+      borderColor: "#CBD5E1",
+      borderWidth: 1,
+      color: "#0F172A",
+      fill: "#E2E8F0",
+      fontFamily: "noto-sans-sc",
+      fontSize: 18,
+      fontWeight: "700",
+      valign: "middle",
+    },
+    height: 180,
+    id: "table",
+    locked: false,
+    name: "表格",
+    opacity: 1,
+    rotation: 0,
+    rows: [{ cells: { "col-1": "转化率", "col-2": "24%" }, height: 56, id: "row-1" }],
+    type: "table",
+    visible: true,
+    width: 320,
+    x: 40,
+    y: 50,
+  };
+}
+
 describe("PropertiesPanel shape fields", () => {
   it("updates text line height", () => {
     const text: TextElement = {
@@ -125,47 +168,36 @@ describe("PropertiesPanel shape fields", () => {
     });
   });
 
+  it("shows all table cell style controls for headers and body cells", () => {
+    const table = createTableElementForTest();
+    const onUpdate = vi.fn();
+    render(<PropertiesPanel isLocked={false} selectedElement={table} onUpdate={onUpdate} />);
+
+    expect(screen.getByText("表头样式")).toBeVisible();
+    expect(screen.getByText("单元格样式")).toBeVisible();
+    expect(screen.getAllByLabelText("背景色")).toHaveLength(2);
+    expect(screen.getAllByLabelText("文字色")).toHaveLength(2);
+    expect(screen.getAllByLabelText("字体")).toHaveLength(2);
+    expect(screen.getAllByLabelText("字重")).toHaveLength(2);
+    expect(screen.getAllByLabelText("字号")).toHaveLength(2);
+    expect(screen.getAllByLabelText("水平对齐")).toHaveLength(2);
+    expect(screen.getAllByLabelText("垂直对齐")).toHaveLength(2);
+    expect(screen.getAllByLabelText("边框宽度")).toHaveLength(2);
+    expect(screen.getAllByLabelText("边框色")).toHaveLength(2);
+
+    fireEvent.change(screen.getAllByLabelText("字号")[0], { target: { value: "20" } });
+    expect(onUpdate).toHaveBeenCalledWith({
+      headerStyle: { ...table.headerStyle, fontSize: 20 },
+    });
+
+    fireEvent.change(screen.getAllByLabelText("边框宽度")[1], { target: { value: "2" } });
+    expect(onUpdate).toHaveBeenCalledWith({
+      cellStyle: { ...table.cellStyle, borderWidth: 2 },
+    });
+  });
+
   it("edits table headers, cells, and dimensions as a structured matrix", () => {
-    const table: TableElement = {
-      cellStyle: {
-        align: "center",
-        borderColor: "#CBD5E1",
-        borderWidth: 1,
-        color: "#334155",
-        fill: "#FFFFFF",
-        fontFamily: "noto-sans-sc",
-        fontSize: 16,
-        fontWeight: "400",
-        valign: "middle",
-      },
-      columns: [
-        { id: "col-1", name: "指标", width: 160 },
-        { id: "col-2", name: "当前值", width: 160 },
-      ],
-      headerStyle: {
-        align: "center",
-        borderColor: "#CBD5E1",
-        borderWidth: 1,
-        color: "#0F172A",
-        fill: "#E2E8F0",
-        fontFamily: "noto-sans-sc",
-        fontSize: 18,
-        fontWeight: "700",
-        valign: "middle",
-      },
-      height: 180,
-      id: "table",
-      locked: false,
-      name: "表格",
-      opacity: 1,
-      rotation: 0,
-      rows: [{ cells: { "col-1": "转化率", "col-2": "24%" }, height: 56, id: "row-1" }],
-      type: "table",
-      visible: true,
-      width: 320,
-      x: 40,
-      y: 50,
-    };
+    const table = createTableElementForTest();
     const onUpdate = vi.fn();
     render(<PropertiesPanel isLocked={false} selectedElement={table} onUpdate={onUpdate} />);
 
