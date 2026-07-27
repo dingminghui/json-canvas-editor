@@ -771,49 +771,19 @@ function createPathSlide(): GroupElement {
 
 function createAssessmentSlide(): GroupElement {
   const top = 0;
-  const panels = [
-    {
-      body: "白天症状、夜间憋醒、活动受限、缓解药使用",
-      color: COLORS.green,
-      label: "当前控制",
-      x: 96,
-      y: 310,
-    },
-    {
-      body: "既往发作、急诊或住院、系统激素暴露、高危共病",
-      color: COLORS.amber,
-      label: "未来风险",
-      x: 548,
-      y: 310,
-    },
-    {
-      body: "治疗理解、吸入步骤、依从障碍、患者偏好",
-      color: COLORS.blue,
-      label: "执行质量",
-      x: 96,
-      y: 548,
-    },
-    {
-      body: "吸烟与暴露、过敏原、职业环境、家庭支持",
-      color: "#7c6b8f",
-      label: "情境因素",
-      x: 548,
-      y: 548,
-    },
-  ] as const;
 
   return group(5, "评估框架", [
     ...contentChrome(5, "ASSESSMENT / 评估框架"),
     text(
       "ppt2-s5-title",
       "评估框架标题",
-      "控制水平只是第一层，完整评估还要再看三层",
+      "同一组评估数据，可以从对比、趋势和构成三个角度解读",
       96,
       top + 112,
-      1280,
+      1400,
       88,
       {
-        fontSize: 60,
+        fontSize: 54,
         fontWeight: "800",
         lineHeight: 1.12,
       },
@@ -821,10 +791,10 @@ function createAssessmentSlide(): GroupElement {
     text(
       "ppt2-s5-lead",
       "评估框架引导",
-      "用同一套结构减少遗漏，也让复诊前后的变化更容易比较。",
+      "柱状图回答“哪项更高”，折线图回答“如何变化”，饼图回答“由什么构成”。",
       100,
       top + 208,
-      940,
+      1320,
       52,
       {
         fill: COLORS.muted,
@@ -832,42 +802,7 @@ function createAssessmentSlide(): GroupElement {
         lineHeight: 1.3,
       },
     ),
-    ...panels.flatMap(({ body, color, label, x, y }, index) => [
-      rect(`ppt2-s5-panel-${index + 1}`, `${label}底板`, x, top + y, 416, 198, COLORS.paleGray, {
-        cornerRadius: 18,
-        stroke: COLORS.border,
-        strokeWidth: 1,
-      }),
-      rect(`ppt2-s5-panel-${index + 1}-accent`, `${label}强调线`, x, top + y, 10, 198, color, {
-        cornerRadius: 18,
-      }),
-      text(
-        `ppt2-s5-panel-${index + 1}-title`,
-        `${label}标题`,
-        label,
-        x + 36,
-        top + y + 30,
-        330,
-        48,
-        {
-          fill: color,
-          fontSize: 38,
-          fontWeight: "700",
-          lineHeight: 1.1,
-        },
-      ),
-      text(`ppt2-s5-panel-${index + 1}-body`, `${label}说明`, body, x + 36, top + y + 92, 340, 78, {
-        fill: COLORS.muted,
-        fontSize: 25,
-        lineHeight: 1.4,
-      }),
-    ]),
-    rect("ppt2-s5-chart-card", "控制维度图表底板", 1016, top + 310, 480, 436, COLORS.white, {
-      cornerRadius: 18,
-      stroke: COLORS.border,
-      strokeWidth: 1,
-    }),
-    chart("ppt2-s5-control-chart", "控制维度评分图表", 1040, top + 334, 432, 388, {
+    chart("ppt2-s5-bar-chart", "评估维度柱状图", 72, top + 310, 456, 430, {
       chartType: "bar",
       colors: [COLORS.green, COLORS.amber, COLORS.blue],
       series: [
@@ -879,8 +814,57 @@ function createAssessmentSlide(): GroupElement {
       ],
       showLegend: false,
       showValue: true,
-      title: "四项评估维度完成度",
+      title: "评估维度对比",
     }),
+    chart("ppt2-s5-line-chart", "复诊趋势折线图", 572, top + 310, 456, 430, {
+      chartType: "line",
+      colors: [COLORS.green, COLORS.blue],
+      series: [
+        {
+          labels: ["首次", "1–4 周", "8–12 周", "长期"],
+          name: "症状控制",
+          values: [52, 64, 71, 78],
+        },
+        {
+          labels: ["首次", "1–4 周", "8–12 周", "长期"],
+          name: "随访执行",
+          values: [48, 58, 66, 72],
+        },
+      ],
+      showLegend: true,
+      showValue: false,
+      title: "复诊趋势变化",
+    }),
+    chart("ppt2-s5-pie-chart", "管理障碍饼图", 1072, top + 310, 456, 430, {
+      chartType: "pie",
+      colors: [COLORS.green, COLORS.amber, COLORS.blue, "#7c6b8f"],
+      series: [
+        {
+          labels: ["吸入技巧", "依从障碍", "环境暴露", "其他"],
+          name: "管理障碍",
+          values: [34, 29, 22, 15],
+        },
+      ],
+      showLegend: true,
+      showValue: true,
+      title: "管理障碍构成",
+    }),
+    text(
+      "ppt2-s5-takeaway",
+      "图表选择提示",
+      "图表类型应跟随问题，而不是跟随数据形式。",
+      96,
+      top + 762,
+      1400,
+      40,
+      {
+        align: "center",
+        fill: COLORS.muted,
+        fontSize: 24,
+        fontWeight: "600",
+        lineHeight: 1.2,
+      },
+    ),
   ]);
 }
 

@@ -37,10 +37,75 @@ const LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const GRID_INPUT_CLASS_NAME =
   "h-8 rounded-none border-0 border-r border-b bg-background px-2 text-xs shadow-none focus-visible:relative focus-visible:z-10 focus-visible:ring-2";
 const CHART_COLORS = ["#4F46E5", "#059669", "#F59E0B", "#DC2626", "#0284C7", "#7C3AED"];
+const TWO_DECIMAL_DIMENSION_PATTERN = /^\d*(?:\.\d{0,2})?$/;
+const NUMBER_INPUT_CLASS_NAME =
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none";
 
 function createSemanticId(prefix: string) {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   return `${prefix}-${suffix}`;
+}
+
+function roundToTwoDecimals(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function formatDimension(value: number) {
+  return Number.isFinite(value) ? String(roundToTwoDecimals(value)) : "";
+}
+
+function TableDimensionInput({
+  "aria-label": ariaLabel,
+  className,
+  minValue,
+  value,
+  onChange,
+}: {
+  "aria-label": string;
+  className?: string;
+  minValue: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const [draftValue, setDraftValue] = useState<string | null>(null);
+  const displayValue = draftValue ?? formatDimension(value);
+  const numericValue = Number(displayValue);
+  const invalid =
+    displayValue.trim() === "" || !Number.isFinite(numericValue) || numericValue < minValue;
+
+  function commit(rawValue: string) {
+    const nextValue = Number(rawValue);
+    if (!Number.isFinite(nextValue)) return;
+    onChange(Math.max(minValue, roundToTwoDecimals(nextValue)));
+  }
+
+  return (
+    <Input
+      aria-invalid={invalid}
+      aria-label={ariaLabel}
+      className={cn(NUMBER_INPUT_CLASS_NAME, className)}
+      inputMode="decimal"
+      min={minValue}
+      step={0.01}
+      type="number"
+      value={displayValue}
+      onBlur={() => {
+        if (draftValue !== null) commit(draftValue);
+        setDraftValue(null);
+      }}
+      onChange={(event) => {
+        const nextValue = event.currentTarget.value;
+        if (!TWO_DECIMAL_DIMENSION_PATTERN.test(nextValue)) return;
+        setDraftValue(nextValue);
+        if (nextValue !== "") commit(nextValue);
+      }}
+      onFocus={() => setDraftValue(formatDimension(value))}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") setDraftValue(null);
+      }}
+    />
+  );
 }
 
 function getChartColor(colors: string[], index: number) {
@@ -836,16 +901,12 @@ function TableDataEditorContent({
                 />
                 <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   宽
-                  <Input
+                  <TableDimensionInput
                     aria-label={`第 ${columnIndex + 1} 列宽`}
-                    aria-invalid={!Number.isFinite(column.width) || column.width < 24}
                     className="h-6 rounded-sm border-transparent bg-background px-1.5 font-mono text-[11px] shadow-none"
-                    min={24}
-                    type="number"
+                    minValue={24}
                     value={column.width}
-                    onChange={(event) =>
-                      updateColumn(column.id, { width: Number(event.currentTarget.value) })
-                    }
+                    onChange={(width) => updateColumn(column.id, { width })}
                   />
                 </div>
               </div>
@@ -871,16 +932,12 @@ function TableDataEditorContent({
                 {rowIndex + 1}
               </span>
               <span className="text-[11px] text-muted-foreground">高</span>
-              <Input
+              <TableDimensionInput
                 aria-label={`第 ${rowIndex + 1} 行高`}
-                aria-invalid={!Number.isFinite(row.height) || row.height < 20}
                 className="h-7 w-11 flex-none rounded-sm border-transparent bg-background px-1 font-mono text-[11px] shadow-none"
-                min={20}
-                type="number"
+                minValue={20}
                 value={row.height}
-                onChange={(event) =>
-                  updateRow(row.id, { height: Number(event.currentTarget.value) })
-                }
+                onChange={(height) => updateRow(row.id, { height })}
               />
               <Button
                 aria-label={`删除第 ${rowIndex + 1} 行`}

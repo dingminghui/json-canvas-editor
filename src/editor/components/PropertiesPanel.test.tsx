@@ -173,16 +173,31 @@ describe("PropertiesPanel shape fields", () => {
     fireEvent.click(screen.getByRole("button", { name: /编辑表格/ }));
     fireEvent.change(screen.getByLabelText("第 2 列名称"), { target: { value: "目标值" } });
     fireEvent.change(screen.getByLabelText("第 1 行第 2 列"), { target: { value: "28%" } });
-    fireEvent.change(screen.getByLabelText("第 1 行高"), { target: { value: "64" } });
+    const columnWidthInput = screen.getByLabelText("第 2 列宽");
+    const rowHeightInput = screen.getByLabelText("第 1 行高");
+    expect(columnWidthInput).toHaveAttribute("step", "0.01");
+    expect(columnWidthInput.className).toContain("[&::-webkit-inner-spin-button]:appearance-none");
+
+    fireEvent.focus(columnWidthInput);
+    fireEvent.change(columnWidthInput, { target: { value: "160.123" } });
+    expect(columnWidthInput).toHaveValue(160);
+    fireEvent.change(columnWidthInput, { target: { value: "160.25" } });
+    expect(columnWidthInput).toHaveValue(160.25);
+
+    fireEvent.focus(rowHeightInput);
+    fireEvent.change(rowHeightInput, { target: { value: "64.126" } });
+    expect(rowHeightInput).toHaveValue(56);
+    fireEvent.change(rowHeightInput, { target: { value: "64.12" } });
+    expect(rowHeightInput).toHaveValue(64.12);
     expect(onUpdate).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "应用数据" }));
     expect(onUpdate).toHaveBeenCalledWith({
       columns: [
         { id: "col-1", name: "指标", width: 160 },
-        { id: "col-2", name: "目标值", width: 160 },
+        { id: "col-2", name: "目标值", width: 160.25 },
       ],
-      rows: [{ cells: { "col-1": "转化率", "col-2": "28%" }, height: 64, id: "row-1" }],
+      rows: [{ cells: { "col-1": "转化率", "col-2": "28%" }, height: 64.12, id: "row-1" }],
     });
   });
 });
