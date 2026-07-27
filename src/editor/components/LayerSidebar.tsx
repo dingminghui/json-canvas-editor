@@ -12,6 +12,7 @@ interface LayerSidebarProps {
   pageDocument: CanvasDocument;
   documents: CanvasDocument[];
   activePageId: string;
+  readOnly?: boolean;
   selectedId: string | null;
   onHover: (elementId: string | null) => void;
   onSelect: (elementId: string) => void;
@@ -241,6 +242,7 @@ export const LayerSidebar = memo(function LayerSidebar({
   pageDocument,
   documents,
   activePageId,
+  readOnly = false,
   selectedId,
   onHover,
   onSelect,
@@ -283,6 +285,7 @@ export const LayerSidebar = memo(function LayerSidebar({
           <LayerTree
             elements={pageDocument.elements}
             key={pageDocument.id}
+            readOnly={readOnly}
             selectedId={selectedId}
             onHover={onHover}
             onReorder={onReorder}

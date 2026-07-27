@@ -46,6 +46,7 @@ import {
 interface LayerTreeProps {
   elements: CanvasElement[];
   selectedId: string | null;
+  readOnly?: boolean;
   onHover: (elementId: string | null) => void;
   onSelect: (elementId: string) => void;
   onToggleVisible: (elementId: string) => void;
@@ -55,6 +56,7 @@ interface LayerTreeProps {
 
 interface LayerTreeItemActions {
   selectedId: string | null;
+  readOnly: boolean;
   onHover: (elementId: string | null) => void;
   onSelect: (elementId: string) => void;
   onToggleVisible: (elementId: string) => void;
@@ -229,8 +231,10 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
             {...dragHandleProps}
             className={cn(
               "h-7 w-auto min-w-0 flex-none cursor-grab touch-none justify-start gap-1.5 px-[3px] text-foreground active:cursor-grabbing",
+              actions.readOnly && "cursor-default active:cursor-default",
               props.clone && "w-auto max-w-60 flex-initial",
             )}
+            disabled={actions.readOnly}
             type="button"
             variant="ghost"
           >
@@ -255,6 +259,7 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
                   "size-6 opacity-0 transition-opacity duration-100 pointer-events-none group-hover/layer:pointer-events-auto group-hover/layer:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
                   !element.visible && "pointer-events-auto opacity-100",
                 )}
+                disabled={actions.readOnly}
                 label={element.visible ? `隐藏 ${element.name}` : `显示 ${element.name}`}
                 tooltip={element.visible ? "隐藏" : "显示"}
                 onPress={() => actions.onToggleVisible(element.id)}
@@ -270,6 +275,7 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
                   "size-6 opacity-0 transition-opacity duration-100 pointer-events-none group-hover/layer:pointer-events-auto group-hover/layer:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
                   element.locked && "pointer-events-auto opacity-100",
                 )}
+                disabled={actions.readOnly}
                 label={element.locked ? `解锁 ${element.name}` : `锁定 ${element.name}`}
                 tooltip={element.locked ? "解锁" : "锁定"}
                 onPress={() => actions.onToggleLocked(element.id)}
@@ -291,6 +297,7 @@ const LayerTreeItem = forwardRef<HTMLDivElement, TreeItemComponentProps<LayerTre
 export function LayerTree({
   elements,
   selectedId,
+  readOnly = false,
   onHover,
   onSelect,
   onToggleVisible,
@@ -301,8 +308,8 @@ export function LayerTree({
   const items = useMemo(() => createLayerTreeItems(elements, expandedIds), [elements, expandedIds]);
 
   const actions = useMemo(
-    () => ({ selectedId, onHover, onSelect, onToggleVisible, onToggleLocked }),
-    [onHover, onSelect, onToggleLocked, onToggleVisible, selectedId],
+    () => ({ readOnly, selectedId, onHover, onSelect, onToggleVisible, onToggleLocked }),
+    [onHover, onSelect, onToggleLocked, onToggleVisible, readOnly, selectedId],
   );
 
   return (
@@ -311,6 +318,7 @@ export function LayerTree({
         <LayerTreeActionsContext.Provider value={actions}>
           <SortableTree
             TreeItemComponent={LayerTreeItem}
+            disableSorting={readOnly}
             dndContextProps={DND_CONTEXT_PROPS}
             indentationWidth={LAYER_INDENTATION_WIDTH}
             indicator

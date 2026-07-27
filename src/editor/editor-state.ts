@@ -4,7 +4,6 @@ import {
   getDocumentPages,
   getFirstPageId,
 } from "@/editor/document-pages";
-import { EDITOR_TEMPLATES } from "@/editor/templates";
 import {
   isGroupElement,
   type CanvasDocument,
@@ -56,31 +55,52 @@ function cloneDocument(document: CanvasDocument): CanvasDocument {
   return structuredClone(document);
 }
 
-export function createInitialEditorState(initialTemplateId?: string): EditorState {
+function validateDocuments(documents: readonly CanvasDocument[]) {
+  if (documents.length === 0) {
+    throw new Error("JsonCanvasEditor requires at least one document.");
+  }
+
+  const documentIds = new Set<string>();
+  for (const document of documents) {
+    if (documentIds.has(document.id)) {
+      throw new Error(`JsonCanvasEditor document ids must be unique: ${document.id}`);
+    }
+    documentIds.add(document.id);
+  }
+}
+
+export function createInitialEditorState(
+  sourceDocuments: readonly CanvasDocument[],
+  initialTemplateId?: string,
+): EditorState {
+  validateDocuments(sourceDocuments);
   const documents = Object.fromEntries(
-    EDITOR_TEMPLATES.map((template) => [template.id, cloneDocument(template)]),
+    sourceDocuments.map((document) => [document.id, cloneDocument(document)]),
   );
   const activeTemplateId =
-    initialTemplateId && documents[initialTemplateId] ? initialTemplateId : EDITOR_TEMPLATES[0].id;
+    initialTemplateId && documents[initialTemplateId] ? initialTemplateId : sourceDocuments[0].id;
 
   return {
     documents,
     activeTemplateId,
     activePageIdByTemplate: Object.fromEntries(
-      EDITOR_TEMPLATES.map((template) => [template.id, getFirstPageId(template)]),
+      sourceDocuments.map((document) => [document.id, getFirstPageId(document)]),
     ),
     selectedId: null,
     manualZoomByTemplate: Object.fromEntries(
-      EDITOR_TEMPLATES.map((template) => [template.id, template.width > 1200 ? 0.4 : 0.5]),
+      sourceDocuments.map((document) => [document.id, document.width > 1200 ? 0.4 : 0.5]),
     ),
     fitMode: true,
   };
 }
 
-export function createInitialEditorHistoryState(initialTemplateId?: string): EditorHistoryState {
+export function createInitialEditorHistoryState(
+  documents: readonly CanvasDocument[],
+  initialTemplateId?: string,
+): EditorHistoryState {
   return {
     past: [],
-    present: createInitialEditorState(initialTemplateId),
+    present: createInitialEditorState(documents, initialTemplateId),
     future: [],
   };
 }

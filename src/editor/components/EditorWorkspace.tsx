@@ -69,6 +69,7 @@ const MAX_CANVAS_PREVIEW_WIDTH = 890;
 interface EditorWorkspaceProps {
   document: CanvasDocument;
   exportDocument?: CanvasDocument;
+  readOnly?: boolean;
   hoveredId: string | null;
   selectedId: string | null;
   editingText: TextEditingSession | null;
@@ -90,6 +91,7 @@ interface EditorWorkspaceProps {
   onUndo: () => void;
   onRedo: () => void;
   onOpenOverview?: () => void;
+  onExport?: (document: CanvasDocument) => void | Promise<void>;
 }
 
 export interface EditorWorkspaceHandle {
@@ -198,6 +200,7 @@ function getCenteredPosition(
 export const EditorWorkspace = memo(function EditorWorkspace({
   document,
   exportDocument = document,
+  readOnly = false,
   hoveredId,
   selectedId,
   editingText,
@@ -219,6 +222,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onUndo,
   onRedo,
   onOpenOverview,
+  onExport,
 }: EditorWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -478,7 +482,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (activeTool && event.button === 0 && !isSpacePressed) {
+    if (!readOnly && activeTool && event.button === 0 && !isSpacePressed) {
       const start = getWorldPoint(event);
       if (!isPointInsideDocument(start, document)) return;
 
@@ -641,7 +645,9 @@ export const EditorWorkspace = memo(function EditorWorkspace({
 
     setExporting(true);
     try {
-      if (exportDocument.documentType === "pptx") {
+      if (onExport) {
+        await onExport(exportDocument);
+      } else if (exportDocument.documentType === "pptx") {
         const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
         await exportCanvasDocumentToPptx(exportDocument);
       } else {
@@ -809,99 +815,106 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           <Redo2 aria-hidden="true" strokeWidth={1.75} />
         </EditorIconButton>
 
-        <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+        {readOnly ? null : (
+          <>
+            <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
 
-        <Popover open={shapeMenuOpen} onOpenChange={setShapeMenuOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              aria-label="图形"
-              aria-pressed={activeShapeTool !== null}
-              className={cn("gap-0.5 px-1.5", activeShapeTool !== null && "bg-accent text-primary")}
-              size="sm"
-              type="button"
-              variant="ghost"
-              onClick={() => toggleCreationTool(lastShapeTool)}
-              onMouseEnter={openShapeMenu}
-              onMouseLeave={scheduleShapeMenuClose}
-            >
-              <SelectedShapeIcon aria-hidden="true" className="size-4" strokeWidth={1.75} />
-              <ChevronDown
-                aria-hidden="true"
-                className="size-3 text-muted-foreground"
-                strokeWidth={1.75}
-              />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="center"
-            className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
-            side="top"
-            sideOffset={8}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-            onMouseEnter={cancelShapeMenuClose}
-            onMouseLeave={scheduleShapeMenuClose}
-            onOpenAutoFocus={(event) => event.preventDefault()}
-          >
-            {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
-              const selected = activeTool === tool;
-              return (
-                <button
-                  aria-pressed={selected}
+            <Popover open={shapeMenuOpen} onOpenChange={setShapeMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  aria-label="图形"
+                  aria-pressed={activeShapeTool !== null}
                   className={cn(
-                    "relative flex h-7 w-full items-center gap-1.5 rounded-sm px-1.5 pr-7 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
-                    selected && "bg-accent/70 text-foreground",
+                    "gap-0.5 px-1.5",
+                    activeShapeTool !== null && "bg-accent text-primary",
                   )}
-                  key={tool}
+                  size="sm"
                   type="button"
-                  onClick={() => {
-                    setLastShapeTool(tool);
-                    toggleCreationTool(tool);
-                    setShapeMenuOpen(false);
-                  }}
+                  variant="ghost"
+                  onClick={() => toggleCreationTool(lastShapeTool)}
+                  onMouseEnter={openShapeMenu}
+                  onMouseLeave={scheduleShapeMenuClose}
                 >
-                  <Icon
+                  <SelectedShapeIcon aria-hidden="true" className="size-4" strokeWidth={1.75} />
+                  <ChevronDown
                     aria-hidden="true"
-                    className={cn(
-                      "size-3.5 shrink-0 text-muted-foreground",
-                      selected && "text-primary",
-                    )}
+                    className="size-3 text-muted-foreground"
                     strokeWidth={1.75}
                   />
-                  <span className="truncate">{label}</span>
-                  {selected ? (
-                    <Check
-                      aria-hidden="true"
-                      className="absolute right-1.5 size-3 text-primary"
-                      strokeWidth={2}
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="center"
+                className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
+                side="top"
+                sideOffset={8}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+                onMouseEnter={cancelShapeMenuClose}
+                onMouseLeave={scheduleShapeMenuClose}
+                onOpenAutoFocus={(event) => event.preventDefault()}
+              >
+                {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
+                  const selected = activeTool === tool;
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={cn(
+                        "relative flex h-7 w-full items-center gap-1.5 rounded-sm px-1.5 pr-7 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
+                        selected && "bg-accent/70 text-foreground",
+                      )}
+                      key={tool}
+                      type="button"
+                      onClick={() => {
+                        setLastShapeTool(tool);
+                        toggleCreationTool(tool);
+                        setShapeMenuOpen(false);
+                      }}
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className={cn(
+                          "size-3.5 shrink-0 text-muted-foreground",
+                          selected && "text-primary",
+                        )}
+                        strokeWidth={1.75}
+                      />
+                      <span className="truncate">{label}</span>
+                      {selected ? (
+                        <Check
+                          aria-hidden="true"
+                          className="absolute right-1.5 size-3 text-primary"
+                          strokeWidth={2}
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
 
-        <EditorIconButton
-          label="文本"
-          pressed={activeTool === "text"}
-          onPress={() => toggleCreationTool("text")}
-        >
-          <Type aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton
+              label="文本"
+              pressed={activeTool === "text"}
+              onPress={() => toggleCreationTool("text")}
+            >
+              <Type aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
-          <ImagePlus aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
+              <ImagePlus aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <EditorIconButton label="图表" onPress={insertChartElement}>
-          <BarChart3 aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton label="图表" onPress={insertChartElement}>
+              <BarChart3 aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <EditorIconButton label="表格" onPress={insertTableElement}>
-          <Table aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton label="表格" onPress={insertTableElement}>
+              <Table aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+            <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+          </>
+        )}
 
         <EditorIconButton
           label="缩小"

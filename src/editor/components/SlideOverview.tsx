@@ -30,7 +30,9 @@ const THUMBNAIL_HEIGHT = 162;
 interface SlideOverviewProps {
   document: CanvasDocument;
   activePageId: string;
+  readOnly?: boolean;
   onClose: () => void;
+  onExport?: (document: CanvasDocument) => void | Promise<void>;
   onReorderPages: (pageIds: string[]) => void;
   onSelectPage: (pageId: string) => void;
 }
@@ -40,12 +42,14 @@ function SortableSlideCard({
   document,
   index,
   page,
+  readOnly,
   onSelect,
 }: {
   active: boolean;
   document: CanvasDocument;
   index: number;
   page: CanvasPage;
+  readOnly: boolean;
   onSelect: () => void;
 }) {
   const {
@@ -56,7 +60,7 @@ function SortableSlideCard({
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: page.id });
+  } = useSortable({ disabled: readOnly, id: page.id });
   const pageDocument = createPageDocument(document, page.id);
   const thumbnailZoom = Math.min(THUMBNAIL_WIDTH / page.width, THUMBNAIL_HEIGHT / page.height);
   const thumbnailPosition = {
@@ -115,7 +119,8 @@ function SortableSlideCard({
         </span>
         <button
           aria-label={`移动幻灯片 ${page.name}`}
-          className="grid size-7 flex-none cursor-grab touch-none place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+          className="grid size-7 flex-none cursor-grab touch-none place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing disabled:cursor-default disabled:opacity-35"
+          disabled={readOnly}
           ref={setActivatorNodeRef}
           type="button"
           {...attributes}
@@ -131,7 +136,9 @@ function SortableSlideCard({
 export function SlideOverview({
   activePageId,
   document,
+  readOnly = false,
   onClose,
+  onExport,
   onReorderPages,
   onSelectPage,
 }: SlideOverviewProps) {
@@ -144,6 +151,7 @@ export function SlideOverview({
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (readOnly) return;
     if (!event.over || event.active.id === event.over.id) return;
 
     const pageIds = pages.map((page) => page.id);
@@ -159,8 +167,12 @@ export function SlideOverview({
     setExporting(true);
     setExportError(null);
     try {
-      const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
-      await exportCanvasDocumentToPptx(document);
+      if (onExport) {
+        await onExport(document);
+      } else {
+        const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
+        await exportCanvasDocumentToPptx(document);
+      }
     } catch {
       setExportError("PPT 导出失败，请重试");
     } finally {
@@ -230,6 +242,7 @@ export function SlideOverview({
                     index={index}
                     key={page.id}
                     page={page}
+                    readOnly={readOnly}
                     onSelect={() => onSelectPage(page.id)}
                   />
                 ))}

@@ -1,6 +1,6 @@
 import {
-  createInitialEditorHistoryState,
-  createInitialEditorState,
+  createInitialEditorHistoryState as createHistoryState,
+  createInitialEditorState as createState,
   editorHistoryReducer,
   editorReducer,
   findElement,
@@ -9,7 +9,13 @@ import {
   getActivePageDocument,
   getActivePageId,
 } from "@/editor/editor-state";
+import { EDITOR_TEMPLATES } from "@/editor/templates";
 import { isGroupElement, type CanvasElement, type ChartElement } from "@/editor/types";
+
+const createInitialEditorState = (initialDocumentId?: string) =>
+  createState(EDITOR_TEMPLATES, initialDocumentId);
+const createInitialEditorHistoryState = (initialDocumentId?: string) =>
+  createHistoryState(EDITOR_TEMPLATES, initialDocumentId);
 
 describe("editorReducer", () => {
   it("initializes the imported Symbicort document and PPT template 2", () => {
