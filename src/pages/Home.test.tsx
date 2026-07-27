@@ -112,13 +112,13 @@ function renderApp(initialEntry = "/symbicort-longform-medical-comic") {
 }
 
 describe("Home", () => {
-  it("opens the JSON structure detail page from the home page in a new tab", () => {
+  it("opens the JSON structure detail page from the home page in the current tab", () => {
     renderApp("/");
 
-    const structureLink = screen.getByRole("link", { name: "结构详情，新开标签页" });
+    const structureLink = screen.getByRole("link", { name: "结构详情" });
     expect(structureLink).toHaveAttribute("href", "/json-structure");
-    expect(structureLink).toHaveAttribute("target", "_blank");
-    expect(structureLink).toHaveAttribute("rel", "noreferrer");
+    expect(structureLink).not.toHaveAttribute("target");
+    expect(structureLink).not.toHaveAttribute("rel");
   });
 
   it("renders the JSON structure detail route", () => {
