@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -421,122 +422,126 @@ function ChartDataEditorContent({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto bg-muted/25 p-4">
-        <div
-          className="grid min-w-max overflow-hidden rounded-sm border border-r-0 border-b-0 bg-background"
-          style={{ gridTemplateColumns }}
-        >
-          <div className="flex h-10 items-center border-r border-b bg-muted px-2 text-xs text-muted-foreground">
-            类目
-          </div>
-          {visibleSeries.map((series, seriesIndex) => (
-            <div
-              className="flex h-10 min-w-0 items-center gap-1.5 border-r border-b bg-muted px-1.5"
-              key={`series-${seriesIndex}`}
-            >
-              {chartType !== "pie" ? (
-                <ColorSwatch
-                  disabled={false}
-                  label={`系列 ${seriesIndex + 1}`}
-                  value={draft.colors[seriesIndex]}
-                  onChange={(color) =>
-                    setDraft((current) => ({
-                      ...current,
-                      colors: setChartColor(current.colors, seriesIndex, color),
-                    }))
-                  }
-                />
-              ) : null}
-              <Input
-                aria-label={`系列 ${seriesIndex + 1} 名称`}
-                className="h-7 min-w-20 rounded-sm border-transparent bg-background px-2 text-xs shadow-none"
-                value={series.name}
-                onChange={(event) => updateSeries(seriesIndex, { name: event.currentTarget.value })}
-              />
-              {chartType !== "pie" ? (
-                <Button
-                  aria-label={`删除系列 ${seriesIndex + 1}`}
-                  disabled={visibleSeries.length <= 1}
-                  size="icon-xs"
-                  type="button"
-                  variant="ghost"
-                  onClick={() => removeSeries(seriesIndex)}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              ) : null}
+      <ScrollArea className="min-h-0 flex-1 bg-muted/25" scrollbars="both">
+        <div className="p-4">
+          <div
+            className="grid min-w-max overflow-hidden rounded-sm border border-r-0 border-b-0 bg-background"
+            style={{ gridTemplateColumns }}
+          >
+            <div className="flex h-10 items-center border-r border-b bg-muted px-2 text-xs text-muted-foreground">
+              类目
             </div>
-          ))}
-          <div className="border-r border-b bg-muted" />
-
-          {draft.labels.map((label, labelIndex) => [
-            chartType === "pie" ? (
+            {visibleSeries.map((series, seriesIndex) => (
               <div
-                className="flex h-8 items-center gap-1.5 border-r border-b bg-background px-1.5"
-                key={`label-${labelIndex}`}
+                className="flex h-10 min-w-0 items-center gap-1.5 border-r border-b bg-muted px-1.5"
+                key={`series-${seriesIndex}`}
               >
-                <ColorSwatch
-                  disabled={false}
-                  label={`类目 ${labelIndex + 1}`}
-                  value={draft.colors[labelIndex]}
-                  onChange={(color) =>
-                    setDraft((current) => ({
-                      ...current,
-                      colors: setChartColor(current.colors, labelIndex, color),
-                    }))
+                {chartType !== "pie" ? (
+                  <ColorSwatch
+                    disabled={false}
+                    label={`系列 ${seriesIndex + 1}`}
+                    value={draft.colors[seriesIndex]}
+                    onChange={(color) =>
+                      setDraft((current) => ({
+                        ...current,
+                        colors: setChartColor(current.colors, seriesIndex, color),
+                      }))
+                    }
+                  />
+                ) : null}
+                <Input
+                  aria-label={`系列 ${seriesIndex + 1} 名称`}
+                  className="h-7 min-w-20 rounded-sm border-transparent bg-background px-2 text-xs shadow-none"
+                  value={series.name}
+                  onChange={(event) =>
+                    updateSeries(seriesIndex, { name: event.currentTarget.value })
                   }
                 />
+                {chartType !== "pie" ? (
+                  <Button
+                    aria-label={`删除系列 ${seriesIndex + 1}`}
+                    disabled={visibleSeries.length <= 1}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => removeSeries(seriesIndex)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            <div className="border-r border-b bg-muted" />
+
+            {draft.labels.map((label, labelIndex) => [
+              chartType === "pie" ? (
+                <div
+                  className="flex h-8 items-center gap-1.5 border-r border-b bg-background px-1.5"
+                  key={`label-${labelIndex}`}
+                >
+                  <ColorSwatch
+                    disabled={false}
+                    label={`类目 ${labelIndex + 1}`}
+                    value={draft.colors[labelIndex]}
+                    onChange={(color) =>
+                      setDraft((current) => ({
+                        ...current,
+                        colors: setChartColor(current.colors, labelIndex, color),
+                      }))
+                    }
+                  />
+                  <Input
+                    aria-label={`类目 ${labelIndex + 1}`}
+                    className="h-7 rounded-none border-0 px-1.5 text-xs shadow-none focus-visible:ring-2"
+                    value={label}
+                    onChange={(event) => updateLabel(labelIndex, event.currentTarget.value)}
+                  />
+                </div>
+              ) : (
                 <Input
                   aria-label={`类目 ${labelIndex + 1}`}
-                  className="h-7 rounded-none border-0 px-1.5 text-xs shadow-none focus-visible:ring-2"
+                  className={GRID_INPUT_CLASS_NAME}
+                  key={`label-${labelIndex}`}
                   value={label}
                   onChange={(event) => updateLabel(labelIndex, event.currentTarget.value)}
                 />
-              </div>
-            ) : (
-              <Input
-                aria-label={`类目 ${labelIndex + 1}`}
-                className={GRID_INPUT_CLASS_NAME}
-                key={`label-${labelIndex}`}
-                value={label}
-                onChange={(event) => updateLabel(labelIndex, event.currentTarget.value)}
-              />
-            ),
-            ...visibleSeries.map((series, seriesIndex) => {
-              const value = series.values[labelIndex] ?? "";
-              const invalid = value.trim() === "" || !Number.isFinite(Number(value));
-              return (
-                <Input
-                  aria-invalid={invalid}
-                  aria-label={`类目 ${labelIndex + 1} 系列 ${seriesIndex + 1} 数值`}
-                  className={cn(GRID_INPUT_CLASS_NAME, "font-mono")}
-                  key={`value-${labelIndex}-${seriesIndex}`}
-                  inputMode="decimal"
-                  value={value}
-                  onChange={(event) =>
-                    updateValue(seriesIndex, labelIndex, event.currentTarget.value)
-                  }
-                />
-              );
-            }),
-            <div
-              className="flex h-8 items-center justify-center border-r border-b bg-background"
-              key={`actions-${labelIndex}`}
-            >
-              <Button
-                aria-label={`删除类目 ${labelIndex + 1}`}
-                disabled={draft.labels.length <= 1}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-                onClick={() => removeCategory(labelIndex)}
+              ),
+              ...visibleSeries.map((series, seriesIndex) => {
+                const value = series.values[labelIndex] ?? "";
+                const invalid = value.trim() === "" || !Number.isFinite(Number(value));
+                return (
+                  <Input
+                    aria-invalid={invalid}
+                    aria-label={`类目 ${labelIndex + 1} 系列 ${seriesIndex + 1} 数值`}
+                    className={cn(GRID_INPUT_CLASS_NAME, "font-mono")}
+                    key={`value-${labelIndex}-${seriesIndex}`}
+                    inputMode="decimal"
+                    value={value}
+                    onChange={(event) =>
+                      updateValue(seriesIndex, labelIndex, event.currentTarget.value)
+                    }
+                  />
+                );
+              }),
+              <div
+                className="flex h-8 items-center justify-center border-r border-b bg-background"
+                key={`actions-${labelIndex}`}
               >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </div>,
-          ])}
+                <Button
+                  aria-label={`删除类目 ${labelIndex + 1}`}
+                  disabled={draft.labels.length <= 1}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeCategory(labelIndex)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>,
+            ])}
+          </div>
         </div>
-      </div>
+      </ScrollArea>
 
       <div className="flex justify-end gap-2 border-t px-5 py-3.5">
         <Button type="button" variant="outline" onClick={onCancel}>
@@ -879,89 +884,93 @@ function TableDataEditorContent({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto bg-muted/25 p-4">
-        <div
-          className="grid min-w-max overflow-hidden rounded-sm border border-r-0 border-b-0 bg-background"
-          style={{ gridTemplateColumns }}
-        >
-          <div className="flex min-h-16 items-center justify-center border-r border-b bg-muted text-xs text-muted-foreground">
-            行
-          </div>
-          {draft.columns.map((column, columnIndex) => (
-            <div
-              className="flex min-h-16 min-w-0 items-center gap-1.5 border-r border-b bg-muted p-1.5"
-              key={column.id}
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <Input
-                  aria-label={`第 ${columnIndex + 1} 列名称`}
-                  className="h-7 rounded-sm border-transparent bg-background px-2 text-xs shadow-none"
-                  value={column.name}
-                  onChange={(event) => updateColumn(column.id, { name: event.currentTarget.value })}
-                />
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  宽
-                  <TableDimensionInput
-                    aria-label={`第 ${columnIndex + 1} 列宽`}
-                    className="h-6 rounded-sm border-transparent bg-background px-1.5 font-mono text-[11px] shadow-none"
-                    minValue={24}
-                    value={column.width}
-                    onChange={(width) => updateColumn(column.id, { width })}
-                  />
-                </div>
-              </div>
-              <Button
-                aria-label={`删除第 ${columnIndex + 1} 列`}
-                disabled={draft.columns.length <= 1}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-                onClick={() => removeColumn(column.id)}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
+      <ScrollArea className="min-h-0 flex-1 bg-muted/25" scrollbars="both">
+        <div className="p-4">
+          <div
+            className="grid min-w-max overflow-hidden rounded-sm border border-r-0 border-b-0 bg-background"
+            style={{ gridTemplateColumns }}
+          >
+            <div className="flex min-h-16 items-center justify-center border-r border-b bg-muted text-xs text-muted-foreground">
+              行
             </div>
-          ))}
-
-          {draft.rows.map((row, rowIndex) => [
-            <div
-              className="flex h-10 items-center gap-1 border-r border-b bg-muted px-1"
-              key={`row-control-${row.id}`}
-            >
-              <span className="w-4 text-center font-mono text-[11px] text-muted-foreground">
-                {rowIndex + 1}
-              </span>
-              <span className="text-[11px] text-muted-foreground">高</span>
-              <TableDimensionInput
-                aria-label={`第 ${rowIndex + 1} 行高`}
-                className="h-7 w-11 flex-none rounded-sm border-transparent bg-background px-1 font-mono text-[11px] shadow-none"
-                minValue={20}
-                value={row.height}
-                onChange={(height) => updateRow(row.id, { height })}
-              />
-              <Button
-                aria-label={`删除第 ${rowIndex + 1} 行`}
-                disabled={draft.rows.length <= 1}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-                onClick={() => removeRow(row.id)}
+            {draft.columns.map((column, columnIndex) => (
+              <div
+                className="flex min-h-16 min-w-0 items-center gap-1.5 border-r border-b bg-muted p-1.5"
+                key={column.id}
               >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </div>,
-            ...draft.columns.map((column, columnIndex) => (
-              <Input
-                aria-label={`第 ${rowIndex + 1} 行第 ${columnIndex + 1} 列`}
-                className={cn(GRID_INPUT_CLASS_NAME, "h-10")}
-                key={`${row.id}-${column.id}`}
-                value={row.cells[column.id] ?? ""}
-                onChange={(event) => updateCell(row.id, column.id, event.currentTarget.value)}
-              />
-            )),
-          ])}
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <Input
+                    aria-label={`第 ${columnIndex + 1} 列名称`}
+                    className="h-7 rounded-sm border-transparent bg-background px-2 text-xs shadow-none"
+                    value={column.name}
+                    onChange={(event) =>
+                      updateColumn(column.id, { name: event.currentTarget.value })
+                    }
+                  />
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    宽
+                    <TableDimensionInput
+                      aria-label={`第 ${columnIndex + 1} 列宽`}
+                      className="h-6 rounded-sm border-transparent bg-background px-1.5 font-mono text-[11px] shadow-none"
+                      minValue={24}
+                      value={column.width}
+                      onChange={(width) => updateColumn(column.id, { width })}
+                    />
+                  </div>
+                </div>
+                <Button
+                  aria-label={`删除第 ${columnIndex + 1} 列`}
+                  disabled={draft.columns.length <= 1}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeColumn(column.id)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>
+            ))}
+
+            {draft.rows.map((row, rowIndex) => [
+              <div
+                className="flex h-10 items-center gap-1 border-r border-b bg-muted px-1"
+                key={`row-control-${row.id}`}
+              >
+                <span className="w-4 text-center font-mono text-[11px] text-muted-foreground">
+                  {rowIndex + 1}
+                </span>
+                <span className="text-[11px] text-muted-foreground">高</span>
+                <TableDimensionInput
+                  aria-label={`第 ${rowIndex + 1} 行高`}
+                  className="h-7 w-11 flex-none rounded-sm border-transparent bg-background px-1 font-mono text-[11px] shadow-none"
+                  minValue={20}
+                  value={row.height}
+                  onChange={(height) => updateRow(row.id, { height })}
+                />
+                <Button
+                  aria-label={`删除第 ${rowIndex + 1} 行`}
+                  disabled={draft.rows.length <= 1}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeRow(row.id)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>,
+              ...draft.columns.map((column, columnIndex) => (
+                <Input
+                  aria-label={`第 ${rowIndex + 1} 行第 ${columnIndex + 1} 列`}
+                  className={cn(GRID_INPUT_CLASS_NAME, "h-10")}
+                  key={`${row.id}-${column.id}`}
+                  value={row.cells[column.id] ?? ""}
+                  onChange={(event) => updateCell(row.id, column.id, event.currentTarget.value)}
+                />
+              )),
+            ])}
+          </div>
         </div>
-      </div>
+      </ScrollArea>
 
       <div className="flex justify-end gap-2 border-t px-5 py-3.5">
         <Button type="button" variant="outline" onClick={onCancel}>

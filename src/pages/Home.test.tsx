@@ -103,15 +103,37 @@ vi.mock("@/editor/components/RichTextEditorOverlay", () => {
   return { default: MockRichTextEditorOverlay };
 });
 
-function renderApp() {
+function renderApp(initialEntry = "/symbicort-longform-medical-comic") {
   return render(
-    <MemoryRouter initialEntries={["/symbicort-longform-medical-comic"]}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <App />
     </MemoryRouter>,
   );
 }
 
 describe("Home", () => {
+  it("opens the JSON structure detail page from the home page in a new tab", () => {
+    renderApp("/");
+
+    const structureLink = screen.getByRole("link", { name: "结构详情，新开标签页" });
+    expect(structureLink).toHaveAttribute("href", "/json-structure");
+    expect(structureLink).toHaveAttribute("target", "_blank");
+    expect(structureLink).toHaveAttribute("rel", "noreferrer");
+  });
+
+  it("renders the JSON structure detail route", () => {
+    renderApp("/json-structure");
+
+    expect(screen.getByRole("heading", { name: "JSON 结构详情" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "CanvasDocument" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "chart" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "table" })).toBeInTheDocument();
+    expect(screen.getByText("documentType")).toBeInTheDocument();
+    expect(screen.getByText("chartType")).toBeInTheDocument();
+    expect(screen.getByText("headerStyle")).toBeInTheDocument();
+    expect(screen.getByText("pointerLength")).toBeInTheDocument();
+  });
+
   it("previews the current page definition as read-only JSON", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -143,8 +165,7 @@ describe("Home", () => {
     expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
   });
 
-  it("renders the imported Symbicort template and PPT template 2", async () => {
-    const user = userEvent.setup();
+  it("renders only the current Symbicort detail page in the page list", async () => {
     renderApp();
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
@@ -162,13 +183,13 @@ describe("Home", () => {
     );
     expect(currentPageInfo).toHaveTextContent(/信必可：从 GINA 原则看懂哮喘长期管理1080 × 5993/);
     expect(screen.getByRole("button", { name: "导出图片" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(1);
     expect(
       screen.getByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
 
@@ -181,15 +202,25 @@ describe("Home", () => {
 
     expect(layerScrollArea).toHaveAttribute("data-scrollbars", "both");
     expect(titleActions).toHaveClass("sticky", "right-0");
+  });
 
-    await user.click(
-      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
-    );
+  it("renders only the current PPT detail page and its slides in the page list", async () => {
+    const user = userEvent.setup();
+    renderApp("/ppt-template-2-medical-brief");
+
+    const currentPageInfo = screen.getByRole("group", { name: "当前页面信息" });
 
     expect(screen.getByTestId("canvas-stage")).toHaveTextContent("PPT模板2：哮喘长期管理沟通简报");
     expect(currentPageInfo).toHaveTextContent(
       /PPT模板2：哮喘长期管理沟通简报 \/ 01 欢迎页1600 × 900/,
     );
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.queryByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "打开幻灯片 01 欢迎页" })).toHaveAttribute(
       "aria-current",
       "page",

@@ -56,14 +56,16 @@ function cloneDocument(document: CanvasDocument): CanvasDocument {
   return structuredClone(document);
 }
 
-export function createInitialEditorState(): EditorState {
+export function createInitialEditorState(initialTemplateId?: string): EditorState {
   const documents = Object.fromEntries(
     EDITOR_TEMPLATES.map((template) => [template.id, cloneDocument(template)]),
   );
+  const activeTemplateId =
+    initialTemplateId && documents[initialTemplateId] ? initialTemplateId : EDITOR_TEMPLATES[0].id;
 
   return {
     documents,
-    activeTemplateId: EDITOR_TEMPLATES[0].id,
+    activeTemplateId,
     activePageIdByTemplate: Object.fromEntries(
       EDITOR_TEMPLATES.map((template) => [template.id, getFirstPageId(template)]),
     ),
@@ -75,10 +77,10 @@ export function createInitialEditorState(): EditorState {
   };
 }
 
-export function createInitialEditorHistoryState(): EditorHistoryState {
+export function createInitialEditorHistoryState(initialTemplateId?: string): EditorHistoryState {
   return {
     past: [],
-    present: createInitialEditorState(),
+    present: createInitialEditorState(initialTemplateId),
     future: [],
   };
 }

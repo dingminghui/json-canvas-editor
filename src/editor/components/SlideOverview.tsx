@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CanvasStage } from "@/editor/components/CanvasStage";
 import { createPageDocument, getDocumentPages, type CanvasPage } from "@/editor/document-pages";
 import type { CanvasDocument } from "@/editor/types";
@@ -205,32 +206,38 @@ export function SlideOverview({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto p-6">
-        {exportError ? (
-          <div
-            className="mx-auto mb-4 max-w-5xl rounded-sm border border-destructive/25 bg-popover px-3 py-2 text-xs text-destructive"
-            role="alert"
-          >
-            {exportError}
-          </div>
-        ) : null}
-        <DndContext collisionDetection={closestCenter} sensors={sensors} onDragEnd={handleDragEnd}>
-          <SortableContext items={pages.map((page) => page.id)} strategy={rectSortingStrategy}>
-            <div className="mx-auto grid max-w-5xl grid-cols-[repeat(auto-fill,304px)] justify-center gap-5">
-              {pages.map((page, index) => (
-                <SortableSlideCard
-                  active={page.id === activePageId}
-                  document={document}
-                  index={index}
-                  key={page.id}
-                  page={page}
-                  onSelect={() => onSelectPage(page.id)}
-                />
-              ))}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-6">
+          {exportError ? (
+            <div
+              className="mx-auto mb-4 max-w-5xl rounded-sm border border-destructive/25 bg-popover px-3 py-2 text-xs text-destructive"
+              role="alert"
+            >
+              {exportError}
             </div>
-          </SortableContext>
-        </DndContext>
-      </div>
+          ) : null}
+          <DndContext
+            collisionDetection={closestCenter}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={pages.map((page) => page.id)} strategy={rectSortingStrategy}>
+              <div className="mx-auto grid max-w-5xl grid-cols-[repeat(auto-fill,304px)] justify-center gap-5">
+                {pages.map((page, index) => (
+                  <SortableSlideCard
+                    active={page.id === activePageId}
+                    document={document}
+                    index={index}
+                    key={page.id}
+                    page={page}
+                    onSelect={() => onSelectPage(page.id)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      </ScrollArea>
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { type TemplateMeta, TEMPLATE_META } from "@/editor/template-meta";
+import { ExternalLink, FileJson2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const DOCUMENT_TYPE_LABEL: Record<TemplateMeta["documentType"], string> = {
@@ -31,6 +32,17 @@ export function Home() {
           <TemplateCard key={template.id} template={template} />
         ))}
       </div>
+      <Link
+        aria-label="结构详情，新开标签页"
+        className="fixed right-6 bottom-6 flex h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        rel="noreferrer"
+        target="_blank"
+        to="/json-structure"
+      >
+        <FileJson2 aria-hidden="true" size={16} strokeWidth={1.75} />
+        结构详情
+        <ExternalLink aria-hidden="true" size={14} strokeWidth={1.75} />
+      </Link>
     </div>
   );
 }
