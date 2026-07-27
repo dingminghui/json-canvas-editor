@@ -87,6 +87,59 @@ export interface ImageElement extends TransformableElement {
   cornerRadius: number;
 }
 
+export type ChartType = "bar" | "line" | "pie";
+
+export interface ChartSeries {
+  name: string;
+  labels: string[];
+  values: number[];
+}
+
+export interface ChartElement extends TransformableElement {
+  type: "chart";
+  chartType: ChartType;
+  title: string;
+  showLegend: boolean;
+  showValue: boolean;
+  colors: string[];
+  series: ChartSeries[];
+}
+
+export type TableTextAlign = "left" | "center" | "right";
+export type TableVerticalAlign = "top" | "middle" | "bottom";
+
+export interface TableColumn {
+  id: string;
+  name: string;
+  width: number;
+}
+
+export interface TableRow {
+  id: string;
+  height: number;
+  cells: Record<string, string>;
+}
+
+export interface TableCellStyle {
+  fill: string;
+  color: string;
+  fontFamily: CanvasFontFamily;
+  fontSize: number;
+  fontWeight: "400" | "500" | "600" | "700" | "800";
+  align: TableTextAlign;
+  valign: TableVerticalAlign;
+  borderColor: string;
+  borderWidth: number;
+}
+
+export interface TableElement extends TransformableElement {
+  type: "table";
+  columns: TableColumn[];
+  rows: TableRow[];
+  headerStyle: TableCellStyle;
+  cellStyle: TableCellStyle;
+}
+
 export interface GroupElement extends ElementMeta {
   type: "group";
   children: CanvasElement[];
@@ -101,7 +154,9 @@ export type CanvasLeafElement =
   | ArrowElement
   | PolygonElement
   | StarElement
-  | ImageElement;
+  | ImageElement
+  | ChartElement
+  | TableElement;
 export type CanvasElement = CanvasLeafElement | GroupElement;
 export type CanvasTransformPatch = Pick<
   CanvasLeafElement,

@@ -201,12 +201,16 @@ function updateLeafElement(
   return mapElements(elements, elementId, (element) => {
     if (isGroupElement(element)) return element;
 
+    const elementPatch =
+      (element.type === "chart" || element.type === "table") && "rotation" in normalizedPatch
+        ? ({ ...normalizedPatch, rotation: 0 } as CanvasElementPatch)
+        : normalizedPatch;
     const currentValues = element as unknown as Record<string, unknown>;
-    const hasChanges = Object.entries(normalizedPatch).some(
+    const hasChanges = Object.entries(elementPatch).some(
       ([key, value]) => !Object.is(currentValues[key], value),
     );
 
-    return hasChanges ? ({ ...element, ...normalizedPatch } as CanvasLeafElement) : element;
+    return hasChanges ? ({ ...element, ...elementPatch } as CanvasLeafElement) : element;
   });
 }
 

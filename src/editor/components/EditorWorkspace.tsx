@@ -9,8 +9,10 @@ import { EditorIconButton } from "@/editor/components/EditorIconButton";
 import { findElement } from "@/editor/editor-state";
 import {
   ACCEPTED_IMAGE_TYPES,
+  createChartElement,
   createElementFromDrag,
   createImageElement,
+  createTableElement,
   isPointInsideDocument,
   MAX_IMAGE_BYTES,
   type CreationTool,
@@ -29,6 +31,7 @@ import type {
 import { cn } from "@/lib/utils";
 import {
   ArrowUpRight,
+  BarChart3,
   Check,
   ChevronDown,
   Circle,
@@ -42,6 +45,7 @@ import {
   Scan,
   Square,
   Star,
+  Table,
   Triangle,
   Type,
   Undo2,
@@ -125,7 +129,7 @@ const SHAPE_TOOLS: Array<{
   { icon: Star, label: "星形", tool: "star" },
 ];
 
-function createElementId(tool: CreationTool | "image") {
+function createElementId(tool: CreationTool | "image" | "chart" | "table") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   return `${tool}-${suffix}`;
 }
@@ -613,6 +617,25 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     }
   }
 
+  function getVisibleDocumentArea() {
+    return {
+      bottom: (size.height - viewportPosition.y) / zoom,
+      left: -viewportPosition.x / zoom,
+      right: (size.width - viewportPosition.x) / zoom,
+      top: -viewportPosition.y / zoom,
+    };
+  }
+
+  function insertChartElement() {
+    cancelCreation();
+    onAddElement(createChartElement(createElementId("chart"), document, getVisibleDocumentArea()));
+  }
+
+  function insertTableElement() {
+    cancelCreation();
+    onAddElement(createTableElement(createElementId("table"), document, getVisibleDocumentArea()));
+  }
+
   async function handleExport() {
     if (exporting) return;
 
@@ -868,6 +891,14 @@ export const EditorWorkspace = memo(function EditorWorkspace({
 
         <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
           <ImagePlus aria-hidden="true" strokeWidth={1.75} />
+        </EditorIconButton>
+
+        <EditorIconButton label="图表" onPress={insertChartElement}>
+          <BarChart3 aria-hidden="true" strokeWidth={1.75} />
+        </EditorIconButton>
+
+        <EditorIconButton label="表格" onPress={insertTableElement}>
+          <Table aria-hidden="true" strokeWidth={1.75} />
         </EditorIconButton>
 
         <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />

@@ -1,16 +1,26 @@
 import { getCanvasElementBounds, type CanvasBounds } from "@/editor/canvas-viewport";
+import {
+  getNativeChartSeries,
+  isChartDataValid,
+  renderChartToDataUrl,
+} from "@/editor/chart-renderer";
 import { getExportFileName } from "@/editor/export-file";
 import { markdownToDisplayText } from "@/editor/markdown";
+import { isTableDataValid } from "@/editor/table-layout";
+import { renderTableToDataUrl } from "@/editor/table-renderer";
 import {
   isGroupElement,
   type ArrowElement,
   type CanvasDocument,
   type CanvasElement,
   type CanvasLeafElement,
+  type ChartElement,
   type GroupElement,
   type ImageElement,
   type LineElement,
   type RectElement,
+  type TableCellStyle,
+  type TableElement,
 } from "@/editor/types";
 import pptxgen from "pptxgenjs";
 
@@ -302,10 +312,142 @@ async function addImageElement(
   });
 }
 
+function addFallbackImage(
+  slide: pptxgen.Slide,
+  data: string | null,
+  element: CanvasLeafElement,
+  coordinates: SlideCoordinateSystem,
+) {
+  if (!data) return;
+  slide.addImage({
+    data,
+    ...toSlideRect(element, coordinates),
+    altText: element.name,
+    objectName: element.name,
+    transparency: getTransparency(element.opacity),
+  });
+}
+
+function getChartType(pptx: pptxgen, element: ChartElement) {
+  switch (element.chartType) {
+    case "bar":
+      return pptx.ChartType.bar;
+    case "line":
+      return pptx.ChartType.line;
+    case "pie":
+      return pptx.ChartType.pie;
+    default: {
+      const exhaustiveType: never = element.chartType;
+      return exhaustiveType;
+    }
+  }
+}
+
+async function addChartElement(
+  pptx: pptxgen,
+  slide: pptxgen.Slide,
+  element: ChartElement,
+  coordinates: SlideCoordinateSystem,
+) {
+  if (!isChartDataValid(element) || element.rotation !== 0) {
+    addFallbackImage(slide, renderChartToDataUrl(element), element, coordinates);
+    return;
+  }
+
+  const rect = toSlideRect(element, coordinates);
+  const data = getNativeChartSeries(element).map((series) => ({
+    labels: series.labels,
+    name: series.name,
+    values: series.values,
+  }));
+
+  try {
+    slide.addChart(getChartType(pptx, element), data, {
+      ...rect,
+      altText: element.name,
+      barDir: element.chartType === "bar" ? "col" : undefined,
+      chartColors: element.colors.map((color) => normalizeHexColor(color) ?? "4F46E5"),
+      showLegend: element.showLegend,
+      showTitle: element.title.trim() !== "",
+      showValue: element.showValue,
+      title: element.title,
+    });
+  } catch {
+    addFallbackImage(slide, renderChartToDataUrl(element), element, coordinates);
+  }
+}
+
+function getTableCellOptions(style: TableCellStyle, opacity: number, scale: number) {
+  return {
+    align: style.align,
+    bold: Number(style.fontWeight) >= 600,
+    border: {
+      color: normalizeHexColor(style.borderColor) ?? "CBD5E1",
+      pt: Math.max(0, style.borderWidth * scale * 72),
+      type: style.borderWidth > 0 ? ("solid" as const) : ("none" as const),
+    },
+    color: normalizeHexColor(style.color) ?? "000000",
+    fill: { color: normalizeHexColor(style.fill) ?? "FFFFFF" },
+    fontFace: PPTX_FONT_FACES[style.fontFamily],
+    fontSize: Math.max(1, round(style.fontSize * scale * 72)),
+    margin: 0.06,
+    transparency: getTransparency(opacity),
+    valign: style.valign,
+  };
+}
+
+async function addTableElement(
+  slide: pptxgen.Slide,
+  element: TableElement,
+  coordinates: SlideCoordinateSystem,
+) {
+  if (element.rotation !== 0 || !isTableDataValid(element)) {
+    addFallbackImage(slide, renderTableToDataUrl(element), element, coordinates);
+    return;
+  }
+
+  const rect = toSlideRect(element, coordinates);
+  const headerOptions = getTableCellOptions(
+    element.headerStyle,
+    element.opacity,
+    coordinates.scale,
+  );
+  const cellOptions = getTableCellOptions(element.cellStyle, element.opacity, coordinates.scale);
+  const headerRow = element.columns.map((column) => ({
+    options: headerOptions,
+    text: column.name,
+  }));
+  const rows = element.rows.map((row) =>
+    element.columns.map((column) => ({
+      options: cellOptions,
+      text: row.cells[column.id] ?? "",
+    })),
+  );
+
+  try {
+    slide.addTable([headerRow, ...rows], {
+      ...rect,
+      colW: element.columns.map((column) => round(column.width * coordinates.scale)),
+      rowH: [
+        round(
+          (element.rows[0]?.height ?? element.height / (element.rows.length + 1)) *
+            coordinates.scale,
+        ),
+        ...element.rows.map((row) => round(row.height * coordinates.scale)),
+      ],
+    });
+  } catch {
+    addFallbackImage(slide, renderTableToDataUrl(element), element, coordinates);
+  }
+}
+
 async function addShapeElement(
   pptx: pptxgen,
   slide: pptxgen.Slide,
-  element: Exclude<CanvasLeafElement, ImageElement | LineElement | ArrowElement>,
+  element: Exclude<
+    CanvasLeafElement,
+    ImageElement | LineElement | ArrowElement | ChartElement | TableElement
+  >,
   coordinates: SlideCoordinateSystem,
 ) {
   switch (element.type) {
@@ -355,6 +497,12 @@ async function addCanvasElementToSlide(
       return;
     case "image":
       await addImageElement(slide, element, coordinates, imageSourceCache);
+      return;
+    case "chart":
+      await addChartElement(pptx, slide, element, coordinates);
+      return;
+    case "table":
+      await addTableElement(slide, element, coordinates);
       return;
     default:
       await addShapeElement(pptx, slide, element, coordinates);

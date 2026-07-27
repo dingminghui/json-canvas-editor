@@ -14,6 +14,7 @@ import {
   patchCanvasDocumentElement,
 } from "@/editor/editor-state";
 import { isInteractiveTarget } from "@/editor/interaction";
+import { TEMPLATE_META } from "@/editor/template-meta";
 import { EDITOR_TEMPLATES } from "@/editor/templates";
 import {
   isLeafElement,
@@ -22,7 +23,6 @@ import {
   type CanvasLeafElement,
   type TextEditingSession,
 } from "@/editor/types";
-import { TEMPLATE_META } from "@/editor/template-meta";
 import {
   useCallback,
   useEffect,
@@ -88,8 +88,8 @@ export function EditorPage() {
       : selectedElement;
   const isSelectedLocked = selectedElementContext?.effectivelyLocked ?? false;
   const documents = useMemo(
-    () => EDITOR_TEMPLATES.filter((t) => t.id === templateId).map((template) => state.documents[template.id]),
-    [state.documents, templateId],
+    () => EDITOR_TEMPLATES.map((template) => state.documents[template.id]),
+    [state.documents],
   );
   const canMutateSelected =
     Boolean(selectedElement && isLeafElement(selectedElement)) && !isSelectedLocked;

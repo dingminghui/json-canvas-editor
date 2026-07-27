@@ -81,10 +81,12 @@ vi.mock("react-konva", async () => {
   interface MockRectProps {
     cornerRadius?: number;
     fill?: string;
+    height?: number;
     listening?: boolean;
     name?: string;
     stroke?: string;
     strokeWidth?: number;
+    width?: number;
   }
 
   const Container = React.forwardRef<HTMLDivElement, MockContainerProps>(function Container(
@@ -135,15 +137,17 @@ vi.mock("react-konva", async () => {
   });
 
   const Rect = React.forwardRef<HTMLDivElement, MockRectProps>(function Rect(
-    { cornerRadius, fill, listening = true, name, stroke, strokeWidth },
+    { cornerRadius, fill, height, listening = true, name, stroke, strokeWidth, width },
     ref,
   ) {
     return (
       <div
         data-corner-radius={cornerRadius}
+        data-height={height}
         data-listening={String(listening)}
         data-stroke={stroke}
         data-stroke-width={strokeWidth}
+        data-width={width}
         data-testid={fill === "#e5e3dd" ? "image-hit-area" : name ? `rect-${name}` : undefined}
         ref={ref}
       />
@@ -291,6 +295,88 @@ describe("CanvasStage", () => {
     fireEvent.click(hitArea);
 
     expect(onSelect).toHaveBeenCalledWith("photo");
+  });
+
+  it("selects a table through one full-size listening hit area", () => {
+    const onSelect = vi.fn();
+    const tableDocument: CanvasDocument = {
+      ...document,
+      elements: [
+        {
+          cellStyle: {
+            align: "center",
+            borderColor: "#CBD5E1",
+            borderWidth: 1,
+            color: "#334155",
+            fill: "#FFFFFF",
+            fontFamily: "noto-sans-sc",
+            fontSize: 16,
+            fontWeight: "400",
+            valign: "middle",
+          },
+          columns: [
+            { id: "col-1", name: "指标", width: 160 },
+            { id: "col-2", name: "数值", width: 160 },
+          ],
+          headerStyle: {
+            align: "center",
+            borderColor: "#CBD5E1",
+            borderWidth: 1,
+            color: "#FFFFFF",
+            fill: "#25645F",
+            fontFamily: "noto-sans-sc",
+            fontSize: 16,
+            fontWeight: "700",
+            valign: "middle",
+          },
+          height: 180,
+          id: "table",
+          locked: false,
+          name: "测试表格",
+          opacity: 1,
+          rotation: 0,
+          rows: [
+            {
+              cells: { "col-1": "转化率", "col-2": "24%" },
+              height: 56,
+              id: "row-1",
+            },
+          ],
+          type: "table",
+          visible: true,
+          width: 320,
+          x: 40,
+          y: 50,
+        },
+      ],
+    };
+
+    render(
+      <CanvasStage
+        document={tableDocument}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId={null}
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={vi.fn()}
+        onElementPreview={vi.fn()}
+        onSelect={onSelect}
+      />,
+    );
+
+    const hitArea = screen.getByTestId("rect-table-hit-area");
+    expect(hitArea).toHaveAttribute("data-height", "180");
+    expect(hitArea).toHaveAttribute("data-listening", "true");
+    expect(hitArea).toHaveAttribute("data-width", "320");
+
+    fireEvent.click(hitArea);
+
+    expect(onSelect).toHaveBeenCalledWith("table");
   });
 
   it("only allows the explicitly selected element to be dragged", () => {

@@ -15,6 +15,7 @@ import {
   type TreeItemComponentProps,
 } from "dnd-kit-sortable-tree";
 import {
+  BarChart3,
   ChevronDown,
   ChevronRight,
   Circle,
@@ -27,6 +28,7 @@ import {
   MoveUpRight,
   Square,
   Star,
+  Table,
   Triangle,
   Type,
   Unlock,
@@ -110,6 +112,10 @@ function getElementIcon(element: CanvasElement, selected: boolean): ReactNode {
       return <Star {...props} />;
     case "image":
       return <ImageIcon {...props} />;
+    case "chart":
+      return <BarChart3 {...props} />;
+    case "table":
+      return <Table {...props} />;
     default: {
       const exhaustiveElement: never = element;
       return exhaustiveElement;

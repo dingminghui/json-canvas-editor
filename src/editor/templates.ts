@@ -89,9 +89,11 @@ function resolveSourceElement(element: SourceCanvasElement): CanvasElement {
     case "line":
       return { ...element, lineCap: element.lineCap ?? "butt" };
     case "arrow":
+    case "chart":
     case "ellipse":
     case "polygon":
     case "star":
+    case "table":
       return element;
     default: {
       const exhaustiveElement: never = element;

@@ -2,6 +2,7 @@ import { App } from "@/App";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/editor/components/CanvasStage", () => ({
   CanvasStage: ({
@@ -102,10 +103,18 @@ vi.mock("@/editor/components/RichTextEditorOverlay", () => {
   return { default: MockRichTextEditorOverlay };
 });
 
+function renderApp() {
+  return render(
+    <MemoryRouter initialEntries={["/symbicort-longform-medical-comic"]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 describe("Home", () => {
   it("previews the current page definition as read-only JSON", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
 
@@ -136,7 +145,7 @@ describe("Home", () => {
 
   it("renders the imported Symbicort template and PPT template 2", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
     const pagesHeading = screen.getByRole("heading", { name: "页面" });
@@ -204,7 +213,7 @@ describe("Home", () => {
 
   it("does not scroll the layer list when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const viewport = screen
       .getByRole("heading", { name: "图层" })
@@ -228,7 +237,7 @@ describe("Home", () => {
 
   it("does not expand a collapsed group when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "收起 封面" }));
     expect(screen.queryByRole("button", { name: "封面主标题" })).not.toBeInTheDocument();
@@ -262,7 +271,7 @@ describe("Home", () => {
 
     try {
       const user = userEvent.setup();
-      render(<App />);
+      renderApp();
 
       const canvas = screen.getByTestId("canvas-stage");
       await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "800"));
@@ -306,7 +315,7 @@ describe("Home", () => {
     globalThis.ResizeObserver = WideContainerResizeObserver;
 
     try {
-      render(<App />);
+      renderApp();
 
       const canvas = screen.getByTestId("canvas-stage");
       await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "1400"));
@@ -319,7 +328,7 @@ describe("Home", () => {
 
   it("highlights the matching canvas element while hovering a layer", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const layer = screen.getByRole("button", { name: "长图背景" });
@@ -333,7 +342,7 @@ describe("Home", () => {
 
   it("collapses and expands a layer group", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const groupButton = screen.getByRole("button", { name: "封面" });
     await user.click(groupButton);
@@ -357,7 +366,7 @@ describe("Home", () => {
 
   it("selects from the whole layer row without action buttons clicking through", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const backgroundRow = screen
       .getByRole("button", { name: "长图背景" })
@@ -384,7 +393,7 @@ describe("Home", () => {
 
   it("feeds live transform dimensions back into the canvas without changing font size", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const nameInput = screen.getByLabelText("名称");
@@ -418,7 +427,7 @@ describe("Home", () => {
 
   it("formats a valid rotation with degrees and restores the previous value for invalid text", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const rotationInput = screen.getByLabelText("角度");
@@ -448,7 +457,7 @@ describe("Home", () => {
 
   it("enforces minimum values for constrained numeric properties", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const fontSizeInput = screen.getByLabelText("字号");
@@ -471,7 +480,7 @@ describe("Home", () => {
 
   it("edits shape stroke and rounded corners from the properties panel", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "栏目标签" }));
 
@@ -509,7 +518,7 @@ describe("Home", () => {
 
   it("changes the selected text box font as one undoable property update", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const fontSelect = screen.getByRole("combobox", { name: "字体" });
@@ -526,7 +535,7 @@ describe("Home", () => {
 
   it("enters text editing from Enter or double click and commits one undoable session", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("不只在“喘”的时候");
@@ -564,7 +573,7 @@ describe("Home", () => {
 
   it("does not create history for an unchanged edit and cancels on Escape", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     fireEvent.keyDown(window, { key: "Enter" });
@@ -582,7 +591,7 @@ describe("Home", () => {
 
   it("commits color changes immediately without waiting for the popover to close", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const colorButton = screen.getByRole("button", { name: "文字颜色选择器" });
@@ -608,7 +617,7 @@ describe("Home", () => {
 
   it("shows only the action name in layer tooltips", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.hover(screen.getByRole("button", { name: "长图背景" }));
     await user.hover(screen.getByRole("button", { name: "隐藏 长图背景" }));
@@ -620,7 +629,7 @@ describe("Home", () => {
 
   it("keeps only active hidden and locked layer actions visible outside hover", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const backgroundHideButton = screen.getByRole("button", { name: "隐藏 长图背景" });
     const backgroundUnlockButton = screen.getByRole("button", { name: "解锁 长图背景" });
@@ -646,7 +655,7 @@ describe("Home", () => {
   });
 
   it("pans the free canvas with the middle mouse button", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;
@@ -682,7 +691,7 @@ describe("Home", () => {
   });
 
   it("pans with a primary-button drag while Space is held", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;
@@ -715,7 +724,7 @@ describe("Home", () => {
   });
 
   it("pans the free canvas in both axes with trackpad scrolling", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const initialX = Number(canvas.getAttribute("data-viewport-x"));
@@ -731,7 +740,7 @@ describe("Home", () => {
   });
 
   it("moves instead of zooming for ctrl-modified wheel input", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const initialY = Number(canvas.getAttribute("data-viewport-y"));
@@ -745,7 +754,7 @@ describe("Home", () => {
   });
 
   it("does not pan the canvas or show a grab cursor for a primary-button drag", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;

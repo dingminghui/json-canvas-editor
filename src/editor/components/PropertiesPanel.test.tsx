@@ -1,5 +1,11 @@
 import { PropertiesPanel } from "@/editor/components/PropertiesPanel";
-import type { PolygonElement, StarElement, TextElement } from "@/editor/types";
+import type {
+  ChartElement,
+  PolygonElement,
+  StarElement,
+  TableElement,
+  TextElement,
+} from "@/editor/types";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 const polygon: PolygonElement = {
@@ -74,5 +80,109 @@ describe("PropertiesPanel shape fields", () => {
 
     fireEvent.change(screen.getByLabelText("外半径"), { target: { value: "80" } });
     expect(onUpdate).toHaveBeenCalledWith({ height: 160, outerRadius: 80, width: 160 });
+  });
+
+  it("edits chart data as a structured matrix without exposing rotation", () => {
+    const chart: ChartElement = {
+      chartType: "bar",
+      colors: ["#4F46E5"],
+      height: 320,
+      id: "chart",
+      locked: false,
+      name: "图表",
+      opacity: 1,
+      rotation: 0,
+      series: [{ labels: ["Q1", "Q2"], name: "销售额", values: [120, 180] }],
+      showLegend: true,
+      showValue: true,
+      title: "季度销售趋势",
+      type: "chart",
+      visible: true,
+      width: 520,
+      x: 40,
+      y: 50,
+    };
+    const onUpdate = vi.fn();
+    render(<PropertiesPanel isLocked={false} selectedElement={chart} onUpdate={onUpdate} />);
+
+    expect(screen.queryByLabelText("角度")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("图表类型")).toHaveClass("w-full");
+    expect(screen.getByLabelText("图例")).toHaveClass("w-full");
+    expect(screen.getByLabelText("数值")).toHaveClass("w-full");
+    expect(screen.getByLabelText("系列 1 名称")).toHaveValue("销售额");
+
+    fireEvent.click(screen.getByRole("button", { name: /编辑数据/ }));
+    fireEvent.change(screen.getByLabelText("类目 1"), { target: { value: "第一季度" } });
+    fireEvent.change(screen.getByLabelText("类目 1 系列 1 数值"), {
+      target: { value: "125" },
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "应用数据" }));
+    expect(onUpdate).toHaveBeenCalledWith({
+      colors: ["#4F46E5"],
+      series: [{ labels: ["第一季度", "Q2"], name: "销售额", values: [125, 180] }],
+    });
+  });
+
+  it("edits table headers, cells, and dimensions as a structured matrix", () => {
+    const table: TableElement = {
+      cellStyle: {
+        align: "center",
+        borderColor: "#CBD5E1",
+        borderWidth: 1,
+        color: "#334155",
+        fill: "#FFFFFF",
+        fontFamily: "noto-sans-sc",
+        fontSize: 16,
+        fontWeight: "400",
+        valign: "middle",
+      },
+      columns: [
+        { id: "col-1", name: "指标", width: 160 },
+        { id: "col-2", name: "当前值", width: 160 },
+      ],
+      headerStyle: {
+        align: "center",
+        borderColor: "#CBD5E1",
+        borderWidth: 1,
+        color: "#0F172A",
+        fill: "#E2E8F0",
+        fontFamily: "noto-sans-sc",
+        fontSize: 18,
+        fontWeight: "700",
+        valign: "middle",
+      },
+      height: 180,
+      id: "table",
+      locked: false,
+      name: "表格",
+      opacity: 1,
+      rotation: 0,
+      rows: [{ cells: { "col-1": "转化率", "col-2": "24%" }, height: 56, id: "row-1" }],
+      type: "table",
+      visible: true,
+      width: 320,
+      x: 40,
+      y: 50,
+    };
+    const onUpdate = vi.fn();
+    render(<PropertiesPanel isLocked={false} selectedElement={table} onUpdate={onUpdate} />);
+
+    expect(screen.getByRole("button", { name: /编辑表格/ })).toHaveTextContent("1 × 2");
+    fireEvent.click(screen.getByRole("button", { name: /编辑表格/ }));
+    fireEvent.change(screen.getByLabelText("第 2 列名称"), { target: { value: "目标值" } });
+    fireEvent.change(screen.getByLabelText("第 1 行第 2 列"), { target: { value: "28%" } });
+    fireEvent.change(screen.getByLabelText("第 1 行高"), { target: { value: "64" } });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "应用数据" }));
+    expect(onUpdate).toHaveBeenCalledWith({
+      columns: [
+        { id: "col-1", name: "指标", width: 160 },
+        { id: "col-2", name: "目标值", width: 160 },
+      ],
+      rows: [{ cells: { "col-1": "转化率", "col-2": "28%" }, height: 64, id: "row-1" }],
+    });
   });
 });

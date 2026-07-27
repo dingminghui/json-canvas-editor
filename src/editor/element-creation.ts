@@ -3,12 +3,15 @@ import type {
   CanvasDocument,
   CanvasLeafElement,
   CanvasPoint,
+  ChartElement,
   EllipseElement,
   ImageElement,
   LineElement,
   PolygonElement,
   RectElement,
   StarElement,
+  TableCellStyle,
+  TableElement,
   TextElement,
 } from "@/editor/types";
 
@@ -18,6 +21,7 @@ export const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as
 
 export type ShapeCreationTool = "rect" | "line" | "arrow" | "ellipse" | "polygon" | "star";
 export type CreationTool = ShapeCreationTool | "text";
+export type InsertableElementTool = "chart" | "table";
 
 const FILLED_SHAPE_STYLE = {
   fill: "#E5E7EB",
@@ -252,6 +256,30 @@ export function getImagePlacement(
   };
 }
 
+function getCenteredElementPlacement(
+  requestedSize: { height: number; width: number },
+  document: CanvasDocument,
+  visibleArea: VisibleDocumentArea,
+) {
+  const width = Math.min(requestedSize.width, document.width);
+  const height = Math.min(requestedSize.height, document.height);
+  const visibleLeft = Math.max(0, visibleArea.left);
+  const visibleRight = Math.min(document.width, visibleArea.right);
+  const visibleTop = Math.max(0, visibleArea.top);
+  const visibleBottom = Math.min(document.height, visibleArea.bottom);
+  const centerX =
+    visibleLeft <= visibleRight ? (visibleLeft + visibleRight) / 2 : document.width / 2;
+  const centerY =
+    visibleTop <= visibleBottom ? (visibleTop + visibleBottom) / 2 : document.height / 2;
+
+  return {
+    height,
+    width,
+    x: Math.min(document.width - width, Math.max(0, centerX - width / 2)),
+    y: Math.min(document.height - height, Math.max(0, centerY - height / 2)),
+  };
+}
+
 export function createImageElement(
   id: string,
   src: string,
@@ -266,5 +294,90 @@ export function createImageElement(
     fit: "contain",
     src,
     type: "image",
+  };
+}
+
+export function createChartElement(
+  id: string,
+  document: CanvasDocument,
+  visibleArea: VisibleDocumentArea,
+): ChartElement {
+  const placement = getCenteredElementPlacement({ height: 320, width: 520 }, document, visibleArea);
+  return {
+    ...baseElement(id, "图表", placement.x, placement.y, placement.width, placement.height),
+    chartType: "bar",
+    colors: ["#4F46E5", "#059669", "#F59E0B"],
+    series: [
+      {
+        labels: ["Q1", "Q2", "Q3", "Q4"],
+        name: "销售额",
+        values: [120, 180, 150, 220],
+      },
+    ],
+    showLegend: true,
+    showValue: true,
+    title: "季度销售趋势",
+    type: "chart",
+  };
+}
+
+const DEFAULT_TABLE_HEADER_STYLE: TableCellStyle = {
+  align: "center",
+  borderColor: "#CBD5E1",
+  borderWidth: 1,
+  color: "#0F172A",
+  fill: "#E2E8F0",
+  fontFamily: "noto-sans-sc",
+  fontSize: 18,
+  fontWeight: "700",
+  valign: "middle",
+};
+
+const DEFAULT_TABLE_CELL_STYLE: TableCellStyle = {
+  align: "center",
+  borderColor: "#CBD5E1",
+  borderWidth: 1,
+  color: "#334155",
+  fill: "#FFFFFF",
+  fontFamily: "noto-sans-sc",
+  fontSize: 16,
+  fontWeight: "400",
+  valign: "middle",
+};
+
+export function createTableElement(
+  id: string,
+  document: CanvasDocument,
+  visibleArea: VisibleDocumentArea,
+): TableElement {
+  const placement = getCenteredElementPlacement({ height: 260, width: 520 }, document, visibleArea);
+  const columnWidth = placement.width / 3;
+  const rowHeight = placement.height / 4;
+  const columns = [
+    { id: `${id}-col-1`, name: "指标", width: columnWidth },
+    { id: `${id}-col-2`, name: "当前值", width: columnWidth },
+    { id: `${id}-col-3`, name: "变化", width: columnWidth },
+  ];
+  const rows = [
+    { label: "转化率", value: "24%", change: "+3.2%" },
+    { label: "访问量", value: "18,420", change: "+8.7%" },
+    { label: "客单价", value: "¥326", change: "-1.4%" },
+  ].map((row, index) => ({
+    cells: {
+      [columns[0].id]: row.label,
+      [columns[1].id]: row.value,
+      [columns[2].id]: row.change,
+    },
+    height: rowHeight,
+    id: `${id}-row-${index + 1}`,
+  }));
+
+  return {
+    ...baseElement(id, "表格", placement.x, placement.y, placement.width, placement.height),
+    cellStyle: DEFAULT_TABLE_CELL_STYLE,
+    columns,
+    headerStyle: DEFAULT_TABLE_HEADER_STYLE,
+    rows,
+    type: "table",
   };
 }

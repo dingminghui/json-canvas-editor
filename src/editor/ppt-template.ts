@@ -1,17 +1,19 @@
 import type {
   CanvasDocument,
   CanvasElement,
+  ChartElement,
   CircleElement,
   GroupElement,
   ImageElement,
   LineElement,
   RectElement,
+  TableCellStyle,
+  TableElement,
   TextElement,
 } from "@/editor/types";
 import heroImageUrl from "../../mock/assets/11-symbicort-hero.webp";
 import airwayMechanismUrl from "../../mock/assets/12-airway-mechanism.webp";
 import ginaProtectionUrl from "../../mock/assets/13-gina-protection.webp";
-import treatmentImageUrl from "../../mock/assets/14-ics-laba-duo.webp";
 import inhalerStepsUrl from "../../mock/assets/15-inhaler-steps.webp";
 import followupReviewUrl from "../../mock/assets/16-followup-review.webp";
 import urgentCareUrl from "../../mock/assets/17-urgent-care.webp";
@@ -191,6 +193,87 @@ function circle(
     type: "circle",
     visible: true,
     width: diameter,
+    x,
+    y,
+  };
+}
+
+function chart(
+  id: string,
+  name: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  options: Pick<
+    ChartElement,
+    "chartType" | "colors" | "series" | "showLegend" | "showValue" | "title"
+  >,
+): ChartElement {
+  return {
+    ...options,
+    height,
+    id,
+    locked: false,
+    name,
+    opacity: 1,
+    rotation: 0,
+    type: "chart",
+    visible: true,
+    width,
+    x,
+    y,
+  };
+}
+
+const TABLE_HEADER_STYLE: TableCellStyle = {
+  align: "center",
+  borderColor: COLORS.border,
+  borderWidth: 1,
+  color: COLORS.white,
+  fill: COLORS.green,
+  fontFamily: "noto-sans-sc",
+  fontSize: 20,
+  fontWeight: "700",
+  valign: "middle",
+};
+
+const TABLE_CELL_STYLE: TableCellStyle = {
+  align: "center",
+  borderColor: COLORS.border,
+  borderWidth: 1,
+  color: COLORS.ink,
+  fill: COLORS.white,
+  fontFamily: "noto-sans-sc",
+  fontSize: 18,
+  fontWeight: "500",
+  valign: "middle",
+};
+
+function table(
+  id: string,
+  name: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  columns: TableElement["columns"],
+  rows: TableElement["rows"],
+): TableElement {
+  return {
+    cellStyle: TABLE_CELL_STYLE,
+    columns,
+    headerStyle: TABLE_HEADER_STYLE,
+    height,
+    id,
+    locked: false,
+    name,
+    opacity: 1,
+    rotation: 0,
+    rows,
+    type: "table",
+    visible: true,
+    width,
     x,
     y,
   };
@@ -779,25 +862,25 @@ function createAssessmentSlide(): GroupElement {
         lineHeight: 1.4,
       }),
     ]),
-    image("ppt2-s5-image", "治疗协同配图", treatmentImageUrl, 1030, top + 310, 466, 436),
-    rect("ppt2-s5-image-caption-bg", "评估配图说明底板", 1030, top + 662, 466, 84, COLORS.dark, {
-      opacity: 0.92,
+    rect("ppt2-s5-chart-card", "控制维度图表底板", 1016, top + 310, 480, 436, COLORS.white, {
+      cornerRadius: 18,
+      stroke: COLORS.border,
+      strokeWidth: 1,
     }),
-    text(
-      "ppt2-s5-image-caption",
-      "评估配图说明",
-      "评估的终点不是贴标签，\n而是找到下一步可以共同调整的环节。",
-      1056,
-      top + 671,
-      414,
-      66,
-      {
-        fill: COLORS.white,
-        fontSize: 22,
-        fontWeight: "600",
-        lineHeight: 1.25,
-      },
-    ),
+    chart("ppt2-s5-control-chart", "控制维度评分图表", 1040, top + 334, 432, 388, {
+      chartType: "bar",
+      colors: [COLORS.green, COLORS.amber, COLORS.blue],
+      series: [
+        {
+          labels: ["症状控制", "未来风险", "吸入技巧", "随访执行"],
+          name: "本次评估",
+          values: [78, 54, 66, 72],
+        },
+      ],
+      showLegend: false,
+      showValue: true,
+      title: "四项评估维度完成度",
+    }),
   ]);
 }
 
@@ -992,23 +1075,41 @@ function createFollowupSlide(): GroupElement {
         ),
       ];
     }),
-    rect("ppt2-s7-reminder-bg", "随访提醒底板", 96, top + 716, 1400, 70, COLORS.paleGreen, {
-      cornerRadius: 16,
-    }),
-    text(
-      "ppt2-s7-reminder",
-      "随访提醒",
-      "复诊间隔不是固定答案：控制不佳、急性加重或行动计划触发条件出现时，应提前评估。",
-      130,
-      top + 728,
-      1330,
-      46,
-      {
-        fill: COLORS.green,
-        fontSize: 27,
-        fontWeight: "600",
-        lineHeight: 1.25,
-      },
+    table(
+      "ppt2-s7-followup-table",
+      "复诊检查清单表格",
+      96,
+      top + 704,
+      1400,
+      110,
+      [
+        { id: "ppt2-s7-table-col-1", name: "复诊节点", width: 240 },
+        { id: "ppt2-s7-table-col-2", name: "必须检查", width: 420 },
+        { id: "ppt2-s7-table-col-3", name: "判断依据", width: 390 },
+        { id: "ppt2-s7-table-col-4", name: "下一步", width: 350 },
+      ],
+      [
+        {
+          cells: {
+            "ppt2-s7-table-col-1": "1–4 周",
+            "ppt2-s7-table-col-2": "耐受、依从、吸入技巧",
+            "ppt2-s7-table-col-3": "症状记录与回示动作",
+            "ppt2-s7-table-col-4": "纠错并确认计划",
+          },
+          height: 34,
+          id: "ppt2-s7-table-row-1",
+        },
+        {
+          cells: {
+            "ppt2-s7-table-col-1": "8–12 周",
+            "ppt2-s7-table-col-2": "控制水平与风险变化",
+            "ppt2-s7-table-col-3": "夜醒、活动、缓解药使用",
+            "ppt2-s7-table-col-4": "评估是否调整",
+          },
+          height: 34,
+          id: "ppt2-s7-table-row-2",
+        },
+      ],
     ),
   ]);
 }

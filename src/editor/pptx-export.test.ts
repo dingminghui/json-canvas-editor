@@ -66,6 +66,71 @@ const document: CanvasDocument = {
           x: 100,
           y: 300,
         },
+        {
+          chartType: "bar",
+          colors: ["#25645F"],
+          height: 260,
+          id: "native-chart",
+          locked: false,
+          name: "原生图表",
+          opacity: 1,
+          rotation: 0,
+          series: [{ labels: ["控制", "风险"], name: "评分", values: [78, 54] }],
+          showLegend: false,
+          showValue: true,
+          title: "评估评分",
+          type: "chart",
+          visible: true,
+          width: 460,
+          x: 100,
+          y: 360,
+        },
+        {
+          cellStyle: {
+            align: "center",
+            borderColor: "#CBD5E1",
+            borderWidth: 1,
+            color: "#334155",
+            fill: "#FFFFFF",
+            fontFamily: "noto-sans-sc",
+            fontSize: 16,
+            fontWeight: "400",
+            valign: "middle",
+          },
+          columns: [
+            { id: "table-col-1", name: "节点", width: 160 },
+            { id: "table-col-2", name: "动作", width: 260 },
+          ],
+          headerStyle: {
+            align: "center",
+            borderColor: "#CBD5E1",
+            borderWidth: 1,
+            color: "#FFFFFF",
+            fill: "#25645F",
+            fontFamily: "noto-sans-sc",
+            fontSize: 16,
+            fontWeight: "700",
+            valign: "middle",
+          },
+          height: 140,
+          id: "native-table",
+          locked: false,
+          name: "原生表格",
+          opacity: 1,
+          rotation: 0,
+          rows: [
+            {
+              cells: { "table-col-1": "1–4 周", "table-col-2": "检查技巧" },
+              height: 42,
+              id: "table-row-1",
+            },
+          ],
+          type: "table",
+          visible: true,
+          width: 420,
+          x: 620,
+          y: 360,
+        },
       ],
       id: "slide-1",
       locked: false,
@@ -107,5 +172,23 @@ describe("PPTX export", () => {
 
   it("creates filesystem-safe export names", () => {
     expect(getExportFileName(document)).toBe("PPT-导出-测试.pptx");
+  });
+
+  it("exports semantic charts and tables as native PPT objects", async () => {
+    const presentation = await createCanvasDocumentPresentation(document);
+    const output = await presentation.write({ outputType: "uint8array" });
+    const archive = await JSZip.loadAsync(output as Uint8Array);
+    const slideXml = await archive.file("ppt/slides/slide1.xml")?.async("string");
+    const chartFileName = Object.keys(archive.files).find((fileName) =>
+      /^ppt\/charts\/chart\d+\.xml$/.test(fileName),
+    );
+    const embeddingFileName = Object.keys(archive.files).find((fileName) =>
+      /^ppt\/embeddings\/Microsoft_Excel_Worksheet\d+\.xlsx$/.test(fileName),
+    );
+
+    expect(chartFileName).toBeDefined();
+    expect(embeddingFileName).toBeDefined();
+    expect(slideXml).toContain("<a:tbl>");
+    expect(slideXml).toContain("<a:t>检查技巧</a:t>");
   });
 });

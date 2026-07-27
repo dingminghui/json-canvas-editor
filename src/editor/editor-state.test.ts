@@ -9,7 +9,7 @@ import {
   getActivePageDocument,
   getActivePageId,
 } from "@/editor/editor-state";
-import { isGroupElement, type CanvasElement } from "@/editor/types";
+import { isGroupElement, type CanvasElement, type ChartElement } from "@/editor/types";
 
 describe("editorReducer", () => {
   it("initializes the imported Symbicort document and PPT template 2", () => {
@@ -160,6 +160,39 @@ describe("editorReducer", () => {
         lineHeight: 0.5,
       },
     );
+  });
+
+  it("keeps semantic charts locked to zero rotation", () => {
+    const chart: ChartElement = {
+      chartType: "bar",
+      colors: ["#4F46E5"],
+      height: 320,
+      id: "chart-test",
+      locked: false,
+      name: "图表",
+      opacity: 1,
+      rotation: 0,
+      series: [{ labels: ["A", "B"], name: "系列", values: [1, 2] }],
+      showLegend: true,
+      showValue: true,
+      title: "测试图表",
+      type: "chart",
+      visible: true,
+      width: 520,
+      x: 100,
+      y: 100,
+    };
+    let state = editorReducer(createInitialEditorState(), { type: "add-element", element: chart });
+    state = editorReducer(state, {
+      type: "update-element",
+      elementId: chart.id,
+      patch: { rotation: 45 },
+    });
+
+    expect(findElement(getActiveDocument(state).elements, chart.id)).toMatchObject({
+      rotation: 0,
+      type: "chart",
+    });
   });
 
   it("resolves the imported image assets", () => {
