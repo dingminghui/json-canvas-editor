@@ -2,6 +2,7 @@ import { App } from "@/App";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/editor/components/CanvasStage", () => ({
   CanvasStage: ({
@@ -102,16 +103,47 @@ vi.mock("@/editor/components/RichTextEditorOverlay", () => {
   return { default: MockRichTextEditorOverlay };
 });
 
+function renderApp(initialEntry = "/symbicort-longform-medical-comic") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 describe("Home", () => {
+  it("opens the JSON structure detail page from the home page in the current tab", () => {
+    renderApp("/");
+
+    const structureLink = screen.getByRole("link", { name: "结构详情" });
+    expect(structureLink).toHaveAttribute("href", "/json-structure");
+    expect(structureLink).not.toHaveAttribute("target");
+    expect(structureLink).not.toHaveAttribute("rel");
+  });
+
+  it("renders the JSON structure detail route", () => {
+    renderApp("/json-structure");
+
+    expect(screen.getByRole("heading", { name: "JSON 结构详情" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "CanvasDocument" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "chart" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "table" })).toBeInTheDocument();
+    expect(screen.getByText("documentType")).toBeInTheDocument();
+    expect(screen.getByText("chartType")).toBeInTheDocument();
+    expect(screen.getByText("headerStyle")).toBeInTheDocument();
+    expect(screen.getByText("pointerLength")).toBeInTheDocument();
+  });
+
   it("previews the current page definition as read-only JSON", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "查看页面结构 JSON" }));
 
     const dialog = screen.getByRole("dialog", { name: "页面结构" });
     const preview = screen.getByLabelText("当前页面 JSON");
     const pageDefinition = JSON.parse(preview.textContent ?? "") as {
+      documentType: string;
       id: string;
       name: string;
       elements: unknown[];
@@ -125,6 +157,7 @@ describe("Home", () => {
     );
     expect(preview).toHaveClass("w-max", "min-w-full", "whitespace-pre");
     expect(pageDefinition.id).toBe("symbicort-longform-medical-comic");
+    expect(pageDefinition.documentType).toBe("longform");
     expect(pageDefinition.name).toBe("信必可：从 GINA 原则看懂哮喘长期管理");
     expect(pageDefinition.elements.length).toBeGreaterThan(0);
 
@@ -132,8 +165,8 @@ describe("Home", () => {
     expect(screen.queryByRole("dialog", { name: "页面结构" })).not.toBeInTheDocument();
   });
 
-  it("renders the imported Symbicort template as the only page", () => {
-    render(<App />);
+  it("renders only the current Symbicort detail page in the page list", async () => {
+    renderApp();
 
     const layerHeading = screen.getByRole("heading", { name: "图层" });
     const pagesHeading = screen.getByRole("heading", { name: "页面" });
@@ -149,10 +182,14 @@ describe("Home", () => {
       "信必可：从 GINA 原则看懂哮喘长期管理",
     );
     expect(currentPageInfo).toHaveTextContent(/信必可：从 GINA 原则看懂哮喘长期管理1080 × 5993/);
+    expect(screen.getByRole("button", { name: "导出图片" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(1);
     expect(
       screen.getByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
     ).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.queryByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "切换模板" })).not.toBeInTheDocument();
     expect(screen.queryByText("01 · 1080 × 1080")).not.toBeInTheDocument();
 
@@ -167,9 +204,47 @@ describe("Home", () => {
     expect(titleActions).toHaveClass("sticky", "right-0");
   });
 
+  it("renders only the current PPT detail page and its slides in the page list", async () => {
+    const user = userEvent.setup();
+    renderApp("/ppt-template-2-medical-brief");
+
+    const currentPageInfo = screen.getByRole("group", { name: "当前页面信息" });
+
+    expect(screen.getByTestId("canvas-stage")).toHaveTextContent("PPT模板2：哮喘长期管理沟通简报");
+    expect(currentPageInfo).toHaveTextContent(
+      /PPT模板2：哮喘长期管理沟通简报 \/ 01 欢迎页1600 × 900/,
+    );
+    expect(screen.getAllByRole("button", { name: /^打开页面 / })).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "打开页面 PPT模板2：哮喘长期管理沟通简报" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.queryByRole("button", { name: "打开页面 信必可：从 GINA 原则看懂哮喘长期管理" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开幻灯片 01 欢迎页" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "打开幻灯片 03 核心问题" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "幻灯片总览" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "导出 PPT" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开幻灯片 03 核心问题" }));
+    expect(screen.getByTestId("canvas-stage")).toHaveTextContent(
+      "PPT模板2：哮喘长期管理沟通简报 / 03 核心问题",
+    );
+    expect(screen.getByRole("button", { name: "核心问题标题" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "欢迎页标题" })).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "幻灯片总览" })[0]);
+    expect(screen.getByText("幻灯片总览 · 8 页")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回当前幻灯片" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^编辑幻灯片 / })).toHaveLength(8);
+  });
+
   it("does not scroll the layer list when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const viewport = screen
       .getByRole("heading", { name: "图层" })
@@ -193,7 +268,7 @@ describe("Home", () => {
 
   it("does not expand a collapsed group when an element is selected on the canvas", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "收起 封面" }));
     expect(screen.queryByRole("button", { name: "封面主标题" })).not.toBeInTheDocument();
@@ -227,7 +302,7 @@ describe("Home", () => {
 
     try {
       const user = userEvent.setup();
-      render(<App />);
+      renderApp();
 
       const canvas = screen.getByTestId("canvas-stage");
       await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "800"));
@@ -271,7 +346,7 @@ describe("Home", () => {
     globalThis.ResizeObserver = WideContainerResizeObserver;
 
     try {
-      render(<App />);
+      renderApp();
 
       const canvas = screen.getByTestId("canvas-stage");
       await waitFor(() => expect(canvas).toHaveAttribute("data-viewport-width", "1400"));
@@ -284,7 +359,7 @@ describe("Home", () => {
 
   it("highlights the matching canvas element while hovering a layer", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const layer = screen.getByRole("button", { name: "长图背景" });
@@ -298,7 +373,7 @@ describe("Home", () => {
 
   it("collapses and expands a layer group", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const groupButton = screen.getByRole("button", { name: "封面" });
     await user.click(groupButton);
@@ -322,7 +397,7 @@ describe("Home", () => {
 
   it("selects from the whole layer row without action buttons clicking through", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const backgroundRow = screen
       .getByRole("button", { name: "长图背景" })
@@ -347,9 +422,9 @@ describe("Home", () => {
     expect(backgroundRow).toHaveAttribute("data-selected", "false");
   });
 
-  it("previews rounded transform values without feeding them back into the canvas", async () => {
+  it("feeds live transform dimensions back into the canvas without changing font size", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const nameInput = screen.getByLabelText("名称");
@@ -365,7 +440,11 @@ describe("Home", () => {
     expect(screen.getByLabelText("Y")).toHaveValue(91.23);
     expect(screen.getByLabelText("宽")).toHaveValue(333.46);
     expect(screen.getByLabelText("高")).toHaveValue(55.68);
-    expect(screen.getByTestId("canvas-stage").dataset.document).toBe(canvasDocumentBeforePreview);
+    const canvasDocumentDuringPreview = screen.getByTestId("canvas-stage").dataset.document;
+    expect(canvasDocumentDuringPreview).not.toBe(canvasDocumentBeforePreview);
+    expect(canvasDocumentDuringPreview).toContain('"x":83.456');
+    expect(canvasDocumentDuringPreview).toContain('"width":333.456');
+    expect(canvasDocumentDuringPreview).toContain('"fontSize":49');
 
     await user.click(screen.getByRole("button", { name: "模拟画布变换" }));
 
@@ -379,7 +458,7 @@ describe("Home", () => {
 
   it("formats a valid rotation with degrees and restores the previous value for invalid text", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const rotationInput = screen.getByLabelText("角度");
@@ -409,7 +488,7 @@ describe("Home", () => {
 
   it("enforces minimum values for constrained numeric properties", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const fontSizeInput = screen.getByLabelText("字号");
@@ -432,7 +511,7 @@ describe("Home", () => {
 
   it("edits shape stroke and rounded corners from the properties panel", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "栏目标签" }));
 
@@ -470,7 +549,7 @@ describe("Home", () => {
 
   it("changes the selected text box font as one undoable property update", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const fontSelect = screen.getByRole("combobox", { name: "字体" });
@@ -487,7 +566,7 @@ describe("Home", () => {
 
   it("enters text editing from Enter or double click and commits one undoable session", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     expect(screen.getByRole("textbox", { name: "文本内容" })).toHaveTextContent("不只在“喘”的时候");
@@ -525,7 +604,7 @@ describe("Home", () => {
 
   it("does not create history for an unchanged edit and cancels on Escape", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     fireEvent.keyDown(window, { key: "Enter" });
@@ -543,7 +622,7 @@ describe("Home", () => {
 
   it("commits color changes immediately without waiting for the popover to close", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const colorButton = screen.getByRole("button", { name: "文字颜色选择器" });
@@ -569,7 +648,7 @@ describe("Home", () => {
 
   it("shows only the action name in layer tooltips", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await user.hover(screen.getByRole("button", { name: "长图背景" }));
     await user.hover(screen.getByRole("button", { name: "隐藏 长图背景" }));
@@ -581,7 +660,7 @@ describe("Home", () => {
 
   it("keeps only active hidden and locked layer actions visible outside hover", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const backgroundHideButton = screen.getByRole("button", { name: "隐藏 长图背景" });
     const backgroundUnlockButton = screen.getByRole("button", { name: "解锁 长图背景" });
@@ -607,7 +686,7 @@ describe("Home", () => {
   });
 
   it("pans the free canvas with the middle mouse button", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;
@@ -643,7 +722,7 @@ describe("Home", () => {
   });
 
   it("pans with a primary-button drag while Space is held", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;
@@ -676,7 +755,7 @@ describe("Home", () => {
   });
 
   it("pans the free canvas in both axes with trackpad scrolling", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const initialX = Number(canvas.getAttribute("data-viewport-x"));
@@ -692,7 +771,7 @@ describe("Home", () => {
   });
 
   it("moves instead of zooming for ctrl-modified wheel input", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const initialY = Number(canvas.getAttribute("data-viewport-y"));
@@ -706,7 +785,7 @@ describe("Home", () => {
   });
 
   it("does not pan the canvas or show a grab cursor for a primary-button drag", () => {
-    render(<App />);
+    renderApp();
 
     const canvas = screen.getByTestId("canvas-stage");
     const viewport = canvas.parentElement;

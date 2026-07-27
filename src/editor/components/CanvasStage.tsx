@@ -1,3 +1,4 @@
+import { renderChartToDataUrl } from "@/editor/chart-renderer";
 import { findElementContext } from "@/editor/editor-state";
 import { getCanvasFont, loadCanvasFont, type CanvasFontFamily } from "@/editor/fonts";
 import {
@@ -5,6 +6,7 @@ import {
   markdownToDisplayText,
   renderMarkdownToCanvas,
 } from "@/editor/markdown";
+import { getTableLayout } from "@/editor/table-layout";
 import {
   isGroupElement,
   isLeafElement,
@@ -15,11 +17,24 @@ import {
   type CanvasLeafElement,
   type CanvasPoint,
   type CanvasTransformPatch,
+  type ChartElement,
   type ImageElement,
   type LineElement,
+  type TableCellStyle,
+  type TableElement,
 } from "@/editor/types";
 import Konva from "konva";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   Arrow,
@@ -49,10 +64,16 @@ interface CanvasStageProps {
   isSelectedLocked: boolean;
   draftElement?: CanvasLeafElement | null;
   isCreating?: boolean;
+  readOnly?: boolean;
+  stageHandleRef?: Ref<CanvasStageHandle>;
   onEditText: (elementId: string) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+}
+
+export interface CanvasStageHandle {
+  exportImage: (options?: { pixelRatio?: number }) => string | null;
 }
 
 interface RenderElementProps {
@@ -88,6 +109,29 @@ function getDocumentFontLoadRequests(elements: CanvasElement[]): FontLoadRequest
   function visit(element: CanvasElement) {
     if (isGroupElement(element)) {
       element.children.forEach(visit);
+      return;
+    }
+    if (element.type === "table") {
+      const text = [
+        ...element.columns.map((column) => column.name),
+        ...element.rows.flatMap((row) =>
+          element.columns.map((column) => row.cells[column.id] ?? ""),
+        ),
+      ].join("\n");
+
+      for (const style of [element.headerStyle, element.cellStyle]) {
+        const key = `${style.fontFamily}:${style.fontWeight}`;
+        const currentRequest = requests.get(key);
+        if (currentRequest) {
+          currentRequest.text += `\n${text}`;
+        } else {
+          requests.set(key, {
+            fontFamily: style.fontFamily,
+            fontWeight: style.fontWeight,
+            text,
+          });
+        }
+      }
       return;
     }
     if (element.type !== "text") return;
@@ -226,6 +270,214 @@ function CanvasImage({
   );
 }
 
+function CanvasChart({
+  element,
+  draggable,
+  onSelect,
+  onElementChange,
+  onElementPreview,
+  setNodeRef,
+}: {
+  element: ChartElement;
+  draggable: boolean;
+  onSelect: (elementId: string) => void;
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [chartImage] = useImage(dataUrl ?? "");
+
+  useEffect(() => {
+    let cancelled = false;
+    const frame = window.requestAnimationFrame(() => {
+      const nextDataUrl = renderChartToDataUrl(element);
+      if (!cancelled) setDataUrl(nextDataUrl);
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [element]);
+
+  return (
+    <Group
+      ref={(node) => setNodeRef(element.id, node)}
+      draggable={draggable}
+      height={element.height}
+      name={element.id}
+      opacity={element.opacity}
+      rotation={0}
+      visible={element.visible}
+      width={element.width}
+      x={element.x}
+      y={element.y}
+      onClick={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onDragMove={(event) =>
+        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
+      }
+      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onTap={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onTransform={(event) =>
+        onElementPreview(element.id, { ...getTransformPatch(element, event.target), rotation: 0 })
+      }
+      onTransformEnd={(event) =>
+        commitTransform(element, event.target, onElementChange, onElementPreview)
+      }
+    >
+      <Rect
+        fill="#ffffff"
+        height={element.height}
+        listening
+        stroke="#E2E8F0"
+        strokeWidth={1}
+        width={element.width}
+      />
+      {chartImage ? (
+        <Image height={element.height} image={chartImage} listening={false} width={element.width} />
+      ) : null}
+    </Group>
+  );
+}
+
+function getTableTextY(rowY: number, rowHeight: number, fontSize: number) {
+  return rowY + Math.max(0, (rowHeight - fontSize * 1.28) / 2);
+}
+
+function CanvasTableCell({
+  height,
+  style,
+  text,
+  width,
+  x,
+  y,
+}: {
+  height: number;
+  style: TableCellStyle;
+  text: string;
+  width: number;
+  x: number;
+  y: number;
+}) {
+  return (
+    <Group x={x} y={y}>
+      <Rect
+        fill={style.fill}
+        height={height}
+        listening={false}
+        stroke={style.borderColor}
+        strokeWidth={style.borderWidth}
+        width={width}
+      />
+      <Text
+        align={style.align}
+        fill={style.color}
+        fontFamily={getCanvasFont(style.fontFamily).cssFamily}
+        fontSize={style.fontSize}
+        fontStyle={style.fontWeight}
+        height={Math.max(1, height - 8)}
+        listening={false}
+        text={text}
+        verticalAlign={style.valign}
+        width={Math.max(1, width - 16)}
+        x={8}
+        y={getTableTextY(0, height, style.fontSize)}
+      />
+    </Group>
+  );
+}
+
+function CanvasTable({
+  element,
+  draggable,
+  onSelect,
+  onElementChange,
+  onElementPreview,
+  setNodeRef,
+}: {
+  element: TableElement;
+  draggable: boolean;
+  onSelect: (elementId: string) => void;
+  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}) {
+  const layout = getTableLayout(element);
+
+  return (
+    <Group
+      ref={(node) => setNodeRef(element.id, node)}
+      draggable={draggable}
+      height={element.height}
+      name={element.id}
+      opacity={element.opacity}
+      rotation={0}
+      visible={element.visible}
+      width={element.width}
+      x={element.x}
+      y={element.y}
+      onClick={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onDragMove={(event) =>
+        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
+      }
+      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onTap={(event) => {
+        event.cancelBubble = true;
+        onSelect(element.id);
+      }}
+      onTransform={(event) =>
+        onElementPreview(element.id, { ...getTransformPatch(element, event.target), rotation: 0 })
+      }
+      onTransformEnd={(event) =>
+        commitTransform(element, event.target, onElementChange, onElementPreview)
+      }
+    >
+      <Rect
+        fill="transparent"
+        height={element.height}
+        listening
+        name={`${element.id}-hit-area`}
+        width={element.width}
+      />
+      {element.columns.map((column, index) => (
+        <CanvasTableCell
+          height={layout.headerHeight}
+          key={column.id}
+          style={element.headerStyle}
+          text={column.name}
+          width={layout.columnWidths[index]}
+          x={layout.columnX[index]}
+          y={0}
+        />
+      ))}
+      {element.rows.flatMap((row, rowIndex) => {
+        return element.columns.map((column, columnIndex) => {
+          return (
+            <CanvasTableCell
+              height={layout.rowHeights[rowIndex]}
+              key={`${row.id}-${column.id}`}
+              style={element.cellStyle}
+              text={row.cells[column.id] ?? ""}
+              width={layout.columnWidths[columnIndex]}
+              x={layout.columnX[columnIndex]}
+              y={layout.rowY[rowIndex]}
+            />
+          );
+        });
+      })}
+    </Group>
+  );
+}
+
 function getTransformPatch(element: CanvasLeafElement, node: Konva.Node): CanvasTransformPatch {
   return {
     x: node.x(),
@@ -248,14 +500,16 @@ function getLineTransformPatch(
   };
 }
 
-function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
+function normalizeTextTransform(
+  element: Extract<CanvasLeafElement, { type: "text" }>,
+  node: Konva.Shape,
+): CanvasTransformPatch {
   const width = Math.max(8, node.width() * Math.abs(node.scaleX()));
-  const height = Math.max(8, node.height() * Math.abs(node.scaleY()));
 
-  // Text needs real dimensions during the gesture so Konva can reflow it instead of
-  // stretching the already-rendered glyphs with scaleX/scaleY.
+  // Konva Transformer changes scale values. Text boxes intentionally resize only
+  // horizontally, so their font size and line box height remain stable while reflowing.
   node.width(width);
-  node.height(height);
+  node.height(element.height);
   node.scaleX(1);
   node.scaleY(1);
 
@@ -263,7 +517,7 @@ function normalizeTextTransform(node: Konva.Shape): CanvasTransformPatch {
     x: node.x(),
     y: node.y(),
     width,
-    height,
+    height: element.height,
     rotation: node.rotation(),
   };
 }
@@ -289,7 +543,10 @@ function commitTransform(
   const patch =
     element.type === "line" || element.type === "arrow"
       ? getLineTransformPatch(element, node)
-      : getTransformPatch(element, node);
+      : {
+          ...getTransformPatch(element, node),
+          ...(element.type === "chart" || element.type === "table" ? { rotation: 0 } : {}),
+        };
 
   // Normalize the temporary Transformer scale before committing real dimensions so the
   // selection frame never observes both the new size and the old scale in the same frame.
@@ -302,17 +559,17 @@ function commitTransform(
 }
 
 function commitTextTransform(
-  elementId: string,
+  element: Extract<CanvasLeafElement, { type: "text" }>,
   node: Konva.Shape,
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void,
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void,
 ) {
-  const patch = normalizeTextTransform(node);
+  const patch = normalizeTextTransform(element, node);
 
   flushSync(() => {
-    onElementChange(elementId, patch);
+    onElementChange(element.id, patch);
   });
-  onElementPreview(elementId, null);
+  onElementPreview(element.id, null);
 }
 
 const RenderElement = memo(function RenderElement({
@@ -499,11 +756,14 @@ const RenderElement = memo(function RenderElement({
             if (!locked) onEditText(element.id);
           }}
           onTransform={(event) =>
-            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Image))
+            onElementPreview(
+              element.id,
+              normalizeTextTransform(element, event.target as Konva.Image),
+            )
           }
           onTransformEnd={(event) =>
             commitTextTransform(
-              element.id,
+              element,
               event.target as Konva.Image,
               onElementChange,
               onElementPreview,
@@ -528,11 +788,14 @@ const RenderElement = memo(function RenderElement({
             if (!locked) onEditText(element.id);
           }}
           onTransform={(event) =>
-            onElementPreview(element.id, normalizeTextTransform(event.target as Konva.Text))
+            onElementPreview(
+              element.id,
+              normalizeTextTransform(element, event.target as Konva.Text),
+            )
           }
           onTransformEnd={(event) =>
             commitTextTransform(
-              element.id,
+              element,
               event.target as Konva.Text,
               onElementChange,
               onElementPreview,
@@ -543,6 +806,28 @@ const RenderElement = memo(function RenderElement({
     case "image":
       return (
         <CanvasImage
+          draggable={selectedId === element.id && !locked}
+          element={element}
+          setNodeRef={setNodeRef}
+          onElementChange={onElementChange}
+          onElementPreview={onElementPreview}
+          onSelect={onSelect}
+        />
+      );
+    case "chart":
+      return (
+        <CanvasChart
+          draggable={selectedId === element.id && !locked}
+          element={element}
+          setNodeRef={setNodeRef}
+          onElementChange={onElementChange}
+          onElementPreview={onElementPreview}
+          onSelect={onSelect}
+        />
+      );
+    case "table":
+      return (
+        <CanvasTable
           draggable={selectedId === element.id && !locked}
           element={element}
           setNodeRef={setNodeRef}
@@ -570,11 +855,14 @@ export function CanvasStage({
   isSelectedLocked,
   draftElement = null,
   isCreating = false,
+  readOnly = false,
+  stageHandleRef,
   onEditText,
   onSelect,
   onElementChange,
   onElementPreview,
 }: CanvasStageProps) {
+  const documentGroupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
@@ -646,6 +934,25 @@ export function CanvasStage({
     else nodeRefs.current.delete(elementId);
   }, []);
 
+  useImperativeHandle(
+    stageHandleRef,
+    () => ({
+      exportImage(options) {
+        return (
+          documentGroupRef.current?.toDataURL({
+            height: document.height,
+            mimeType: "image/png",
+            pixelRatio: options?.pixelRatio ?? 2,
+            width: document.width,
+            x: 0,
+            y: 0,
+          }) ?? null
+        );
+      },
+    }),
+    [document.height, document.width],
+  );
+
   return (
     <Stage
       height={viewportHeight}
@@ -658,7 +965,7 @@ export function CanvasStage({
       }}
     >
       <Layer
-        listening={!isCreating}
+        listening={!isCreating && !readOnly}
         scaleX={zoom}
         scaleY={zoom}
         x={viewportPosition.x}
@@ -676,21 +983,24 @@ export function CanvasStage({
           strokeWidth={1 / zoom}
           width={document.width}
         />
-        {document.elements.map((element) => (
-          <RenderElement
-            element={element}
-            fontRevision={fontRevision}
-            editingElementId={editingElementId}
-            inheritedLocked={false}
-            key={element.id}
-            selectedId={selectedId}
-            setNodeRef={setNodeRef}
-            onEditText={onEditText}
-            onElementChange={onElementChange}
-            onElementPreview={onElementPreview}
-            onSelect={onSelect}
-          />
-        ))}
+        <Group ref={documentGroupRef}>
+          <Rect fill="#ffffff" height={document.height} listening={false} width={document.width} />
+          {document.elements.map((element) => (
+            <RenderElement
+              element={element}
+              fontRevision={fontRevision}
+              editingElementId={editingElementId}
+              inheritedLocked={false}
+              key={element.id}
+              selectedId={selectedId}
+              setNodeRef={setNodeRef}
+              onEditText={onEditText}
+              onElementChange={onElementChange}
+              onElementPreview={onElementPreview}
+              onSelect={onSelect}
+            />
+          ))}
+        </Group>
         {draftElement ? (
           <RenderElement
             element={draftElement}
@@ -705,44 +1015,60 @@ export function CanvasStage({
             onSelect={() => undefined}
           />
         ) : null}
-        <Transformer
-          ref={hoverTransformerRef}
-          borderDash={[]}
-          borderStroke="rgba(109, 95, 212, 0.72)"
-          borderStrokeWidth={1.25}
-          enabledAnchors={[]}
-          listening={false}
-          padding={2}
-          resizeEnabled={false}
-          rotateEnabled={false}
-        />
-        <Transformer
-          ref={transformerRef}
-          anchorCornerRadius={4}
-          anchorFill="#ffffff"
-          anchorSize={12}
-          anchorStroke="#6d5fd4"
-          anchorStrokeWidth={1}
-          borderDash={[]}
-          borderStroke="#6d5fd4"
-          borderStrokeWidth={1.5}
-          flipEnabled={false}
-          keepRatio={
-            selectedContext?.element.type !== "image" &&
-            selectedContext?.element.type !== "line" &&
-            selectedContext?.element.type !== "arrow"
-          }
-          rotateAnchorOffset={28}
-          rotateEnabled
-          boundBoxFunc={(oldBox, newBox) => {
-            const isLinear =
-              selectedContext?.element.type === "line" || selectedContext?.element.type === "arrow";
-            const isTooSmall = isLinear
-              ? Math.hypot(newBox.width, newBox.height) < 8 * zoom
-              : Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom;
-            return isTooSmall ? oldBox : newBox;
-          }}
-        />
+        {readOnly ? null : (
+          <>
+            <Transformer
+              ref={hoverTransformerRef}
+              borderDash={[]}
+              borderStroke="rgba(109, 95, 212, 0.72)"
+              borderStrokeWidth={1.25}
+              enabledAnchors={[]}
+              listening={false}
+              padding={2}
+              resizeEnabled={false}
+              rotateEnabled={false}
+            />
+            <Transformer
+              ref={transformerRef}
+              anchorCornerRadius={4}
+              anchorFill="#ffffff"
+              anchorSize={12}
+              anchorStroke="#6d5fd4"
+              anchorStrokeWidth={1}
+              borderDash={[]}
+              borderStroke="#6d5fd4"
+              borderStrokeWidth={1.5}
+              enabledAnchors={
+                selectedContext?.element.type === "text"
+                  ? ["middle-left", "middle-right"]
+                  : undefined
+              }
+              flipEnabled={false}
+              keepRatio={
+                selectedContext?.element.type !== "image" &&
+                selectedContext?.element.type !== "line" &&
+                selectedContext?.element.type !== "arrow" &&
+                selectedContext?.element.type !== "text" &&
+                selectedContext?.element.type !== "chart" &&
+                selectedContext?.element.type !== "table"
+              }
+              rotateAnchorOffset={28}
+              rotateEnabled={
+                selectedContext?.element.type !== "chart" &&
+                selectedContext?.element.type !== "table"
+              }
+              boundBoxFunc={(oldBox, newBox) => {
+                const isLinear =
+                  selectedContext?.element.type === "line" ||
+                  selectedContext?.element.type === "arrow";
+                const isTooSmall = isLinear
+                  ? Math.hypot(newBox.width, newBox.height) < 8 * zoom
+                  : Math.abs(newBox.width) < 8 * zoom || Math.abs(newBox.height) < 8 * zoom;
+                return isTooSmall ? oldBox : newBox;
+              }}
+            />
+          </>
+        )}
       </Layer>
     </Stage>
   );

@@ -3,19 +3,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { findCanvasElementBounds, getViewportPositionToReveal } from "@/editor/canvas-viewport";
-import { CanvasStage } from "@/editor/components/CanvasStage";
+import { CanvasStage, type CanvasStageHandle } from "@/editor/components/CanvasStage";
 import { DocumentJsonPreviewDialog } from "@/editor/components/DocumentJsonPreviewDialog";
 import { EditorIconButton } from "@/editor/components/EditorIconButton";
 import { findElement } from "@/editor/editor-state";
 import {
   ACCEPTED_IMAGE_TYPES,
+  createChartElement,
   createElementFromDrag,
   createImageElement,
+  createTableElement,
   isPointInsideDocument,
   MAX_IMAGE_BYTES,
   type CreationTool,
   type ShapeCreationTool,
 } from "@/editor/element-creation";
+import { getExportFileName } from "@/editor/export-file";
 import { isInteractiveTarget } from "@/editor/interaction";
 import type {
   CanvasDocument,
@@ -28,16 +31,21 @@ import type {
 import { cn } from "@/lib/utils";
 import {
   ArrowUpRight,
+  BarChart3,
   Check,
   ChevronDown,
   Circle,
+  Download,
   ImagePlus,
+  LayoutGrid,
+  Loader2,
   Minus,
   Plus,
   Redo2,
   Scan,
   Square,
   Star,
+  Table,
   Triangle,
   Type,
   Undo2,
@@ -60,6 +68,8 @@ const MAX_CANVAS_PREVIEW_WIDTH = 890;
 
 interface EditorWorkspaceProps {
   document: CanvasDocument;
+  exportDocument?: CanvasDocument;
+  readOnly?: boolean;
   hoveredId: string | null;
   selectedId: string | null;
   editingText: TextEditingSession | null;
@@ -80,6 +90,8 @@ interface EditorWorkspaceProps {
   onSetFitMode: (enabled: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onOpenOverview?: () => void;
+  onExport?: (document: CanvasDocument) => void | Promise<void>;
 }
 
 export interface EditorWorkspaceHandle {
@@ -119,7 +131,7 @@ const SHAPE_TOOLS: Array<{
   { icon: Star, label: "星形", tool: "star" },
 ];
 
-function createElementId(tool: CreationTool | "image") {
+function createElementId(tool: CreationTool | "image" | "chart" | "table") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   return `${tool}-${suffix}`;
 }
@@ -141,6 +153,15 @@ function decodeImage(src: string): Promise<{ height: number; width: number }> {
     image.onload = () => resolve({ height: image.naturalHeight, width: image.naturalWidth });
     image.src = src;
   });
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const link = globalThis.document.createElement("a");
+  link.download = fileName;
+  link.href = dataUrl;
+  globalThis.document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function useContainerSize(containerRef: React.RefObject<HTMLDivElement | null>): ContainerSize {
@@ -178,6 +199,8 @@ function getCenteredPosition(
 
 export const EditorWorkspace = memo(function EditorWorkspace({
   document,
+  exportDocument = document,
+  readOnly = false,
   hoveredId,
   selectedId,
   editingText,
@@ -198,9 +221,12 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onSetFitMode,
   onUndo,
   onRedo,
+  onOpenOverview,
+  onExport,
 }: EditorWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const canvasStageRef = useRef<CanvasStageHandle>(null);
   const panSessionRef = useRef<PanSession | null>(null);
   const drawSessionRef = useRef<DrawSession | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -221,7 +247,8 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   );
   const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
   const [lastShapeTool, setLastShapeTool] = useState<ShapeCreationTool>("rect");
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const availableWidth = Math.max(1, Math.min(MAX_CANVAS_PREVIEW_WIDTH, size.width - 112));
   const availableHeight = Math.max(1, size.height - 174);
   const widthFitZoom = availableWidth / document.width;
@@ -244,6 +271,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   const selectedShape = SHAPE_TOOLS.find(({ tool }) => tool === lastShapeTool) ?? SHAPE_TOOLS[0];
   const SelectedShapeIcon = selectedShape.icon;
   const draftElement = draft?.documentId === document.id ? draft.element : null;
+  const exportLabel = exportDocument.documentType === "pptx" ? "导出 PPT" : "导出图片";
 
   useEffect(
     () => () => {
@@ -262,10 +290,10 @@ export const EditorWorkspace = memo(function EditorWorkspace({
     setShapeMenuOpen(false);
   }, []);
 
-  function showImageError(message: string) {
-    setImageError(message);
+  function showOperationError(message: string) {
+    setOperationError(message);
     if (errorTimerRef.current !== null) window.clearTimeout(errorTimerRef.current);
-    errorTimerRef.current = window.setTimeout(() => setImageError(null), 3600);
+    errorTimerRef.current = window.setTimeout(() => setOperationError(null), 3600);
   }
 
   function cancelShapeMenuClose() {
@@ -454,7 +482,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (activeTool && event.button === 0 && !isSpacePressed) {
+    if (!readOnly && activeTool && event.button === 0 && !isSpacePressed) {
       const start = getWorldPoint(event);
       if (!isPointInsideDocument(start, document)) return;
 
@@ -567,11 +595,11 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   async function handleImageFile(file: File | undefined) {
     if (!file) return;
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
-      showImageError("仅支持 PNG、JPEG 或 WebP 图片");
+      showOperationError("仅支持 PNG、JPEG 或 WebP 图片");
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      showImageError("图片不能超过 10MB");
+      showOperationError("图片不能超过 10MB");
       return;
     }
 
@@ -587,9 +615,53 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       onAddElement(
         createImageElement(createElementId("image"), src, imageSize, document, visibleArea),
       );
-      setImageError(null);
+      setOperationError(null);
     } catch {
-      showImageError("图片读取失败，请重试");
+      showOperationError("图片读取失败，请重试");
+    }
+  }
+
+  function getVisibleDocumentArea() {
+    return {
+      bottom: (size.height - viewportPosition.y) / zoom,
+      left: -viewportPosition.x / zoom,
+      right: (size.width - viewportPosition.x) / zoom,
+      top: -viewportPosition.y / zoom,
+    };
+  }
+
+  function insertChartElement() {
+    cancelCreation();
+    onAddElement(createChartElement(createElementId("chart"), document, getVisibleDocumentArea()));
+  }
+
+  function insertTableElement() {
+    cancelCreation();
+    onAddElement(createTableElement(createElementId("table"), document, getVisibleDocumentArea()));
+  }
+
+  async function handleExport() {
+    if (exporting) return;
+
+    setExporting(true);
+    try {
+      if (onExport) {
+        await onExport(exportDocument);
+      } else if (exportDocument.documentType === "pptx") {
+        const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
+        await exportCanvasDocumentToPptx(exportDocument);
+      } else {
+        const dataUrl = canvasStageRef.current?.exportImage({ pixelRatio: 2 });
+        if (!dataUrl) throw new Error("image-export-failed");
+        downloadDataUrl(dataUrl, getExportFileName(document));
+      }
+      setOperationError(null);
+    } catch {
+      showOperationError(
+        exportDocument.documentType === "pptx" ? "PPT 导出失败，请重试" : "图片导出失败，请重试",
+      );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -614,7 +686,37 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           </span>
         </div>
 
-        <DocumentJsonPreviewDialog document={document} />
+        <div className="pointer-events-auto flex items-center gap-1">
+          {exportDocument.documentType === "pptx" && onOpenOverview ? (
+            <Button
+              aria-label="幻灯片总览"
+              className="h-7 gap-1.5 rounded-sm px-2 text-xs text-muted-foreground hover:text-foreground"
+              size="sm"
+              type="button"
+              variant="ghost"
+              onClick={onOpenOverview}
+            >
+              <LayoutGrid aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+              <span>总览</span>
+            </Button>
+          ) : null}
+          <Button
+            aria-label={exportLabel}
+            className="h-7 gap-1.5 rounded-sm px-2 text-xs"
+            disabled={exporting}
+            size="sm"
+            type="button"
+            onClick={() => void handleExport()}
+          >
+            {exporting ? (
+              <Loader2 aria-hidden="true" className="size-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <Download aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+            )}
+            <span>{exporting ? "导出中" : exportLabel}</span>
+          </Button>
+          <DocumentJsonPreviewDialog document={exportDocument} />
+        </div>
       </header>
 
       <div
@@ -651,6 +753,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           isCreating={Boolean(activeTool)}
           isSelectedLocked={isSelectedLocked}
           selectedId={selectedId}
+          stageHandleRef={canvasStageRef}
           viewportHeight={Math.max(1, size.height)}
           viewportPosition={viewportPosition}
           viewportWidth={Math.max(1, size.width)}
@@ -690,12 +793,12 @@ export const EditorWorkspace = memo(function EditorWorkspace({
         }}
       />
 
-      {imageError ? (
+      {operationError ? (
         <div
           className="absolute bottom-[62px] left-1/2 z-[9] -translate-x-1/2 rounded-sm border border-destructive/25 bg-popover px-3 py-2 text-xs text-destructive shadow-md"
           role="alert"
         >
-          {imageError}
+          {operationError}
         </div>
       ) : null}
 
@@ -712,91 +815,106 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           <Redo2 aria-hidden="true" strokeWidth={1.75} />
         </EditorIconButton>
 
-        <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+        {readOnly ? null : (
+          <>
+            <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
 
-        <Popover open={shapeMenuOpen} onOpenChange={setShapeMenuOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              aria-label="图形"
-              aria-pressed={activeShapeTool !== null}
-              className={cn("gap-0.5 px-1.5", activeShapeTool !== null && "bg-accent text-primary")}
-              size="sm"
-              type="button"
-              variant="ghost"
-              onClick={() => toggleCreationTool(lastShapeTool)}
-              onMouseEnter={openShapeMenu}
-              onMouseLeave={scheduleShapeMenuClose}
-            >
-              <SelectedShapeIcon aria-hidden="true" className="size-4" strokeWidth={1.75} />
-              <ChevronDown
-                aria-hidden="true"
-                className="size-3 text-muted-foreground"
-                strokeWidth={1.75}
-              />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="center"
-            className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
-            side="top"
-            sideOffset={8}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-            onMouseEnter={cancelShapeMenuClose}
-            onMouseLeave={scheduleShapeMenuClose}
-            onOpenAutoFocus={(event) => event.preventDefault()}
-          >
-            {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
-              const selected = activeTool === tool;
-              return (
-                <button
-                  aria-pressed={selected}
+            <Popover open={shapeMenuOpen} onOpenChange={setShapeMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  aria-label="图形"
+                  aria-pressed={activeShapeTool !== null}
                   className={cn(
-                    "relative flex h-7 w-full items-center gap-1.5 rounded-sm px-1.5 pr-7 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
-                    selected && "bg-accent/70 text-foreground",
+                    "gap-0.5 px-1.5",
+                    activeShapeTool !== null && "bg-accent text-primary",
                   )}
-                  key={tool}
+                  size="sm"
                   type="button"
-                  onClick={() => {
-                    setLastShapeTool(tool);
-                    toggleCreationTool(tool);
-                    setShapeMenuOpen(false);
-                  }}
+                  variant="ghost"
+                  onClick={() => toggleCreationTool(lastShapeTool)}
+                  onMouseEnter={openShapeMenu}
+                  onMouseLeave={scheduleShapeMenuClose}
                 >
-                  <Icon
+                  <SelectedShapeIcon aria-hidden="true" className="size-4" strokeWidth={1.75} />
+                  <ChevronDown
                     aria-hidden="true"
-                    className={cn(
-                      "size-3.5 shrink-0 text-muted-foreground",
-                      selected && "text-primary",
-                    )}
+                    className="size-3 text-muted-foreground"
                     strokeWidth={1.75}
                   />
-                  <span className="truncate">{label}</span>
-                  {selected ? (
-                    <Check
-                      aria-hidden="true"
-                      className="absolute right-1.5 size-3 text-primary"
-                      strokeWidth={2}
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="center"
+                className="w-[152px] gap-0 rounded-md p-1 shadow-[0_12px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)]"
+                side="top"
+                sideOffset={8}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+                onMouseEnter={cancelShapeMenuClose}
+                onMouseLeave={scheduleShapeMenuClose}
+                onOpenAutoFocus={(event) => event.preventDefault()}
+              >
+                {SHAPE_TOOLS.map(({ icon: Icon, label, tool }) => {
+                  const selected = activeTool === tool;
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={cn(
+                        "relative flex h-7 w-full items-center gap-1.5 rounded-sm px-1.5 pr-7 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
+                        selected && "bg-accent/70 text-foreground",
+                      )}
+                      key={tool}
+                      type="button"
+                      onClick={() => {
+                        setLastShapeTool(tool);
+                        toggleCreationTool(tool);
+                        setShapeMenuOpen(false);
+                      }}
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className={cn(
+                          "size-3.5 shrink-0 text-muted-foreground",
+                          selected && "text-primary",
+                        )}
+                        strokeWidth={1.75}
+                      />
+                      <span className="truncate">{label}</span>
+                      {selected ? (
+                        <Check
+                          aria-hidden="true"
+                          className="absolute right-1.5 size-3 text-primary"
+                          strokeWidth={2}
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
 
-        <EditorIconButton
-          label="文本"
-          pressed={activeTool === "text"}
-          onPress={() => toggleCreationTool("text")}
-        >
-          <Type aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton
+              label="文本"
+              pressed={activeTool === "text"}
+              onPress={() => toggleCreationTool("text")}
+            >
+              <Type aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
-          <ImagePlus aria-hidden="true" strokeWidth={1.75} />
-        </EditorIconButton>
+            <EditorIconButton label="上传图片" onPress={() => imageInputRef.current?.click()}>
+              <ImagePlus aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
 
-        <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+            <EditorIconButton label="图表" onPress={insertChartElement}>
+              <BarChart3 aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
+
+            <EditorIconButton label="表格" onPress={insertTableElement}>
+              <Table aria-hidden="true" strokeWidth={1.75} />
+            </EditorIconButton>
+
+            <Separator className="mx-0.5 h-5 w-px" orientation="vertical" />
+          </>
+        )}
 
         <EditorIconButton
           label="缩小"

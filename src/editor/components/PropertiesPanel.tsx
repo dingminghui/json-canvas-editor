@@ -23,6 +23,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ChartFields, TableFields } from "@/editor/components/SemanticElementFields";
 import { CANVAS_FONT_FAMILIES, isCanvasFontFamily } from "@/editor/fonts";
 import { markdownToPlainText } from "@/editor/markdown";
 import {
@@ -64,12 +65,14 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
   polygon: "多边形",
   star: "星形",
   image: "图片",
+  chart: "图表",
+  table: "表格",
 };
 
 const TWO_DECIMAL_NUMBER_PATTERN = /^-?\d*(?:\.\d{0,2})?$/;
 const PROPERTY_LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const PROPERTY_CONTROL_CLASS_NAME =
-  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring";
+  "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
 const COMPACT_FIELD_GROUP_CLASS_NAME = "gap-2.5";
 
 function roundToTwoDecimals(value: number) {
@@ -648,6 +651,10 @@ function ElementSpecificFields({
           />
         </FieldGroup>
       );
+    case "chart":
+      return <ChartFields disabled={disabled} element={element} onUpdate={onUpdate} />;
+    case "table":
+      return <TableFields disabled={disabled} element={element} onUpdate={onUpdate} />;
     default: {
       const exhaustiveElement: never = element;
       return exhaustiveElement;
@@ -661,6 +668,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
   onUpdate,
 }: PropertiesPanelProps) {
   const nameId = useId();
+  const canRotate = selectedElement?.type !== "chart" && selectedElement?.type !== "table";
 
   if (!selectedElement || !isLeafElement(selectedElement)) {
     return (
@@ -747,11 +755,13 @@ export const PropertiesPanel = memo(function PropertiesPanel({
               />
             </div>
 
-            <RotationField
-              disabled={isLocked}
-              value={selectedElement.rotation}
-              onChange={(rotation) => onUpdate({ rotation })}
-            />
+            {canRotate ? (
+              <RotationField
+                disabled={isLocked}
+                value={selectedElement.rotation}
+                onChange={(rotation) => onUpdate({ rotation })}
+              />
+            ) : null}
           </FieldGroup>
         </section>
 
@@ -784,7 +794,13 @@ export const PropertiesPanel = memo(function PropertiesPanel({
 
         <section className="flex flex-col gap-3 p-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="m-0 text-xs">{selectedElement.type === "text" ? "文字" : "元素样式"}</h3>
+            <h3 className="m-0 text-xs">
+              {selectedElement.type === "text"
+                ? "文字"
+                : selectedElement.type === "chart" || selectedElement.type === "table"
+                  ? "数据"
+                  : "元素样式"}
+            </h3>
           </div>
           <ElementSpecificFields
             key={selectedElement.id}

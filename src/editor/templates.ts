@@ -1,4 +1,5 @@
 import { isCanvasFontFamily, type CanvasFontFamily } from "@/editor/fonts";
+import { PPT_TEMPLATE_DOCUMENT } from "@/editor/ppt-template";
 import type {
   CanvasDocument,
   CanvasElement,
@@ -37,7 +38,8 @@ type SourceCanvasElement =
   | SourceLineElement
   | SourceRectElement
   | SourceTextElement;
-interface SourceCanvasDocument extends Omit<CanvasDocument, "elements"> {
+interface SourceCanvasDocument extends Omit<CanvasDocument, "documentType" | "elements"> {
+  documentType?: CanvasDocument["documentType"];
   elements: SourceCanvasElement[];
 }
 
@@ -87,9 +89,11 @@ function resolveSourceElement(element: SourceCanvasElement): CanvasElement {
     case "line":
       return { ...element, lineCap: element.lineCap ?? "butt" };
     case "arrow":
+    case "chart":
     case "ellipse":
     case "polygon":
     case "star":
+    case "table":
       return element;
     default: {
       const exhaustiveElement: never = element;
@@ -99,7 +103,14 @@ function resolveSourceElement(element: SourceCanvasElement): CanvasElement {
 }
 
 function createCanvasDocument(document: SourceCanvasDocument): CanvasDocument {
-  return { ...document, elements: document.elements.map(resolveSourceElement) };
+  return {
+    ...document,
+    documentType: document.documentType ?? "longform",
+    elements: document.elements.map(resolveSourceElement),
+  };
 }
 
-export const EDITOR_TEMPLATES: CanvasDocument[] = [createCanvasDocument(sourceDocument)];
+export const EDITOR_TEMPLATES: CanvasDocument[] = [
+  createCanvasDocument(sourceDocument),
+  PPT_TEMPLATE_DOCUMENT,
+];

@@ -37,7 +37,7 @@ interface RichTextEditorOverlayProps {
   onReady: (elementId: string) => void;
 }
 
-export const ConfiguredMarkdownPlugin = MarkdownPlugin.configure({
+export const ConfiguredMarkdownPlugin: typeof MarkdownPlugin = MarkdownPlugin.configure({
   options: {
     plainMarks: [KEYS.code],
     remarkPlugins: [remarkGfm, remarkMdx],

@@ -1,20 +1,36 @@
 import {
-  createInitialEditorHistoryState,
-  createInitialEditorState,
+  createInitialEditorHistoryState as createHistoryState,
+  createInitialEditorState as createState,
   editorHistoryReducer,
   editorReducer,
   findElement,
   findElementContext,
   getActiveDocument,
+  getActivePageDocument,
+  getActivePageId,
 } from "@/editor/editor-state";
-import { isGroupElement } from "@/editor/types";
+import { EDITOR_TEMPLATES } from "@/editor/templates";
+import { isGroupElement, type CanvasElement, type ChartElement } from "@/editor/types";
+
+const createInitialEditorState = (initialDocumentId?: string) =>
+  createState(EDITOR_TEMPLATES, initialDocumentId);
+const createInitialEditorHistoryState = (initialDocumentId?: string) =>
+  createHistoryState(EDITOR_TEMPLATES, initialDocumentId);
 
 describe("editorReducer", () => {
-  it("initializes the imported Symbicort document as the only template", () => {
+  it("initializes the imported Symbicort document and PPT template 2", () => {
     const state = createInitialEditorState();
 
-    expect(Object.keys(state.documents)).toEqual(["symbicort-longform-medical-comic"]);
+    expect(Object.keys(state.documents)).toEqual([
+      "symbicort-longform-medical-comic",
+      "ppt-template-2-medical-brief",
+    ]);
     expect(state.activeTemplateId).toBe("symbicort-longform-medical-comic");
+    expect(state.documents["symbicort-longform-medical-comic"].documentType).toBe("longform");
+    expect(state.documents["ppt-template-2-medical-brief"].documentType).toBe("pptx");
+    expect(state.documents["ppt-template-2-medical-brief"].elements).toHaveLength(8);
+    expect(state.documents["ppt-template-2-medical-brief"].height).toBe(900);
+    expect(state.activePageIdByTemplate["ppt-template-2-medical-brief"]).toBe("ppt2-slide-1");
     expect(findElement(getActiveDocument(state).elements, "symbicort-006")).toMatchObject({
       fontFamily: "noto-sans-sc",
       lineHeight: 1.42,
@@ -25,6 +41,104 @@ describe("editorReducer", () => {
       lineCap: "butt",
       type: "line",
     });
+  });
+
+  it("selects and remembers one PPT page while exposing only its page elements", () => {
+    let state = createInitialEditorState();
+    state = editorReducer(state, {
+      type: "select-template",
+      templateId: "ppt-template-2-medical-brief",
+    });
+
+    expect(getActivePageId(state)).toBe("ppt2-slide-1");
+    expect(getActivePageDocument(state)).toMatchObject({
+      height: 900,
+      id: "ppt-template-2-medical-brief::ppt2-slide-1",
+      width: 1600,
+    });
+    expect(
+      getActivePageDocument(state).elements.some((element) => element.id === "ppt2-s1-title"),
+    ).toBe(true);
+    expect(
+      getActivePageDocument(state).elements.some((element) => element.id === "ppt2-s2-title"),
+    ).toBe(false);
+
+    state = editorReducer(state, {
+      type: "select-page",
+      templateId: "ppt-template-2-medical-brief",
+      pageId: "ppt2-slide-3",
+    });
+    expect(getActivePageId(state)).toBe("ppt2-slide-3");
+
+    state = editorReducer(state, {
+      type: "select-template",
+      templateId: "symbicort-longform-medical-comic",
+    });
+    state = editorReducer(state, {
+      type: "select-template",
+      templateId: "ppt-template-2-medical-brief",
+    });
+    expect(getActivePageId(state)).toBe("ppt2-slide-3");
+  });
+
+  it("adds, reorders, and renumbers elements within the active PPT page", () => {
+    let state = editorReducer(createInitialEditorState(), {
+      type: "select-page",
+      templateId: "ppt-template-2-medical-brief",
+      pageId: "ppt2-slide-2",
+    });
+    const newElement = {
+      align: "left",
+      fill: "#000000",
+      fontFamily: "noto-sans-sc",
+      fontSize: 24,
+      fontWeight: "400",
+      height: 60,
+      id: "new-slide-text",
+      lineHeight: 1.2,
+      locked: false,
+      name: "新文本",
+      opacity: 1,
+      rotation: 0,
+      text: "新建内容",
+      type: "text",
+      visible: true,
+      width: 240,
+      x: 100,
+      y: 100,
+    } as const;
+
+    state = editorReducer(state, { type: "add-element", element: newElement });
+    expect(findElement(getActivePageDocument(state).elements, newElement.id)).toBe(newElement);
+    expect(
+      findElement(
+        (getActiveDocument(state).elements[0] as { children: CanvasElement[] }).children,
+        newElement.id,
+      ),
+    ).toBeNull();
+
+    state = editorReducer(state, {
+      type: "reorder-pages",
+      pageIds: [
+        "ppt2-slide-2",
+        "ppt2-slide-1",
+        "ppt2-slide-3",
+        "ppt2-slide-4",
+        "ppt2-slide-5",
+        "ppt2-slide-6",
+        "ppt2-slide-7",
+        "ppt2-slide-8",
+      ],
+    });
+
+    expect(getActiveDocument(state).elements[0]).toMatchObject({
+      id: "ppt2-slide-2",
+      name: "01 议程",
+    });
+    expect(findElement(getActiveDocument(state).elements, "ppt2-s2-footer-page")).toMatchObject({
+      text: "01 / 08",
+    });
+    expect(getActivePageId(state)).toBe("ppt2-slide-2");
   });
 
   it("normalizes dimensions, opacity, and non-negative appearance updates", () => {
@@ -52,6 +166,39 @@ describe("editorReducer", () => {
         lineHeight: 0.5,
       },
     );
+  });
+
+  it("keeps semantic charts locked to zero rotation", () => {
+    const chart: ChartElement = {
+      chartType: "bar",
+      colors: ["#4F46E5"],
+      height: 320,
+      id: "chart-test",
+      locked: false,
+      name: "图表",
+      opacity: 1,
+      rotation: 0,
+      series: [{ labels: ["A", "B"], name: "系列", values: [1, 2] }],
+      showLegend: true,
+      showValue: true,
+      title: "测试图表",
+      type: "chart",
+      visible: true,
+      width: 520,
+      x: 100,
+      y: 100,
+    };
+    let state = editorReducer(createInitialEditorState(), { type: "add-element", element: chart });
+    state = editorReducer(state, {
+      type: "update-element",
+      elementId: chart.id,
+      patch: { rotation: 45 },
+    });
+
+    expect(findElement(getActiveDocument(state).elements, chart.id)).toMatchObject({
+      rotation: 0,
+      type: "chart",
+    });
   });
 
   it("resolves the imported image assets", () => {

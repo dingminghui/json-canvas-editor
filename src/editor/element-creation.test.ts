@@ -7,6 +7,7 @@ import type { CanvasDocument } from "@/editor/types";
 
 const document: CanvasDocument = {
   description: "测试",
+  documentType: "longform",
   elements: [],
   height: 600,
   id: "test-page",

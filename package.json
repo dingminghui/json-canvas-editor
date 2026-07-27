@@ -1,12 +1,35 @@
 {
   "name": "json-canvas-editor",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "一个基于 React、Konva 与 shadcn/ui 的可视化模板编辑器",
   "type": "module",
-  "private": true,
+  "private": false,
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite --host --mode develop",
-    "build": "vite build --mode production",
+    "build": "pnpm run build:app",
+    "build:app": "vite build --mode production",
+    "build:lib": "vite build --config vite.lib.config.ts --mode production",
     "preview": "vite preview",
     "test": "vitest",
     "test:ci": "vitest run",
@@ -18,7 +41,8 @@
     "lint": "pnpm run lint:tsc && pnpm run lint:eslint && pnpm run lint:style",
     "lint:fix": "pnpm run lint:eslint:fix && pnpm run lint:style:fix",
     "format": "prettier --write .",
-    "validate": "pnpm run lint && pnpm run test:ci"
+    "validate": "pnpm run lint && pnpm run test:ci",
+    "prepublishOnly": "pnpm run validate && pnpm run build:lib"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -36,16 +60,17 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dnd-kit-sortable-tree": "^0.1.73",
+    "echarts": "^6.1.0",
     "konva": "^10.3.0",
     "lucide-react": "^1.25.0",
     "marked": "15.0.12",
     "platejs": "53.2.4",
+    "pptxgenjs": "^4.0.1",
     "radix-ui": "^1.6.4",
-    "react": "^19.2.0",
     "react-colorful": "5.8.0",
-    "react-dom": "^19.2.0",
     "react-konva": "^19.2.5",
     "react-resizable-panels": "^4.12.2",
+    "react-router-dom": "^7.18.1",
     "remark-gfm": "4.0.1",
     "render-tag": "0.1.26",
     "shadcn": "^4.13.1",
@@ -55,6 +80,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@microsoft/api-extractor": "^7.58.12",
     "@tailwindcss/vite": "^4.1.17",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -70,15 +96,23 @@
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "happy-dom": "^20.0.10",
+    "jszip": "3.10.1",
     "prettier": "^3.4.2",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "stylelint": "^16.24.0",
     "stylelint-config-standard": "^39.0.1",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.18.0",
     "vite": "^7.2.4",
+    "vite-plugin-dts": "^5.0.3",
     "vitest": "^4.0.13"
+  },
+  "peerDependencies": {
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
   }
 }

@@ -1,322 +1,44 @@
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { EditorWorkspace, type EditorWorkspaceHandle } from "@/editor/components/EditorWorkspace";
-import { LayerSidebar } from "@/editor/components/LayerSidebar";
-import { PropertiesPanel } from "@/editor/components/PropertiesPanel";
-import {
-  createInitialEditorHistoryState,
-  editorHistoryReducer,
-  findElementContext,
-  getActiveDocument,
-} from "@/editor/editor-state";
-import { isInteractiveTarget } from "@/editor/interaction";
-import { EDITOR_TEMPLATES } from "@/editor/templates";
-import {
-  isLeafElement,
-  type CanvasElement,
-  type CanvasElementPatch,
-  type CanvasLeafElement,
-  type TextEditingSession,
-} from "@/editor/types";
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { type TemplateMeta, TEMPLATE_META } from "@/editor/template-meta";
+import { FileJson2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
-function createDuplicateId(sourceId: string) {
-  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-  return `${sourceId}-copy-${suffix}`;
+const DOCUMENT_TYPE_LABEL: Record<TemplateMeta["documentType"], string> = {
+  longform: "长图模板",
+  pptx: "演示文稿",
+};
+
+function TemplateCard({ template }: { template: TemplateMeta }) {
+  return (
+    <Link
+      className="group flex flex-col gap-2 rounded-xl border bg-card p-5 text-left shadow-sm transition-all hover:shadow-md hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      to={`/${template.id}`}
+    >
+      <h2 className="text-base font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
+        {template.name}
+      </h2>
+      <p className="line-clamp-2 text-sm text-muted-foreground">{template.description}</p>
+      <span className="mt-auto inline-block w-fit rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+        {DOCUMENT_TYPE_LABEL[template.documentType]}
+      </span>
+    </Link>
+  );
 }
 
 export function Home() {
-  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
-  const [elementPreview, setElementPreview] = useState<{
-    elementId: string;
-    patch: CanvasElementPatch;
-  } | null>(null);
-  const [textEditing, setTextEditing] = useState<TextEditingSession | null>(null);
-  const nextTextEditingSessionIdRef = useRef(0);
-  const editorWorkspaceRef = useRef<EditorWorkspaceHandle>(null);
-  const [history, dispatch] = useReducer(
-    editorHistoryReducer,
-    undefined,
-    createInitialEditorHistoryState,
-  );
-  const state = history.present;
-  const activeDocument = getActiveDocument(state);
-  const selectedElementContext = useMemo(
-    () => findElementContext(activeDocument.elements, state.selectedId),
-    [activeDocument.elements, state.selectedId],
-  );
-  const selectedElement = selectedElementContext?.element ?? null;
-  const displayedSelectedElement =
-    selectedElement &&
-    isLeafElement(selectedElement) &&
-    elementPreview?.elementId === selectedElement.id
-      ? { ...selectedElement, ...elementPreview.patch }
-      : selectedElement;
-  const isSelectedLocked = selectedElementContext?.effectivelyLocked ?? false;
-  const documents = useMemo(
-    () => EDITOR_TEMPLATES.map((template) => state.documents[template.id]),
-    [state.documents],
-  );
-  const canMutateSelected =
-    Boolean(selectedElement && isLeafElement(selectedElement)) && !isSelectedLocked;
-
-  const updateSelectedElement = useCallback(
-    (patch: CanvasElementPatch) => {
-      if (!state.selectedId || isSelectedLocked) return;
-      dispatch({ type: "update-element", elementId: state.selectedId, patch });
-    },
-    [isSelectedLocked, state.selectedId],
-  );
-
-  const addElement = useCallback((element: CanvasLeafElement, editText = false) => {
-    setElementPreview(null);
-    dispatch({ type: "add-element", element });
-    if (editText && element.type === "text") {
-      setTextEditing({
-        elementId: element.id,
-        initialText: element.text,
-        sessionId: ++nextTextEditingSessionIdRef.current,
-      });
-    }
-  }, []);
-
-  const selectElement = useCallback((elementId: string | null) => {
-    setElementPreview(null);
-    dispatch({ type: "select-element", elementId });
-  }, []);
-
-  const selectLayerElement = useCallback(
-    (elementId: string) => {
-      selectElement(elementId);
-      editorWorkspaceRef.current?.revealElement(elementId);
-    },
-    [selectElement],
-  );
-
-  const selectTemplate = useCallback((templateId: string) => {
-    editorWorkspaceRef.current?.cancelCreation();
-    setHoveredElementId(null);
-    setElementPreview(null);
-    setTextEditing(null);
-    dispatch({ type: "select-template", templateId });
-  }, []);
-
-  const undo = useCallback(() => dispatch({ type: "undo" }), []);
-  const redo = useCallback(() => dispatch({ type: "redo" }), []);
-  const reorderElements = useCallback(
-    (elements: CanvasElement[]) => dispatch({ type: "reorder-elements", elements }),
-    [],
-  );
-  const toggleLocked = useCallback(
-    (elementId: string) => dispatch({ type: "toggle-locked", elementId }),
-    [],
-  );
-  const toggleVisible = useCallback(
-    (elementId: string) => dispatch({ type: "toggle-visible", elementId }),
-    [],
-  );
-  const updateElement = useCallback(
-    (elementId: string, patch: CanvasElementPatch) => {
-      if (findElementContext(activeDocument.elements, elementId)?.effectivelyLocked) return;
-      dispatch({ type: "update-element", elementId, patch });
-    },
-    [activeDocument.elements],
-  );
-  const previewElement = useCallback((elementId: string, patch: CanvasElementPatch | null) => {
-    setElementPreview(patch ? { elementId, patch } : null);
-  }, []);
-  const setFitMode = useCallback(
-    (enabled: boolean) => dispatch({ type: "set-fit-mode", enabled }),
-    [],
-  );
-  const setZoom = useCallback((zoom: number) => dispatch({ type: "set-zoom", zoom }), []);
-
-  const beginTextEditing = useCallback(
-    (elementId: string) => {
-      const context = findElementContext(activeDocument.elements, elementId);
-      if (
-        context?.element.type !== "text" ||
-        context.effectivelyLocked ||
-        !context.effectivelyVisible
-      ) {
-        return;
-      }
-
-      setElementPreview(null);
-      dispatch({ type: "select-element", elementId });
-      setTextEditing({
-        elementId,
-        initialText: context.element.text,
-        sessionId: ++nextTextEditingSessionIdRef.current,
-      });
-    },
-    [activeDocument.elements],
-  );
-
-  const cancelTextEditing = useCallback(() => {
-    setTextEditing(null);
-  }, []);
-
-  const commitTextEditing = useCallback(
-    (sessionId: number, elementId: string, markdown: string) => {
-      if (textEditing?.sessionId !== sessionId || textEditing.elementId !== elementId) return;
-
-      setTextEditing(null);
-      const context = findElementContext(activeDocument.elements, elementId);
-      if (context?.element.type !== "text" || context.effectivelyLocked) return;
-      dispatch({ type: "update-element", elementId, patch: { text: markdown } });
-    },
-    [activeDocument.elements, textEditing],
-  );
-
-  const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (textEditing) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancelTextEditing();
-      }
-      return;
-    }
-
-    if (isInteractiveTarget(event.target)) return;
-
-    if (event.key === "Escape") {
-      selectElement(null);
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-      event.preventDefault();
-      dispatch({ type: event.shiftKey ? "redo" : "undo" });
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
-      event.preventDefault();
-      dispatch({ type: "redo" });
-      return;
-    }
-
-    if (event.key === "Enter" && selectedElement?.type === "text" && !isSelectedLocked) {
-      event.preventDefault();
-      beginTextEditing(selectedElement.id);
-      return;
-    }
-
-    if (
-      (event.metaKey || event.ctrlKey) &&
-      event.key.toLowerCase() === "d" &&
-      canMutateSelected &&
-      state.selectedId
-    ) {
-      event.preventDefault();
-      dispatch({
-        type: "duplicate-element",
-        elementId: state.selectedId,
-        duplicateId: createDuplicateId(state.selectedId),
-      });
-      return;
-    }
-
-    if (
-      (event.key === "Delete" || event.key === "Backspace") &&
-      canMutateSelected &&
-      state.selectedId
-    ) {
-      event.preventDefault();
-      dispatch({ type: "delete-element", elementId: state.selectedId });
-    }
-  });
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
-
   return (
-    <ResizablePanelGroup className="h-dvh w-full bg-background" orientation="horizontal">
-      <ResizablePanel
-        className="h-full min-w-0"
-        defaultSize={240}
-        groupResizeBehavior="preserve-pixel-size"
-        id="layers-panel"
-        maxSize={360}
-        minSize={180}
+    <div className="flex min-h-dvh w-full items-center justify-center bg-background p-8">
+      <div className="grid w-full max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
+        {TEMPLATE_META.map((template) => (
+          <TemplateCard key={template.id} template={template} />
+        ))}
+      </div>
+      <Link
+        className="fixed right-6 bottom-6 flex h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        to="/json-structure"
       >
-        <aside className="relative z-10 h-full min-w-0 bg-card">
-          <LayerSidebar
-            document={activeDocument}
-            documents={documents}
-            onHover={setHoveredElementId}
-            onReorder={reorderElements}
-            onSelect={selectLayerElement}
-            onSelectDocument={selectTemplate}
-            onToggleLocked={toggleLocked}
-            onToggleVisible={toggleVisible}
-            selectedId={state.selectedId}
-          />
-        </aside>
-      </ResizablePanel>
-
-      <ResizableHandle
-        aria-label="调整图层栏宽度"
-        className="transition-colors duration-150 hover:bg-primary/20 focus-visible:bg-primary/20 data-[resize-handle-active]:bg-primary/20"
-      />
-
-      <ResizablePanel className="h-full min-w-0" id="canvas-panel" minSize={480}>
-        <EditorWorkspace
-          canRedo={history.future.length > 0}
-          canUndo={history.past.length > 0}
-          document={activeDocument}
-          editingText={textEditing}
-          fitMode={state.fitMode}
-          hoveredId={hoveredElementId}
-          isSelectedLocked={isSelectedLocked}
-          manualZoom={state.manualZoomByTemplate[state.activeTemplateId]}
-          selectedId={state.selectedId}
-          workspaceHandleRef={editorWorkspaceRef}
-          onCancelTextEdit={cancelTextEditing}
-          onCommitTextEdit={commitTextEditing}
-          onEditText={beginTextEditing}
-          onElementChange={updateElement}
-          onElementPreview={previewElement}
-          onAddElement={addElement}
-          onSelect={selectElement}
-          onSetFitMode={setFitMode}
-          onSetZoom={setZoom}
-          onRedo={redo}
-          onUndo={undo}
-        />
-      </ResizablePanel>
-
-      <ResizableHandle
-        aria-label="调整属性栏宽度"
-        className="transition-colors duration-150 hover:bg-primary/20 focus-visible:bg-primary/20 data-[resize-handle-active]:bg-primary/20"
-      />
-
-      <ResizablePanel
-        className="h-full min-w-0"
-        defaultSize={320}
-        groupResizeBehavior="preserve-pixel-size"
-        id="properties-panel"
-        maxSize={440}
-        minSize={260}
-      >
-        <aside className="relative z-10 h-full min-w-0 bg-card">
-          <PropertiesPanel
-            isLocked={isSelectedLocked}
-            selectedElement={displayedSelectedElement}
-            onUpdate={updateSelectedElement}
-          />
-        </aside>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        <FileJson2 aria-hidden="true" size={16} strokeWidth={1.75} />
+        结构详情
+      </Link>
+    </div>
   );
 }
