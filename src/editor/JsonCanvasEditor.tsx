@@ -507,6 +507,7 @@ export function JsonCanvasEditor({
               onAddElement={addElement}
               onOpenOverview={openSlideOverview}
               onExport={onExport}
+              onHover={setHoveredElementId}
               onSelect={selectElement}
               onSetFitMode={setFitMode}
               onSetZoom={setZoom}

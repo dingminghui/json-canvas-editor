@@ -86,6 +86,7 @@ interface EditorWorkspaceProps {
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
   onAddElement: (element: CanvasLeafElement, editText?: boolean) => void;
+  onHover: (elementId: string | null) => void;
   onSetZoom: (zoom: number) => void;
   onSetFitMode: (enabled: boolean) => void;
   onUndo: () => void;
@@ -217,6 +218,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
   onElementChange,
   onElementPreview,
   onAddElement,
+  onHover,
   onSetZoom,
   onSetFitMode,
   onUndo,
@@ -761,6 +763,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
           onEditText={onEditText}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
 

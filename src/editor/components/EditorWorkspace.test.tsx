@@ -59,6 +59,7 @@ function renderWorkspace(
         onEditText={vi.fn()}
         onElementChange={vi.fn()}
         onElementPreview={vi.fn()}
+        onHover={vi.fn()}
         onRedo={vi.fn()}
         onSelect={vi.fn()}
         onSetFitMode={vi.fn()}

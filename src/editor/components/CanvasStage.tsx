@@ -74,6 +74,7 @@ interface CanvasStageProps {
   readOnly?: boolean;
   stageHandleRef?: Ref<CanvasStageHandle>;
   onEditText: (elementId: string) => void;
+  onHover?: (elementId: string | null) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
@@ -93,6 +94,7 @@ interface RenderElementProps {
   onElementDragEnd: (elementId: string, node: Konva.Node) => void;
   onElementDragMove: (elementId: string, node: Konva.Node) => void;
   onElementDragStart: (elementId: string, node: Konva.Node) => void;
+  onHover: (elementId: string | null) => void;
   onSelect: (elementId: string) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
@@ -103,6 +105,10 @@ interface ElementDragCallbacks {
   onElementDragEnd: (elementId: string, node: Konva.Node) => void;
   onElementDragMove: (elementId: string, node: Konva.Node) => void;
   onElementDragStart: (elementId: string, node: Konva.Node) => void;
+}
+
+interface ElementHoverCallbacks {
+  onHover: (elementId: string | null) => void;
 }
 
 interface AlignmentLeafEntry {
@@ -124,6 +130,8 @@ interface ImageRenderGeometry {
   x: number;
   y: number;
 }
+
+const ignoreElementHover = () => undefined;
 
 function collectVisibleLeafEntries(
   elements: CanvasElement[],
@@ -347,17 +355,19 @@ function CanvasImage({
   onElementDragEnd,
   onElementDragMove,
   onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: ElementDragCallbacks & {
-  element: ImageElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: ImageElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const [image] = useImage(element.src);
   const imageGeometry = getImageRenderGeometry(image, element);
 
@@ -385,6 +395,8 @@ function CanvasImage({
       onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
       onDragMove={(event) => onElementDragMove(element.id, event.target)}
       onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -423,17 +435,19 @@ function CanvasChart({
   onElementDragEnd,
   onElementDragMove,
   onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: ElementDragCallbacks & {
-  element: ChartElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: ChartElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [chartImage] = useImage(dataUrl ?? "");
 
@@ -468,6 +482,8 @@ function CanvasChart({
       onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
       onDragMove={(event) => onElementDragMove(element.id, event.target)}
       onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -548,17 +564,19 @@ function CanvasTable({
   onElementDragEnd,
   onElementDragMove,
   onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: ElementDragCallbacks & {
-  element: TableElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: TableElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const layout = getTableLayout(element);
 
   return (
@@ -580,6 +598,8 @@ function CanvasTable({
       onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
       onDragMove={(event) => onElementDragMove(element.id, event.target)}
       onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -732,6 +752,7 @@ const RenderElement = memo(function RenderElement({
   onElementDragEnd,
   onElementDragMove,
   onElementDragStart,
+  onHover,
   onSelect,
   onElementChange,
   onElementPreview,
@@ -766,6 +787,7 @@ const RenderElement = memo(function RenderElement({
             onElementDragStart={onElementDragStart}
             onElementChange={onElementChange}
             onElementPreview={onElementPreview}
+            onHover={onHover}
             onSelect={onSelect}
           />
         ))}
@@ -798,6 +820,8 @@ const RenderElement = memo(function RenderElement({
       onElementDragMove(element.id, event.target),
     onDragStart: (event: Konva.KonvaEventObject<DragEvent>) =>
       onElementDragStart(element.id, event.target),
+    onMouseEnter: () => onHover(element.id),
+    onMouseLeave: () => onHover(null),
     onTransform: (event: Konva.KonvaEventObject<Event>) =>
       onElementPreview(element.id, getTransformPatch(element, event.target)),
     onTransformEnd: (event: Konva.KonvaEventObject<Event>) =>
@@ -972,6 +996,7 @@ const RenderElement = memo(function RenderElement({
           onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -986,6 +1011,7 @@ const RenderElement = memo(function RenderElement({
           onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -1000,6 +1026,7 @@ const RenderElement = memo(function RenderElement({
           onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -1025,6 +1052,7 @@ export function CanvasStage({
   readOnly = false,
   stageHandleRef,
   onEditText,
+  onHover = ignoreElementHover,
   onSelect,
   onElementChange,
   onElementPreview,
@@ -1042,6 +1070,16 @@ export function CanvasStage({
     () => findElementContext(document.elements, selectedId),
     [document.elements, selectedId],
   );
+  const selectedLinearElement =
+    selectedContext &&
+    isLeafElement(selectedContext.element) &&
+    (selectedContext.element.type === "line" || selectedContext.element.type === "arrow") &&
+    selectedContext.effectivelyVisible &&
+    !isSelectedLocked &&
+    selectedId !== editingElementId &&
+    !readOnly
+      ? selectedContext.element
+      : null;
   const [fontRevision, setFontRevision] = useState(0);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
 
@@ -1122,8 +1160,9 @@ export function CanvasStage({
     (elementId: string) => {
       alignmentReferencesRef.current = collectAlignmentReferences(elementId);
       setAlignmentGuides([]);
+      onHover(null);
     },
-    [collectAlignmentReferences],
+    [collectAlignmentReferences, onHover],
   );
 
   const handleElementDragMove = useCallback(
@@ -1165,6 +1204,29 @@ export function CanvasStage({
     [onElementChange, onElementPreview],
   );
 
+  const handleLinearProxyDragMove = useCallback(
+    (elementId: string, proxyNode: Konva.Node) => {
+      const selectedNode = nodeRefs.current.get(elementId);
+      if (!selectedNode) return;
+
+      selectedNode.position(proxyNode.position());
+      handleElementDragMove(elementId, selectedNode);
+      proxyNode.position(selectedNode.position());
+    },
+    [handleElementDragMove],
+  );
+
+  const handleLinearProxyDragEnd = useCallback(
+    (elementId: string, proxyNode: Konva.Node) => {
+      const selectedNode = nodeRefs.current.get(elementId);
+      if (!selectedNode) return;
+
+      selectedNode.position(proxyNode.position());
+      handleElementDragEnd(elementId, selectedNode);
+    },
+    [handleElementDragEnd],
+  );
+
   useImperativeHandle(
     stageHandleRef,
     () => ({
@@ -1191,6 +1253,7 @@ export function CanvasStage({
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
+      onMouseLeave={() => onHover(null)}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
@@ -1231,6 +1294,7 @@ export function CanvasStage({
               onElementDragStart={handleElementDragStart}
               onElementChange={onElementChange}
               onElementPreview={onElementPreview}
+              onHover={onHover}
               onSelect={onSelect}
             />
           ))}
@@ -1249,6 +1313,7 @@ export function CanvasStage({
             onElementDragStart={() => undefined}
             onElementChange={() => undefined}
             onElementPreview={() => undefined}
+            onHover={ignoreElementHover}
             onSelect={() => undefined}
           />
         ) : null}
@@ -1271,6 +1336,27 @@ export function CanvasStage({
             />
           ))}
         </Group>
+        {selectedLinearElement ? (
+          <Line
+            draggable
+            hitStrokeWidth={Math.max(12 / zoom, selectedLinearElement.strokeWidth)}
+            lineCap={selectedLinearElement.lineCap}
+            name="selected-linear-drag-proxy"
+            points={selectedLinearElement.points}
+            rotation={selectedLinearElement.rotation}
+            stroke="rgba(0, 0, 0, 0.001)"
+            strokeWidth={Math.max(1 / zoom, selectedLinearElement.strokeWidth)}
+            x={selectedLinearElement.x}
+            y={selectedLinearElement.y}
+            onDragEnd={(event) => handleLinearProxyDragEnd(selectedLinearElement.id, event.target)}
+            onDragMove={(event) =>
+              handleLinearProxyDragMove(selectedLinearElement.id, event.target)
+            }
+            onDragStart={() => handleElementDragStart(selectedLinearElement.id)}
+            onMouseEnter={() => onHover(selectedLinearElement.id)}
+            onMouseLeave={() => onHover(null)}
+          />
+        ) : null}
         {readOnly ? null : (
           <>
             <Transformer
@@ -1313,6 +1399,20 @@ export function CanvasStage({
                 selectedContext?.element.type !== "chart" &&
                 selectedContext?.element.type !== "table"
               }
+              shouldOverdrawWholeArea={
+                Boolean(selectedContext && isLeafElement(selectedContext.element)) &&
+                selectedContext?.element.type !== "line" &&
+                selectedContext?.element.type !== "arrow"
+              }
+              onDblClick={(event) => {
+                const selectedElement = selectedContext?.element;
+                if (!selectedElement || selectedElement.type !== "text" || isSelectedLocked) {
+                  return;
+                }
+                event.cancelBubble = true;
+                onEditText(selectedElement.id);
+              }}
+              onDragStart={() => onHover(null)}
               boundBoxFunc={(oldBox, newBox) => {
                 const isLinear =
                   selectedContext?.element.type === "line" ||
