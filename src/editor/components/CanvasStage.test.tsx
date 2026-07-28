@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 interface MockGestureHandlers {
   onDragEnd?: (event: { target: unknown }) => void;
   onDragMove?: (event: { target: unknown }) => void;
+  onDragStart?: (event: { target: unknown }) => void;
   onTransform?: (event: { target: unknown }) => void;
   onTransformEnd?: (event: { target: unknown }) => void;
 }
@@ -100,6 +101,7 @@ vi.mock("react-konva", async () => {
       onClick,
       onDragEnd,
       onDragMove,
+      onDragStart,
       onTransform,
       onTransformEnd,
       width,
@@ -111,7 +113,13 @@ vi.mock("react-konva", async () => {
     ref,
   ) {
     if (name === "photo") {
-      imageGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
+      imageGestureHandlers = {
+        onDragEnd,
+        onDragMove,
+        onDragStart,
+        onTransform,
+        onTransformEnd,
+      };
       imageClipFunc = clipFunc;
     }
     return (
@@ -193,6 +201,7 @@ vi.mock("react-konva", async () => {
       lineHeight,
       onDragEnd,
       onDragMove,
+      onDragStart,
       onDblClick,
       onTransform,
       onTransformEnd,
@@ -205,13 +214,20 @@ vi.mock("react-konva", async () => {
       onDblClick?: MockTextRenderProps["onDblClick"];
       onDragEnd?: MockGestureHandlers["onDragEnd"];
       onDragMove?: MockGestureHandlers["onDragMove"];
+      onDragStart?: MockGestureHandlers["onDragStart"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
       visible?: boolean;
     }) => {
       lastTextFontFamily = fontFamily;
       lastTextFontStyle = fontStyle;
-      textGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
+      textGestureHandlers = {
+        onDragEnd,
+        onDragMove,
+        onDragStart,
+        onTransform,
+        onTransformEnd,
+      };
       textRenderProps = { draggable, lineHeight, onDblClick, visible };
       return null;
     },
@@ -965,6 +981,64 @@ describe("CanvasStage", () => {
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("fontSize");
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("height");
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("width");
+  });
+
+  it("snaps a dragged element to the canvas and clears its translucent guide on drop", () => {
+    const onElementChange = vi.fn();
+    const onElementPreview = vi.fn();
+    let position = { x: 3, y: 47 };
+    const node = {
+      getClientRect: () => ({
+        height: 120,
+        width: 180,
+        x: position.x,
+        y: position.y,
+      }),
+      position: (nextPosition: { x: number; y: number }) => {
+        position = nextPosition;
+      },
+      x: () => position.x,
+      y: () => position.y,
+    };
+
+    render(
+      <CanvasStage
+        document={document}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId="photo"
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={onElementChange}
+        onElementPreview={onElementPreview}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    act(() => imageGestureHandlers.onDragStart?.({ target: node }));
+    act(() => imageGestureHandlers.onDragMove?.({ target: node }));
+
+    expect(position).toEqual({ x: 0, y: 47 });
+    expect(onElementPreview).toHaveBeenLastCalledWith("photo", { x: 0, y: 47 });
+    expect(screen.getByTestId("shape-line")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining(
+        '"dash":[6,4],"lineCap":"round","listening":false,"name":"alignment-guide","opacity":0.58',
+      ),
+    );
+    expect(screen.getByTestId("shape-line")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"points":[0,0,0,300]'),
+    );
+
+    act(() => imageGestureHandlers.onDragEnd?.({ target: node }));
+
+    expect(onElementChange).toHaveBeenLastCalledWith("photo", { x: 0, y: 47 });
+    expect(screen.queryByTestId("shape-line")).not.toBeInTheDocument();
   });
 
   it("does not attach editable transform handles to groups or hidden elements", () => {
