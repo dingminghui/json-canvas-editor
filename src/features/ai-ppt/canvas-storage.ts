@@ -200,7 +200,7 @@ export const PptCanvasArtifactSchema = z
     reviewer: z
       .object({
         model: z.literal(PPT_MODEL),
-        promptVersion: z.enum(["ppt-visual-review/v1", PPT_VISUAL_REVIEW_PROMPT_VERSION]),
+        promptVersion: z.literal(PPT_VISUAL_REVIEW_PROMPT_VERSION),
       })
       .strict()
       .optional(),

@@ -69,6 +69,20 @@ describe("PPT 画布产物存储", () => {
     expect(isPptCanvasArtifactStale(legacyArtifact, artifact.sourceStructureUpdatedAt)).toBe(true);
   });
 
+  it("直接丢弃旧视觉评审提示版本的本地产物", () => {
+    const artifact = createArtifact();
+    const legacyReviewArtifact = {
+      ...artifact,
+      reviewer: {
+        ...artifact.reviewer,
+        promptVersion: "ppt-visual-review/v1",
+      },
+    };
+    localStorage.setItem(PPT_CANVAS_ARTIFACT_STORAGE_KEY, JSON.stringify([legacyReviewArtifact]));
+
+    expect(listPptCanvasArtifacts()).toEqual([]);
+  });
+
   it("忽略损坏数据且永不持久化接口密钥", () => {
     localStorage.setItem(
       PPT_CANVAS_ARTIFACT_STORAGE_KEY,
