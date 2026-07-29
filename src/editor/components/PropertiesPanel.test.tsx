@@ -104,6 +104,14 @@ describe("PropertiesPanel shape fields", () => {
     render(<PropertiesPanel isLocked={false} selectedElement={polygon} onUpdate={onUpdate} />);
 
     expect(screen.getByText("多边形", { selector: "[data-slot=badge]" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "拖动调整X" })).toHaveTextContent("X");
+    expect(screen.getByRole("button", { name: "拖动调整Y" })).toHaveTextContent("Y");
+    expect(screen.getByRole("button", { name: "拖动调整宽" }).querySelector("svg")).not.toHaveClass(
+      "rotate-90",
+    );
+    expect(screen.getByRole("button", { name: "拖动调整高" }).querySelector("svg")).toHaveClass(
+      "rotate-90",
+    );
     fireEvent.change(screen.getByLabelText("边数"), { target: { value: "6" } });
     expect(onUpdate).toHaveBeenCalledWith({ sides: 6 });
   });

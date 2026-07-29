@@ -10,8 +10,11 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  ScrubbableNumberInput,
+  type ScrubDirection,
+} from "@/components/ui/scrubbable-number-input";
 import {
   Select,
   SelectContent,
@@ -37,16 +40,26 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  AlignVerticalSpaceAround,
+  ArrowLeftRight,
+  Hash,
   LockKeyhole,
+  MoveRight,
+  PenLine,
+  Radius,
+  RulerDimensionLine,
   SlidersHorizontal,
+  SquareRoundCorner,
   TriangleRight,
+  Type,
 } from "lucide-react";
-import { memo, useId, useRef, useState } from "react";
+import { memo, useId, type ReactNode } from "react";
 
 interface PropertiesPanelProps {
   selectedElement: CanvasElement | null;
   isLocked: boolean;
   onUpdate: (patch: CanvasElementPatch) => void;
+  onPreview?: (patch: CanvasElementPatch | null) => void;
 }
 
 interface SelectOption {
@@ -69,23 +82,17 @@ const ELEMENT_TYPE_LABELS: Record<CanvasLeafElement["type"], string> = {
   table: "表格",
 };
 
-const TWO_DECIMAL_NUMBER_PATTERN = /^-?\d*(?:\.\d{0,2})?$/;
 const PROPERTY_LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const PROPERTY_CONTROL_CLASS_NAME =
   "rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
 const COMPACT_FIELD_GROUP_CLASS_NAME = "gap-2.5";
 
-function roundToTwoDecimals(value: number) {
-  const rounded = Math.round((value + Math.sign(value) * Number.EPSILON) * 100) / 100;
-  return Object.is(rounded, -0) ? 0 : rounded;
-}
-
-function formatPropertyNumber(value: number) {
-  if (!Number.isFinite(value)) return "0";
-  return roundToTwoDecimals(value)
-    .toFixed(2)
-    .replace(/\.00$/, "")
-    .replace(/(\.\d)0$/, "$1");
+function LetterScrubIcon({ children }: { children: string }) {
+  return (
+    <span aria-hidden="true" className="font-mono text-xs leading-none font-semibold">
+      {children}
+    </span>
+  );
 }
 
 function EditorSelect({
@@ -130,56 +137,57 @@ function EditorSelect({
 
 function PropertyNumberField({
   label,
+  icon,
   value,
   disabled,
   minValue,
+  scrubDirection,
+  scrubSensitivity,
   onChange,
+  onPreview,
+  onPreviewEnd,
 }: {
   label: string;
+  icon: ReactNode;
   value: number;
   disabled: boolean;
   minValue?: number;
+  scrubDirection: ScrubDirection;
+  scrubSensitivity: number;
   onChange: (value: number) => void;
+  onPreview?: (value: number) => void;
+  onPreviewEnd?: () => void;
 }) {
   const id = useId();
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const displayValue = draftValue ?? formatPropertyNumber(value);
-
-  function commitValue(rawValue: string) {
-    const nextValue = Number(rawValue);
-    if (!Number.isFinite(nextValue)) return;
-
-    const constrainedValue = minValue === undefined ? nextValue : Math.max(minValue, nextValue);
-    onChange(roundToTwoDecimals(constrainedValue));
-  }
 
   return (
     <Field>
       <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={id}>
         {label}
       </FieldLabel>
-      <Input
-        className={cn(
-          PROPERTY_CONTROL_CLASS_NAME,
-          "font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none",
-        )}
+      <ScrubbableNumberInput
+        className="font-mono"
+        containerClassName={PROPERTY_CONTROL_CLASS_NAME}
         disabled={disabled}
+        icon={icon}
         id={id}
-        min={minValue}
-        step={0.01}
-        type="number"
-        value={displayValue}
-        onBlur={() => {
-          if (draftValue !== null) commitValue(draftValue);
-          setDraftValue(null);
-        }}
-        onChange={(event) => {
-          const nextValue = event.currentTarget.value;
-          if (!TWO_DECIMAL_NUMBER_PATTERN.test(nextValue)) return;
-          setDraftValue(nextValue);
-          commitValue(nextValue);
-        }}
-        onFocus={() => setDraftValue(formatPropertyNumber(value))}
+        inputStep={0.01}
+        label={label}
+        minValue={minValue}
+        scrubDirection={scrubDirection}
+        scrubSensitivity={scrubSensitivity}
+        value={value}
+        onScrubCancel={onPreviewEnd}
+        onScrubCommit={
+          onPreview
+            ? (nextValue) => {
+                onChange(nextValue);
+                onPreviewEnd?.();
+              }
+            : undefined
+        }
+        onScrubPreview={onPreview}
+        onValueChange={onChange}
       />
     </Field>
   );
@@ -189,61 +197,46 @@ function RotationField({
   value,
   disabled,
   onChange,
+  onPreview,
+  onPreviewEnd,
 }: {
   value: number;
   disabled: boolean;
   onChange: (value: number) => void;
+  onPreview?: (value: number) => void;
+  onPreviewEnd?: () => void;
 }) {
   const id = useId();
-  const cancelCommitRef = useRef(false);
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const displayValue = draftValue ?? `${formatPropertyNumber(value)}°`;
-
-  function commitValue(rawValue: string) {
-    const normalizedValue = rawValue.trim().replace(/°$/, "").trim();
-    if (normalizedValue === "") return;
-
-    const nextValue = Number(normalizedValue);
-    if (!Number.isFinite(nextValue)) return;
-
-    onChange(roundToTwoDecimals(nextValue));
-  }
 
   return (
     <Field>
       <FieldLabel className={PROPERTY_LABEL_CLASS_NAME} htmlFor={id}>
         角度
       </FieldLabel>
-      <InputGroup className={PROPERTY_CONTROL_CLASS_NAME}>
-        <InputGroupInput
-          className="font-mono text-xs"
-          disabled={disabled}
-          id={id}
-          inputMode="decimal"
-          type="text"
-          value={displayValue}
-          onBlur={() => {
-            if (!cancelCommitRef.current && draftValue !== null) commitValue(draftValue);
-            cancelCommitRef.current = false;
-            setDraftValue(null);
-          }}
-          onChange={(event) => setDraftValue(event.currentTarget.value)}
-          onFocus={() => {
-            cancelCommitRef.current = false;
-            setDraftValue(formatPropertyNumber(value));
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-            if (event.key === "Escape") {
-              cancelCommitRef.current = true;
-              event.currentTarget.blur();
-            }
-          }}
-        />
-        <InputGroupAddon>
-          <TriangleRight aria-hidden="true" strokeWidth={1.75} />
-        </InputGroupAddon>
-      </InputGroup>
+      <ScrubbableNumberInput
+        allowUnlimitedFractionDigits
+        className="font-mono text-xs"
+        containerClassName={PROPERTY_CONTROL_CLASS_NAME}
+        disabled={disabled}
+        displaySuffix="°"
+        icon={<TriangleRight aria-hidden="true" />}
+        id={id}
+        label="角度"
+        scrubDirection="horizontal"
+        scrubSensitivity={1}
+        value={value}
+        onScrubCancel={onPreviewEnd}
+        onScrubCommit={
+          onPreview
+            ? (nextValue) => {
+                onChange(nextValue);
+                onPreviewEnd?.();
+              }
+            : undefined
+        }
+        onScrubPreview={onPreview}
+        onValueChange={onChange}
+      />
     </Field>
   );
 }
@@ -343,10 +336,14 @@ function ElementSpecificFields({
   element,
   disabled,
   onUpdate,
+  onPreview,
+  onPreviewEnd,
 }: {
   element: CanvasLeafElement;
   disabled: boolean;
   onUpdate: (patch: CanvasElementPatch) => void;
+  onPreview?: (patch: CanvasElementPatch) => void;
+  onPreviewEnd?: () => void;
 }) {
   const textId = useId();
 
@@ -391,10 +388,15 @@ function ElementSpecificFields({
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
               disabled={disabled}
+              icon={<Type aria-hidden="true" />}
               label="字号"
               minValue={8}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.fontSize}
               onChange={(fontSize) => onUpdate({ fontSize })}
+              onPreview={(fontSize) => onPreview?.({ fontSize })}
+              onPreviewEnd={onPreviewEnd}
             />
             <EditorSelect
               disabled={disabled}
@@ -414,10 +416,15 @@ function ElementSpecificFields({
           </div>
           <PropertyNumberField
             disabled={disabled}
+            icon={<AlignVerticalSpaceAround aria-hidden="true" />}
             label="行高"
             minValue={0.5}
+            scrubDirection="vertical"
+            scrubSensitivity={0.01}
             value={element.lineHeight}
             onChange={(lineHeight) => onUpdate({ lineHeight })}
+            onPreview={(lineHeight) => onPreview?.({ lineHeight })}
+            onPreviewEnd={onPreviewEnd}
           />
           <TextAlignmentControl
             disabled={disabled}
@@ -449,17 +456,27 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<SquareRoundCorner aria-hidden="true" />}
             label="圆角"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={1}
             value={element.cornerRadius}
             onChange={(cornerRadius) => onUpdate({ cornerRadius })}
+            onPreview={(cornerRadius) => onPreview?.({ cornerRadius })}
+            onPreviewEnd={onPreviewEnd}
           />
         </FieldGroup>
       );
@@ -481,10 +498,15 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
         </FieldGroup>
       );
@@ -499,10 +521,15 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
         </FieldGroup>
       );
@@ -517,25 +544,40 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
               disabled={disabled}
+              icon={<MoveRight aria-hidden="true" />}
               label="箭头长度"
               minValue={1}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.pointerLength}
               onChange={(pointerLength) => onUpdate({ pointerLength })}
+              onPreview={(pointerLength) => onPreview?.({ pointerLength })}
+              onPreviewEnd={onPreviewEnd}
             />
             <PropertyNumberField
               disabled={disabled}
+              icon={<ArrowLeftRight aria-hidden="true" />}
               label="箭头宽度"
               minValue={1}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.pointerWidth}
               onChange={(pointerWidth) => onUpdate({ pointerWidth })}
+              onPreview={(pointerWidth) => onPreview?.({ pointerWidth })}
+              onPreviewEnd={onPreviewEnd}
             />
           </div>
         </FieldGroup>
@@ -557,25 +599,40 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
               disabled={disabled}
+              icon={<Hash aria-hidden="true" />}
               label="边数"
               minValue={3}
+              scrubDirection="horizontal"
+              scrubSensitivity={0.125}
               value={element.sides}
               onChange={(sides) => onUpdate({ sides: Math.round(sides) })}
+              onPreview={(sides) => onPreview?.({ sides: Math.round(sides) })}
+              onPreviewEnd={onPreviewEnd}
             />
             <PropertyNumberField
               disabled={disabled}
+              icon={<SquareRoundCorner aria-hidden="true" />}
               label="圆角"
               minValue={0}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.cornerRadius}
               onChange={(cornerRadius) => onUpdate({ cornerRadius })}
+              onPreview={(cornerRadius) => onPreview?.({ cornerRadius })}
+              onPreviewEnd={onPreviewEnd}
             />
           </div>
         </FieldGroup>
@@ -597,34 +654,56 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<PenLine aria-hidden="true" />}
             label="描边宽度"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.1}
             value={element.strokeWidth}
             onChange={(strokeWidth) => onUpdate({ strokeWidth })}
+            onPreview={(strokeWidth) => onPreview?.({ strokeWidth })}
+            onPreviewEnd={onPreviewEnd}
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<Hash aria-hidden="true" />}
             label="角数"
             minValue={2}
+            scrubDirection="horizontal"
+            scrubSensitivity={0.125}
             value={element.numPoints}
             onChange={(numPoints) => onUpdate({ numPoints: Math.round(numPoints) })}
+            onPreview={(numPoints) => onPreview?.({ numPoints: Math.round(numPoints) })}
+            onPreviewEnd={onPreviewEnd}
           />
           <div className="grid grid-cols-2 gap-2">
             <PropertyNumberField
               disabled={disabled}
+              icon={<Radius aria-hidden="true" />}
               label="内半径"
               minValue={1}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.innerRadius}
               onChange={(innerRadius) => onUpdate({ innerRadius })}
+              onPreview={(innerRadius) => onPreview?.({ innerRadius })}
+              onPreviewEnd={onPreviewEnd}
             />
             <PropertyNumberField
               disabled={disabled}
+              icon={<Radius aria-hidden="true" />}
               label="外半径"
               minValue={1}
+              scrubDirection="horizontal"
+              scrubSensitivity={1}
               value={element.outerRadius}
               onChange={(outerRadius) =>
                 onUpdate({ outerRadius, width: outerRadius * 2, height: outerRadius * 2 })
               }
+              onPreview={(outerRadius) =>
+                onPreview?.({ outerRadius, width: outerRadius * 2, height: outerRadius * 2 })
+              }
+              onPreviewEnd={onPreviewEnd}
             />
           </div>
         </FieldGroup>
@@ -644,17 +723,30 @@ function ElementSpecificFields({
           />
           <PropertyNumberField
             disabled={disabled}
+            icon={<SquareRoundCorner aria-hidden="true" />}
             label="圆角"
             minValue={0}
+            scrubDirection="horizontal"
+            scrubSensitivity={1}
             value={element.cornerRadius}
             onChange={(cornerRadius) => onUpdate({ cornerRadius })}
+            onPreview={(cornerRadius) => onPreview?.({ cornerRadius })}
+            onPreviewEnd={onPreviewEnd}
           />
         </FieldGroup>
       );
     case "chart":
       return <ChartFields disabled={disabled} element={element} onUpdate={onUpdate} />;
     case "table":
-      return <TableFields disabled={disabled} element={element} onUpdate={onUpdate} />;
+      return (
+        <TableFields
+          disabled={disabled}
+          element={element}
+          onPreview={onPreview}
+          onPreviewEnd={onPreviewEnd}
+          onUpdate={onUpdate}
+        />
+      );
     default: {
       const exhaustiveElement: never = element;
       return exhaustiveElement;
@@ -666,6 +758,7 @@ export const PropertiesPanel = memo(function PropertiesPanel({
   selectedElement,
   isLocked,
   onUpdate,
+  onPreview,
 }: PropertiesPanelProps) {
   const nameId = useId();
   const canRotate = selectedElement?.type !== "chart" && selectedElement?.type !== "table";
@@ -729,29 +822,49 @@ export const PropertiesPanel = memo(function PropertiesPanel({
             <div className="grid grid-cols-2 gap-2">
               <PropertyNumberField
                 disabled={isLocked}
+                icon={<LetterScrubIcon>X</LetterScrubIcon>}
                 label="X"
+                scrubDirection="horizontal"
+                scrubSensitivity={1}
                 value={selectedElement.x}
                 onChange={(x) => onUpdate({ x })}
+                onPreview={(x) => onPreview?.({ x })}
+                onPreviewEnd={() => onPreview?.(null)}
               />
               <PropertyNumberField
                 disabled={isLocked}
+                icon={<LetterScrubIcon>Y</LetterScrubIcon>}
                 label="Y"
+                scrubDirection="vertical"
+                scrubSensitivity={1}
                 value={selectedElement.y}
                 onChange={(y) => onUpdate({ y })}
+                onPreview={(y) => onPreview?.({ y })}
+                onPreviewEnd={() => onPreview?.(null)}
               />
               <PropertyNumberField
                 disabled={isLocked}
+                icon={<RulerDimensionLine aria-hidden="true" />}
                 label="宽"
                 minValue={8}
+                scrubDirection="horizontal"
+                scrubSensitivity={1}
                 value={selectedElement.width}
                 onChange={(width) => onUpdate({ width: Math.max(8, width) })}
+                onPreview={(width) => onPreview?.({ width: Math.max(8, width) })}
+                onPreviewEnd={() => onPreview?.(null)}
               />
               <PropertyNumberField
                 disabled={isLocked}
+                icon={<RulerDimensionLine aria-hidden="true" className="rotate-90" />}
                 label="高"
                 minValue={8}
+                scrubDirection="vertical"
+                scrubSensitivity={1}
                 value={selectedElement.height}
                 onChange={(height) => onUpdate({ height: Math.max(8, height) })}
+                onPreview={(height) => onPreview?.({ height: Math.max(8, height) })}
+                onPreviewEnd={() => onPreview?.(null)}
               />
             </div>
 
@@ -760,6 +873,8 @@ export const PropertiesPanel = memo(function PropertiesPanel({
                 disabled={isLocked}
                 value={selectedElement.rotation}
                 onChange={(rotation) => onUpdate({ rotation })}
+                onPreview={(rotation) => onPreview?.({ rotation })}
+                onPreviewEnd={() => onPreview?.(null)}
               />
             ) : null}
           </FieldGroup>
@@ -807,6 +922,8 @@ export const PropertiesPanel = memo(function PropertiesPanel({
             disabled={isLocked}
             element={selectedElement}
             onUpdate={onUpdate}
+            onPreview={(patch) => onPreview?.(patch)}
+            onPreviewEnd={() => onPreview?.(null)}
           />
         </section>
       </ScrollArea>

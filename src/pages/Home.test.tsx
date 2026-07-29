@@ -1,5 +1,5 @@
 import { App } from "@/App";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -462,14 +462,16 @@ describe("Home", () => {
 
     await user.click(screen.getByRole("button", { name: "封面主标题" }));
     const rotationInput = screen.getByLabelText("角度");
-    const rotationGroup = rotationInput.closest('[data-slot="input-group"]');
-    const rotationAddon = rotationGroup?.querySelector('[data-slot="input-group-addon"]');
+    const rotationGroup = rotationInput.closest('[data-slot="scrubbable-number-input"]');
+    const rotationTrigger = screen.getByRole("button", { name: "拖动调整角度" });
 
     expect(rotationInput).toHaveValue("0°");
     expect(screen.getByText("角度")).toBeVisible();
     expect(rotationGroup).not.toBeNull();
-    expect(rotationAddon).toHaveAttribute("data-align", "inline-start");
-    expect(rotationGroup?.lastElementChild).toBe(rotationAddon);
+    expect(rotationTrigger).toHaveClass("cursor-ew-resize");
+    expect(rotationTrigger.querySelector("svg")).toHaveClass("lucide-triangle-right");
+    expect(rotationGroup?.firstElementChild).toBe(rotationTrigger);
+    expect(rotationGroup?.lastElementChild).toBe(rotationInput);
 
     await user.click(rotationInput);
     await user.clear(rotationInput);
@@ -562,6 +564,55 @@ describe("Home", () => {
     expect(fontSelect).toHaveTextContent("Noto 宋体");
     await user.click(screen.getByRole("button", { name: "撤销" }));
     expect(fontSelect).toHaveTextContent("Noto 黑体");
+  });
+
+  it("previews an icon scrub live and records one undoable property update", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: "封面主标题" }));
+    const xInput = screen.getByLabelText("X");
+    const scrubTrigger = screen.getByRole("button", { name: "拖动调整X" });
+    const initialX = Number(xInput.getAttribute("value"));
+    let capturedPointerId: number | null = null;
+
+    scrubTrigger.setPointerCapture = vi.fn((pointerId: number) => {
+      capturedPointerId = pointerId;
+    });
+    scrubTrigger.releasePointerCapture = vi.fn(() => {
+      capturedPointerId = null;
+    });
+    scrubTrigger.hasPointerCapture = vi.fn((pointerId: number) => capturedPointerId === pointerId);
+
+    vi.useFakeTimers();
+    fireEvent.pointerDown(scrubTrigger, {
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+      isPrimary: true,
+      pointerId: 3,
+      pointerType: "mouse",
+    });
+    act(() => vi.advanceTimersByTime(250));
+    fireEvent.pointerMove(scrubTrigger, {
+      clientX: 44,
+      clientY: 20,
+      pointerId: 3,
+      pointerType: "mouse",
+    });
+
+    expect(xInput).toHaveValue(initialX + 24);
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
+
+    fireEvent.pointerUp(scrubTrigger, { pointerId: 3, pointerType: "mouse" });
+    expect(xInput).toHaveValue(initialX + 24);
+    expect(screen.getByRole("button", { name: "撤销" })).toBeEnabled();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+    expect(xInput).toHaveValue(initialX);
+    expect(screen.getByRole("button", { name: "撤销" })).toBeDisabled();
   });
 
   it("enters text editing from Enter or double click and commits one undoable session", async () => {
