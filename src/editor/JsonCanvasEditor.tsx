@@ -101,6 +101,10 @@ export function JsonCanvasEditor({
     elementId: string;
     patch: CanvasElementPatch;
   } | null>(null);
+  const [propertyPreview, setPropertyPreview] = useState<{
+    elementId: string;
+    patch: CanvasElementPatch;
+  } | null>(null);
   const [textEditing, setTextEditing] = useState<TextEditingSession | null>(null);
   const [showSlideOverview, setShowSlideOverview] = useState(false);
   const nextTextEditingSessionIdRef = useRef(0);
@@ -139,6 +143,7 @@ export function JsonCanvasEditor({
     setHistory(nextHistory);
     setHoveredElementId(null);
     setElementPreview(null);
+    setPropertyPreview(null);
     setTextEditing(null);
     setShowSlideOverview(false);
   }, [initialDocumentId, value]);
@@ -152,24 +157,36 @@ export function JsonCanvasEditor({
     [activePageDocument.elements, state.selectedId],
   );
   const selectedElement = selectedElementContext?.element ?? null;
-  const canvasPageDocument = useMemo(
-    () =>
-      selectedElement?.type === "text" &&
-      elementPreview?.elementId === selectedElement.id &&
-      ("width" in elementPreview.patch || "height" in elementPreview.patch)
+  const canvasPageDocument = useMemo(() => {
+    const propertyPreviewDocument =
+      selectedElement && propertyPreview?.elementId === selectedElement.id
         ? patchCanvasDocumentElement(
             activePageDocument,
-            elementPreview.elementId,
-            elementPreview.patch,
+            propertyPreview.elementId,
+            propertyPreview.patch,
           )
-        : activePageDocument,
-    [activePageDocument, elementPreview, selectedElement],
-  );
+        : activePageDocument;
+
+    return selectedElement?.type === "text" &&
+      elementPreview?.elementId === selectedElement.id &&
+      ("width" in elementPreview.patch || "height" in elementPreview.patch)
+      ? patchCanvasDocumentElement(
+          propertyPreviewDocument,
+          elementPreview.elementId,
+          elementPreview.patch,
+        )
+      : propertyPreviewDocument;
+  }, [activePageDocument, elementPreview, propertyPreview, selectedElement]);
   const displayedSelectedElement =
     selectedElement &&
     isLeafElement(selectedElement) &&
-    elementPreview?.elementId === selectedElement.id
-      ? { ...selectedElement, ...elementPreview.patch }
+    (elementPreview?.elementId === selectedElement.id ||
+      propertyPreview?.elementId === selectedElement.id)
+      ? {
+          ...selectedElement,
+          ...(elementPreview?.elementId === selectedElement.id ? elementPreview.patch : {}),
+          ...(propertyPreview?.elementId === selectedElement.id ? propertyPreview.patch : {}),
+        }
       : selectedElement;
   const isSelectedLocked = selectedElementContext?.effectivelyLocked ?? false;
   const documents = useMemo(() => Object.values(state.documents), [state.documents]);
@@ -183,11 +200,23 @@ export function JsonCanvasEditor({
     },
     [applyAction, isSelectedLocked, readOnly, state.selectedId],
   );
+  const previewSelectedElement = useCallback(
+    (patch: CanvasElementPatch | null) => {
+      if (!patch) {
+        setPropertyPreview(null);
+        return;
+      }
+      if (!state.selectedId || isSelectedLocked || readOnly) return;
+      setPropertyPreview({ elementId: state.selectedId, patch });
+    },
+    [isSelectedLocked, readOnly, state.selectedId],
+  );
 
   const addElement = useCallback(
     (element: CanvasLeafElement, editText = false) => {
       if (readOnly) return;
       setElementPreview(null);
+      setPropertyPreview(null);
       applyAction({ type: "add-element", element });
       if (editText && element.type === "text") {
         setTextEditing({
@@ -203,6 +232,7 @@ export function JsonCanvasEditor({
   const selectElement = useCallback(
     (elementId: string | null) => {
       setElementPreview(null);
+      setPropertyPreview(null);
       applyAction({ type: "select-element", elementId });
     },
     [applyAction],
@@ -221,6 +251,7 @@ export function JsonCanvasEditor({
       editorWorkspaceRef.current?.cancelCreation();
       setHoveredElementId(null);
       setElementPreview(null);
+      setPropertyPreview(null);
       setTextEditing(null);
       setShowSlideOverview(false);
       applyAction({ type: "select-template", templateId: documentId });
@@ -234,6 +265,7 @@ export function JsonCanvasEditor({
       editorWorkspaceRef.current?.cancelCreation();
       setHoveredElementId(null);
       setElementPreview(null);
+      setPropertyPreview(null);
       setTextEditing(null);
       setShowSlideOverview(false);
       applyAction({ type: "select-page", templateId: documentId, pageId });
@@ -249,6 +281,7 @@ export function JsonCanvasEditor({
     editorWorkspaceRef.current?.cancelCreation();
     setHoveredElementId(null);
     setElementPreview(null);
+    setPropertyPreview(null);
     setTextEditing(null);
     applyAction({ type: "select-element", elementId: null });
     setShowSlideOverview(true);
@@ -315,6 +348,7 @@ export function JsonCanvasEditor({
       }
 
       setElementPreview(null);
+      setPropertyPreview(null);
       applyAction({ type: "select-element", elementId });
       setTextEditing({
         elementId,
@@ -507,6 +541,7 @@ export function JsonCanvasEditor({
               onAddElement={addElement}
               onOpenOverview={openSlideOverview}
               onExport={onExport}
+              onHover={setHoveredElementId}
               onSelect={selectElement}
               onSetFitMode={setFitMode}
               onSetZoom={setZoom}
@@ -533,6 +568,7 @@ export function JsonCanvasEditor({
             <PropertiesPanel
               isLocked={isSelectedLocked || readOnly}
               selectedElement={displayedSelectedElement}
+              onPreview={previewSelectedElement}
               onUpdate={updateSelectedElement}
             />
           </aside>

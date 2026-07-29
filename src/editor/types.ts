@@ -85,6 +85,10 @@ export interface ImageElement extends TransformableElement {
   src: string;
   fit: "cover" | "contain";
   cornerRadius: number;
+  /** Normalized crop focus within the source image. Defaults to the center. */
+  focalPointX: number;
+  /** Normalized crop focus within the source image. Defaults to the center. */
+  focalPointY: number;
 }
 
 export type ChartType = "bar" | "line" | "pie";

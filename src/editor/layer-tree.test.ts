@@ -4,8 +4,8 @@ import {
   createLayerTreeItems,
   type LayerTreeItemData,
 } from "@/editor/layer-tree";
-import { EDITOR_TEMPLATES } from "@/editor/templates";
 import { isGroupElement } from "@/editor/types";
+import { EDITOR_TEST_DOCUMENTS } from "@/test/fixtures/editor-documents";
 import type { TreeItem, TreeItems } from "dnd-kit-sortable-tree";
 
 function findTreeItem(
@@ -22,7 +22,7 @@ function findTreeItem(
 
 describe("layer tree conversion", () => {
   it("reuses unchanged groups when the hierarchy did not move", () => {
-    const elements = structuredClone(EDITOR_TEMPLATES[0].elements);
+    const elements = structuredClone(EDITOR_TEST_DOCUMENTS[0].elements);
     const items = createLayerTreeItems(elements, new Set());
     const rebuiltElements = createCanvasElements(items);
 
@@ -32,11 +32,14 @@ describe("layer tree conversion", () => {
   });
 
   it("rebuilds a cross-group hierarchy without changing element properties", () => {
-    const elements = structuredClone(EDITOR_TEMPLATES[0].elements);
-    const items = createLayerTreeItems(elements, new Set(["hero-group", "chapter-1-group"]));
-    const heroGroup = findTreeItem(items, "hero-group");
-    const chapterGroup = findTreeItem(items, "chapter-1-group");
-    const title = findTreeItem(items, "symbicort-006");
+    const elements = structuredClone(EDITOR_TEST_DOCUMENTS[0].elements);
+    const items = createLayerTreeItems(
+      elements,
+      new Set(["test-cover-group", "test-chapter-group"]),
+    );
+    const heroGroup = findTreeItem(items, "test-cover-group");
+    const chapterGroup = findTreeItem(items, "test-chapter-group");
+    const title = findTreeItem(items, "test-title");
 
     expect(heroGroup?.canHaveChildren).toBe(true);
     expect(title?.canHaveChildren).toBe(false);
@@ -47,22 +50,22 @@ describe("layer tree conversion", () => {
     chapterGroup.children = [title, ...(chapterGroup.children ?? [])];
 
     const nextElements = createCanvasElements(items);
-    const nextHeroGroup = findElement(nextElements, "hero-group");
-    const nextChapterGroup = findElement(nextElements, "chapter-1-group");
-    const nextTitle = findElement(nextElements, "symbicort-006");
+    const nextHeroGroup = findElement(nextElements, "test-cover-group");
+    const nextChapterGroup = findElement(nextElements, "test-chapter-group");
+    const nextTitle = findElement(nextElements, "test-title");
 
     expect(
       nextChapterGroup && isGroupElement(nextChapterGroup)
         ? nextChapterGroup.children.map((element) => element.id)
         : [],
-    ).toContain("symbicort-006");
+    ).toContain("test-title");
     expect(
       nextHeroGroup && isGroupElement(nextHeroGroup)
         ? nextHeroGroup.children.map((element) => element.id)
         : [],
-    ).not.toContain("symbicort-006");
+    ).not.toContain("test-title");
     expect(nextTitle).toMatchObject({
-      id: "symbicort-006",
+      id: "test-title",
       type: "text",
       x: 452,
       y: 155,

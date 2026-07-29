@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,7 +63,7 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
           title="查看页面结构 JSON"
           variant="ghost"
         >
-          <CircleHelp aria-hidden="true" className="size-[16px]" strokeWidth={1.75} />
+          <CircleHelp aria-hidden="true" />
         </Button>
       </DialogTrigger>
 
@@ -73,12 +74,14 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
               <Braces aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
             </span>
             <DialogTitle>页面结构</DialogTitle>
-            <span className="rounded-full border bg-muted/45 px-2 py-0.5 text-[10px] leading-none tracking-wide text-muted-foreground">
-              只读预览
-            </span>
+            <Badge variant="outline">只读预览</Badge>
           </div>
-          <DialogDescription>
-            {document.name} · {document.width} × {document.height}
+          <DialogDescription className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate">{document.name}</span>
+            <span className="shrink-0 whitespace-nowrap font-mono tabular-nums">
+              {" · "}
+              {document.width} × {document.height}
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -89,7 +92,7 @@ export function DocumentJsonPreviewDialog({ document }: DocumentJsonPreviewDialo
               page.json
             </span>
             <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-              {lines.length} lines
+              {lines.length} 行
             </span>
           </div>
 

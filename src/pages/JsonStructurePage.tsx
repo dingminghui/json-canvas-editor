@@ -1,8 +1,7 @@
+import { AppBackLink } from "@/components/AppBackLink";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, FileJson2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { FileJson2 } from "lucide-react";
 
 interface FieldRow {
   field: string;
@@ -289,12 +288,9 @@ export function JsonStructurePage() {
                 导出时再转换为 PowerPoint 单位。
               </p>
             </div>
-            <Button asChild variant="outline">
-              <Link to="/">
-                <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.75} />
-                返回首页
-              </Link>
-            </Button>
+            <AppBackLink iconOnly to="/" variant="outline">
+              返回首页
+            </AppBackLink>
           </header>
 
           <section className="flex flex-col gap-3">

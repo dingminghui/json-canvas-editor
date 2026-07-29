@@ -1,6 +1,14 @@
+import {
+  mergeAlignmentBounds,
+  resolveAlignmentSnap,
+  type AlignmentBounds,
+  type AlignmentGuide,
+  type AlignmentReference,
+} from "@/editor/alignment-guides";
 import { renderChartToDataUrl } from "@/editor/chart-renderer";
 import { findElementContext } from "@/editor/editor-state";
 import { getCanvasFont, loadCanvasFont, type CanvasFontFamily } from "@/editor/fonts";
+import { getCoverImageCrop } from "@/editor/image-layout";
 import {
   invalidateMarkdownCanvasCache,
   markdownToDisplayText,
@@ -67,6 +75,7 @@ interface CanvasStageProps {
   readOnly?: boolean;
   stageHandleRef?: Ref<CanvasStageHandle>;
   onEditText: (elementId: string) => void;
+  onHover?: (elementId: string | null) => void;
   onSelect: (elementId: string | null) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
@@ -83,10 +92,30 @@ interface RenderElementProps {
   editingElementId: string | null;
   selectedId: string | null;
   onEditText: (elementId: string) => void;
+  onElementDragEnd: (elementId: string, node: Konva.Node) => void;
+  onElementDragMove: (elementId: string, node: Konva.Node) => void;
+  onElementDragStart: (elementId: string, node: Konva.Node) => void;
+  onHover: (elementId: string | null) => void;
   onSelect: (elementId: string) => void;
   onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
   onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
   setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+}
+
+interface ElementDragCallbacks {
+  onElementDragEnd: (elementId: string, node: Konva.Node) => void;
+  onElementDragMove: (elementId: string, node: Konva.Node) => void;
+  onElementDragStart: (elementId: string, node: Konva.Node) => void;
+}
+
+interface ElementHoverCallbacks {
+  onHover: (elementId: string | null) => void;
+}
+
+interface AlignmentLeafEntry {
+  ancestorGroupIds: string[];
+  id: string;
+  parentGroupId: string | null;
 }
 
 interface FontLoadRequest {
@@ -101,6 +130,130 @@ interface ImageRenderGeometry {
   width: number;
   x: number;
   y: number;
+}
+
+const ignoreElementHover = () => undefined;
+
+function collectVisibleLeafEntries(
+  elements: CanvasElement[],
+  ancestorGroupIds: string[] = [],
+  inheritedVisible = true,
+): AlignmentLeafEntry[] {
+  const entries: AlignmentLeafEntry[] = [];
+
+  for (const element of elements) {
+    const effectivelyVisible = inheritedVisible && element.visible;
+    if (!effectivelyVisible) continue;
+
+    if (isGroupElement(element)) {
+      entries.push(
+        ...collectVisibleLeafEntries(
+          element.children,
+          [...ancestorGroupIds, element.id],
+          effectivelyVisible,
+        ),
+      );
+      continue;
+    }
+
+    entries.push({
+      ancestorGroupIds,
+      id: element.id,
+      parentGroupId: ancestorGroupIds.at(-1) ?? null,
+    });
+  }
+
+  return entries;
+}
+
+function getNodeAlignmentBounds(
+  node: Konva.Node | undefined,
+  relativeTo: Konva.Group,
+): AlignmentBounds | null {
+  if (!node || typeof node.getClientRect !== "function") return null;
+
+  const bounds = node.getClientRect({
+    relativeTo,
+    skipShadow: true,
+  });
+  return {
+    bottom: bounds.y + bounds.height,
+    left: bounds.x,
+    right: bounds.x + bounds.width,
+    top: bounds.y,
+  };
+}
+
+function createAlignmentReferences({
+  document,
+  draggedElementId,
+  documentGroup,
+  nodes,
+}: {
+  document: CanvasDocument;
+  documentGroup: Konva.Group;
+  draggedElementId: string;
+  nodes: Map<string, Konva.Node>;
+}): AlignmentReference[] {
+  const entries = collectVisibleLeafEntries(document.elements);
+  const draggedEntry = entries.find((entry) => entry.id === draggedElementId);
+  const boundsById = new Map<string, AlignmentBounds>();
+
+  for (const entry of entries) {
+    if (entry.id === draggedElementId) continue;
+    const bounds = getNodeAlignmentBounds(nodes.get(entry.id), documentGroup);
+    if (bounds) boundsById.set(entry.id, bounds);
+  }
+
+  const elementReferences = entries.flatMap((entry): AlignmentReference[] => {
+    if (entry.id === draggedElementId) return [];
+    const bounds = boundsById.get(entry.id);
+    if (!bounds) return [];
+
+    return [
+      {
+        bounds,
+        id: entry.id,
+        priority: entry.parentGroupId === draggedEntry?.parentGroupId ? 0 : 2,
+      },
+    ];
+  });
+  const parentGroupId = draggedEntry?.parentGroupId;
+  let parentReference: AlignmentReference | null = null;
+
+  if (parentGroupId) {
+    const parentBounds = mergeAlignmentBounds(
+      entries.flatMap((entry): AlignmentBounds[] => {
+        if (entry.id === draggedElementId || !entry.ancestorGroupIds.includes(parentGroupId)) {
+          return [];
+        }
+        const bounds = boundsById.get(entry.id);
+        return bounds ? [bounds] : [];
+      }),
+    );
+    if (parentBounds) {
+      parentReference = {
+        bounds: parentBounds,
+        id: parentGroupId,
+        priority: 1,
+      };
+    }
+  }
+
+  return [
+    ...elementReferences,
+    ...(parentReference ? [parentReference] : []),
+    {
+      bounds: {
+        bottom: document.height,
+        left: 0,
+        right: document.width,
+        top: 0,
+      },
+      id: document.id,
+      priority: 1,
+    },
+  ];
 }
 
 function getDocumentFontLoadRequests(elements: CanvasElement[]): FontLoadRequest[] {
@@ -175,20 +328,15 @@ function getImageRenderGeometry(
     };
   }
 
-  const frameAspectRatio = element.width / element.height;
-  const imageAspectRatio = image.width / image.height;
-  const cropWidth =
-    imageAspectRatio > frameAspectRatio ? image.height * frameAspectRatio : image.width;
-  const cropHeight =
-    imageAspectRatio > frameAspectRatio ? image.height : image.width / frameAspectRatio;
+  const crop = getCoverImageCrop(
+    image,
+    element,
+    element.focalPointX ?? 0.5,
+    element.focalPointY ?? 0.5,
+  );
 
   return {
-    crop: {
-      height: cropHeight,
-      width: cropWidth,
-      x: (image.width - cropWidth) / 2,
-      y: (image.height - cropHeight) / 2,
-    },
+    crop: crop ?? undefined,
     height: element.height,
     width: element.width,
     x: 0,
@@ -200,17 +348,22 @@ function CanvasImage({
   element,
   draggable,
   onSelect,
+  onElementDragEnd,
+  onElementDragMove,
+  onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: {
-  element: ImageElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: ImageElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const [image] = useImage(element.src);
   const imageGeometry = getImageRenderGeometry(image, element);
 
@@ -235,10 +388,11 @@ function CanvasImage({
         event.cancelBubble = true;
         onSelect(element.id);
       }}
-      onDragMove={(event) =>
-        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
-      }
-      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
+      onDragMove={(event) => onElementDragMove(element.id, event.target)}
+      onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -274,17 +428,22 @@ function CanvasChart({
   element,
   draggable,
   onSelect,
+  onElementDragEnd,
+  onElementDragMove,
+  onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: {
-  element: ChartElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: ChartElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [chartImage] = useImage(dataUrl ?? "");
 
@@ -316,10 +475,11 @@ function CanvasChart({
         event.cancelBubble = true;
         onSelect(element.id);
       }}
-      onDragMove={(event) =>
-        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
-      }
-      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
+      onDragMove={(event) => onElementDragMove(element.id, event.target)}
+      onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -397,17 +557,22 @@ function CanvasTable({
   element,
   draggable,
   onSelect,
+  onElementDragEnd,
+  onElementDragMove,
+  onElementDragStart,
+  onHover,
   onElementChange,
   onElementPreview,
   setNodeRef,
-}: {
-  element: TableElement;
-  draggable: boolean;
-  onSelect: (elementId: string) => void;
-  onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
-  onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
-  setNodeRef: (elementId: string, node: Konva.Node | null) => void;
-}) {
+}: ElementDragCallbacks &
+  ElementHoverCallbacks & {
+    element: TableElement;
+    draggable: boolean;
+    onSelect: (elementId: string) => void;
+    onElementChange: (elementId: string, patch: CanvasElementPatch) => void;
+    onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
+    setNodeRef: (elementId: string, node: Konva.Node | null) => void;
+  }) {
   const layout = getTableLayout(element);
 
   return (
@@ -426,10 +591,11 @@ function CanvasTable({
         event.cancelBubble = true;
         onSelect(element.id);
       }}
-      onDragMove={(event) =>
-        onElementPreview(element.id, { x: event.target.x(), y: event.target.y() })
-      }
-      onDragEnd={(event) => commitDrag(element.id, event.target, onElementChange, onElementPreview)}
+      onDragEnd={(event) => onElementDragEnd(element.id, event.target)}
+      onDragMove={(event) => onElementDragMove(element.id, event.target)}
+      onDragStart={(event) => onElementDragStart(element.id, event.target)}
+      onMouseEnter={() => onHover(element.id)}
+      onMouseLeave={() => onHover(null)}
       onTap={(event) => {
         event.cancelBubble = true;
         onSelect(element.id);
@@ -579,6 +745,10 @@ const RenderElement = memo(function RenderElement({
   editingElementId,
   selectedId,
   onEditText,
+  onElementDragEnd,
+  onElementDragMove,
+  onElementDragStart,
+  onHover,
   onSelect,
   onElementChange,
   onElementPreview,
@@ -608,8 +778,12 @@ const RenderElement = memo(function RenderElement({
             selectedId={selectedId}
             setNodeRef={setNodeRef}
             onEditText={onEditText}
+            onElementDragEnd={onElementDragEnd}
+            onElementDragMove={onElementDragMove}
+            onElementDragStart={onElementDragStart}
             onElementChange={onElementChange}
             onElementPreview={onElementPreview}
+            onHover={onHover}
             onSelect={onSelect}
           />
         ))}
@@ -636,10 +810,14 @@ const RenderElement = memo(function RenderElement({
       event.cancelBubble = true;
       onSelect(element.id);
     },
-    onDragMove: (event: Konva.KonvaEventObject<DragEvent>) =>
-      onElementPreview(element.id, { x: event.target.x(), y: event.target.y() }),
     onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) =>
-      commitDrag(element.id, event.target, onElementChange, onElementPreview),
+      onElementDragEnd(element.id, event.target),
+    onDragMove: (event: Konva.KonvaEventObject<DragEvent>) =>
+      onElementDragMove(element.id, event.target),
+    onDragStart: (event: Konva.KonvaEventObject<DragEvent>) =>
+      onElementDragStart(element.id, event.target),
+    onMouseEnter: () => onHover(element.id),
+    onMouseLeave: () => onHover(null),
     onTransform: (event: Konva.KonvaEventObject<Event>) =>
       onElementPreview(element.id, getTransformPatch(element, event.target)),
     onTransformEnd: (event: Konva.KonvaEventObject<Event>) =>
@@ -809,8 +987,12 @@ const RenderElement = memo(function RenderElement({
           draggable={selectedId === element.id && !locked}
           element={element}
           setNodeRef={setNodeRef}
+          onElementDragEnd={onElementDragEnd}
+          onElementDragMove={onElementDragMove}
+          onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -820,8 +1002,12 @@ const RenderElement = memo(function RenderElement({
           draggable={selectedId === element.id && !locked}
           element={element}
           setNodeRef={setNodeRef}
+          onElementDragEnd={onElementDragEnd}
+          onElementDragMove={onElementDragMove}
+          onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -831,8 +1017,12 @@ const RenderElement = memo(function RenderElement({
           draggable={selectedId === element.id && !locked}
           element={element}
           setNodeRef={setNodeRef}
+          onElementDragEnd={onElementDragEnd}
+          onElementDragMove={onElementDragMove}
+          onElementDragStart={onElementDragStart}
           onElementChange={onElementChange}
           onElementPreview={onElementPreview}
+          onHover={onHover}
           onSelect={onSelect}
         />
       );
@@ -858,6 +1048,7 @@ export function CanvasStage({
   readOnly = false,
   stageHandleRef,
   onEditText,
+  onHover = ignoreElementHover,
   onSelect,
   onElementChange,
   onElementPreview,
@@ -866,6 +1057,7 @@ export function CanvasStage({
   const transformerRef = useRef<Konva.Transformer>(null);
   const hoverTransformerRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
+  const alignmentReferencesRef = useRef<AlignmentReference[]>([]);
   const fontLoadRequests = useMemo(
     () => getDocumentFontLoadRequests(document.elements),
     [document.elements],
@@ -874,7 +1066,18 @@ export function CanvasStage({
     () => findElementContext(document.elements, selectedId),
     [document.elements, selectedId],
   );
+  const selectedLinearElement =
+    selectedContext &&
+    isLeafElement(selectedContext.element) &&
+    (selectedContext.element.type === "line" || selectedContext.element.type === "arrow") &&
+    selectedContext.effectivelyVisible &&
+    !isSelectedLocked &&
+    selectedId !== editingElementId &&
+    !readOnly
+      ? selectedContext.element
+      : null;
   const [fontRevision, setFontRevision] = useState(0);
+  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
 
   useEffect(() => {
     if (fontLoadRequests.length === 0 || !globalThis.document.fonts?.load) return;
@@ -934,6 +1137,92 @@ export function CanvasStage({
     else nodeRefs.current.delete(elementId);
   }, []);
 
+  const collectAlignmentReferences = useCallback(
+    (draggedElementId: string) => {
+      const documentGroup = documentGroupRef.current;
+      if (!documentGroup) return [];
+
+      return createAlignmentReferences({
+        document,
+        documentGroup,
+        draggedElementId,
+        nodes: nodeRefs.current,
+      });
+    },
+    [document],
+  );
+
+  const handleElementDragStart = useCallback(
+    (elementId: string) => {
+      alignmentReferencesRef.current = collectAlignmentReferences(elementId);
+      setAlignmentGuides([]);
+      onHover(null);
+    },
+    [collectAlignmentReferences, onHover],
+  );
+
+  const handleElementDragMove = useCallback(
+    (elementId: string, node: Konva.Node) => {
+      const documentGroup = documentGroupRef.current;
+      const bounds = documentGroup ? getNodeAlignmentBounds(node, documentGroup) : null;
+
+      if (!documentGroup || !bounds) {
+        onElementPreview(elementId, { x: node.x(), y: node.y() });
+        return;
+      }
+
+      if (alignmentReferencesRef.current.length === 0) {
+        alignmentReferencesRef.current = collectAlignmentReferences(elementId);
+      }
+      const snap = resolveAlignmentSnap({
+        bounds,
+        references: alignmentReferencesRef.current,
+        threshold: 5 / zoom,
+        x: node.x(),
+        y: node.y(),
+      });
+
+      if (snap.x !== node.x() || snap.y !== node.y()) {
+        node.position({ x: snap.x, y: snap.y });
+      }
+      setAlignmentGuides(snap.guides);
+      onElementPreview(elementId, { x: snap.x, y: snap.y });
+    },
+    [collectAlignmentReferences, onElementPreview, zoom],
+  );
+
+  const handleElementDragEnd = useCallback(
+    (elementId: string, node: Konva.Node) => {
+      alignmentReferencesRef.current = [];
+      setAlignmentGuides([]);
+      commitDrag(elementId, node, onElementChange, onElementPreview);
+    },
+    [onElementChange, onElementPreview],
+  );
+
+  const handleLinearProxyDragMove = useCallback(
+    (elementId: string, proxyNode: Konva.Node) => {
+      const selectedNode = nodeRefs.current.get(elementId);
+      if (!selectedNode) return;
+
+      selectedNode.position(proxyNode.position());
+      handleElementDragMove(elementId, selectedNode);
+      proxyNode.position(selectedNode.position());
+    },
+    [handleElementDragMove],
+  );
+
+  const handleLinearProxyDragEnd = useCallback(
+    (elementId: string, proxyNode: Konva.Node) => {
+      const selectedNode = nodeRefs.current.get(elementId);
+      if (!selectedNode) return;
+
+      selectedNode.position(proxyNode.position());
+      handleElementDragEnd(elementId, selectedNode);
+    },
+    [handleElementDragEnd],
+  );
+
   useImperativeHandle(
     stageHandleRef,
     () => ({
@@ -960,6 +1249,7 @@ export function CanvasStage({
       onMouseDown={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
+      onMouseLeave={() => onHover(null)}
       onTouchStart={(event) => {
         if (event.target === event.target.getStage()) onSelect(null);
       }}
@@ -995,8 +1285,12 @@ export function CanvasStage({
               selectedId={selectedId}
               setNodeRef={setNodeRef}
               onEditText={onEditText}
+              onElementDragEnd={handleElementDragEnd}
+              onElementDragMove={handleElementDragMove}
+              onElementDragStart={handleElementDragStart}
               onElementChange={onElementChange}
               onElementPreview={onElementPreview}
+              onHover={onHover}
               onSelect={onSelect}
             />
           ))}
@@ -1010,9 +1304,53 @@ export function CanvasStage({
             selectedId={null}
             setNodeRef={() => undefined}
             onEditText={() => undefined}
+            onElementDragEnd={() => undefined}
+            onElementDragMove={() => undefined}
+            onElementDragStart={() => undefined}
             onElementChange={() => undefined}
             onElementPreview={() => undefined}
+            onHover={ignoreElementHover}
             onSelect={() => undefined}
+          />
+        ) : null}
+        <Group listening={false}>
+          {alignmentGuides.map((guide, index) => (
+            <Line
+              dash={[6 / zoom, 4 / zoom]}
+              key={`${guide.orientation}-${guide.sourceId}-${index}`}
+              lineCap="round"
+              listening={false}
+              name="alignment-guide"
+              opacity={0.58}
+              points={
+                guide.orientation === "vertical"
+                  ? [guide.position, guide.start, guide.position, guide.end]
+                  : [guide.start, guide.position, guide.end, guide.position]
+              }
+              stroke="#6d5fd4"
+              strokeWidth={1 / zoom}
+            />
+          ))}
+        </Group>
+        {selectedLinearElement ? (
+          <Line
+            draggable
+            hitStrokeWidth={Math.max(12 / zoom, selectedLinearElement.strokeWidth)}
+            lineCap={selectedLinearElement.lineCap}
+            name="selected-linear-drag-proxy"
+            points={selectedLinearElement.points}
+            rotation={selectedLinearElement.rotation}
+            stroke="rgba(0, 0, 0, 0.001)"
+            strokeWidth={Math.max(1 / zoom, selectedLinearElement.strokeWidth)}
+            x={selectedLinearElement.x}
+            y={selectedLinearElement.y}
+            onDragEnd={(event) => handleLinearProxyDragEnd(selectedLinearElement.id, event.target)}
+            onDragMove={(event) =>
+              handleLinearProxyDragMove(selectedLinearElement.id, event.target)
+            }
+            onDragStart={() => handleElementDragStart(selectedLinearElement.id)}
+            onMouseEnter={() => onHover(selectedLinearElement.id)}
+            onMouseLeave={() => onHover(null)}
           />
         ) : null}
         {readOnly ? null : (
@@ -1057,6 +1395,20 @@ export function CanvasStage({
                 selectedContext?.element.type !== "chart" &&
                 selectedContext?.element.type !== "table"
               }
+              shouldOverdrawWholeArea={
+                Boolean(selectedContext && isLeafElement(selectedContext.element)) &&
+                selectedContext?.element.type !== "line" &&
+                selectedContext?.element.type !== "arrow"
+              }
+              onDblClick={(event) => {
+                const selectedElement = selectedContext?.element;
+                if (!selectedElement || selectedElement.type !== "text" || isSelectedLocked) {
+                  return;
+                }
+                event.cancelBubble = true;
+                onEditText(selectedElement.id);
+              }}
+              onDragStart={() => onHover(null)}
               boundBoxFunc={(oldBox, newBox) => {
                 const isLinear =
                   selectedContext?.element.type === "line" ||

@@ -5,6 +5,7 @@ import {
   renderChartToDataUrl,
 } from "@/editor/chart-renderer";
 import { getExportFileName } from "@/editor/export-file";
+import { getCoverImageCrop } from "@/editor/image-layout";
 import { markdownToDisplayText } from "@/editor/markdown";
 import { isTableDataValid } from "@/editor/table-layout";
 import { renderTableToDataUrl } from "@/editor/table-renderer";
@@ -264,28 +265,64 @@ async function loadImageElement(src: string): Promise<HTMLImageElement> {
   });
 }
 
-async function createPngImageSource(src: string): Promise<PptxImageSource> {
+async function createPngImageSource(element: ImageElement): Promise<PptxImageSource> {
   try {
-    const image = await loadImageElement(src);
+    const image = await loadImageElement(element.src);
+    const crop =
+      element.fit === "cover"
+        ? getCoverImageCrop(
+            {
+              height: image.naturalHeight || image.height,
+              width: image.naturalWidth || image.width,
+            },
+            element,
+            element.focalPointX ?? 0.5,
+            element.focalPointY ?? 0.5,
+          )
+        : null;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, image.naturalWidth || image.width);
-    canvas.height = Math.max(1, image.naturalHeight || image.height);
+    canvas.width = Math.max(1, Math.round(crop?.width ?? (image.naturalWidth || image.width)));
+    canvas.height = Math.max(1, Math.round(crop?.height ?? (image.naturalHeight || image.height)));
     const context = canvas.getContext("2d");
-    if (!context) return { path: src };
+    if (!context) return { path: element.src };
 
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (crop) {
+      context.drawImage(
+        image,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+    } else {
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    }
     return { data: canvas.toDataURL("image/png") };
   } catch {
-    return { path: src };
+    return { path: element.src };
   }
 }
 
-function getImageSource(src: string, cache: PptxImageSourceCache): Promise<PptxImageSource> {
-  const cached = cache.get(src);
+function getImageSource(
+  element: ImageElement,
+  cache: PptxImageSourceCache,
+): Promise<PptxImageSource> {
+  const key = [
+    element.src,
+    element.fit,
+    element.width / Math.max(element.height, 1),
+    element.focalPointX ?? 0.5,
+    element.focalPointY ?? 0.5,
+  ].join(":");
+  const cached = cache.get(key);
   if (cached) return cached;
 
-  const source = createPngImageSource(src);
-  cache.set(src, source);
+  const source = createPngImageSource(element);
+  cache.set(key, source);
   return source;
 }
 
@@ -296,7 +333,7 @@ async function addImageElement(
   imageSourceCache: PptxImageSourceCache,
 ) {
   const rect = toSlideRect(element, coordinates);
-  const source = await getImageSource(element.src, imageSourceCache);
+  const source = await getImageSource(element, imageSourceCache);
 
   slide.addImage({
     ...source,

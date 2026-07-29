@@ -292,6 +292,8 @@ export function createImageElement(
     ...baseElement(id, "图片", placement.x, placement.y, placement.width, placement.height),
     cornerRadius: 0,
     fit: "contain",
+    focalPointX: 0.5,
+    focalPointY: 0.5,
     src,
     type: "image",
   };

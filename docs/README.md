@@ -9,6 +9,7 @@
 | [PRODUCT_SPEC.md](./PRODUCT_SPEC.md) | 产品、设计、测试 | 产品定位、功能清单、核心流程、交互规则、验收标准 |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 开发、维护者 | 技术栈、目录结构、数据模型、状态管理、渲染与导出链路 |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | 开发、贡献者 | 本地开发、质量检查、模板扩展、常见修改入口 |
+| [PPT_MASTER_REFERENCE.md](./PPT_MASTER_REFERENCE.md) | AI PPT 开发、维护者 | PPT Master 调研基线、可迁移原则、架构差异与增量刷新规则 |
 
 ## 当前产品边界
 

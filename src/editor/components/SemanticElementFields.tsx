@@ -11,6 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  ScrubbableNumberInput,
+  type ScrubDirection,
+} from "@/components/ui/scrubbable-number-input";
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -30,8 +34,18 @@ import type {
   TableRow,
 } from "@/editor/types";
 import { cn } from "@/lib/utils";
-import { BarChart3, Grid2X2, Plus, Rows3, Table2, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import {
+  BarChart3,
+  Columns3,
+  Grid2X2,
+  PenLine,
+  Plus,
+  Rows3,
+  Table2,
+  Trash2,
+  Type,
+} from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
 
 const CONTROL_CLASS_NAME =
   "w-full rounded-[calc(var(--radius-sm)-3px)] border-transparent bg-[color-mix(in_oklch,var(--muted)_76%,var(--card))] text-xs shadow-none focus-visible:border-ring md:text-xs";
@@ -39,10 +53,6 @@ const LABEL_CLASS_NAME = "text-xs text-muted-foreground";
 const GRID_INPUT_CLASS_NAME =
   "h-8 rounded-none border-0 border-r border-b bg-background px-2 text-xs shadow-none focus-visible:relative focus-visible:z-10 focus-visible:ring-2 md:text-xs";
 const CHART_COLORS = ["#4F46E5", "#059669", "#F59E0B", "#DC2626", "#0284C7", "#7C3AED"];
-const TWO_DECIMAL_DIMENSION_PATTERN = /^\d*(?:\.\d{0,2})?$/;
-const NUMBER_INPUT_CLASS_NAME =
-  "[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none";
-
 interface TableStyleSelectOption<TValue extends string> {
   label: string;
   value: TValue;
@@ -81,64 +91,38 @@ function createSemanticId(prefix: string) {
   return `${prefix}-${suffix}`;
 }
 
-function roundToTwoDecimals(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function formatDimension(value: number) {
-  return Number.isFinite(value) ? String(roundToTwoDecimals(value)) : "";
-}
-
 function TableDimensionInput({
   "aria-label": ariaLabel,
   className,
+  icon,
   minValue,
+  scrubDirection,
   value,
   onChange,
 }: {
   "aria-label": string;
   className?: string;
+  icon: ReactNode;
   minValue: number;
+  scrubDirection: ScrubDirection;
   value: number;
   onChange: (value: number) => void;
 }) {
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const displayValue = draftValue ?? formatDimension(value);
-  const numericValue = Number(displayValue);
-  const invalid =
-    displayValue.trim() === "" || !Number.isFinite(numericValue) || numericValue < minValue;
-
-  function commit(rawValue: string) {
-    const nextValue = Number(rawValue);
-    if (!Number.isFinite(nextValue)) return;
-    onChange(Math.max(minValue, roundToTwoDecimals(nextValue)));
-  }
-
   return (
-    <Input
-      aria-invalid={invalid}
-      aria-label={ariaLabel}
-      className={cn(NUMBER_INPUT_CLASS_NAME, className)}
-      inputMode="decimal"
-      min={minValue}
-      step={0.01}
-      type="number"
-      value={displayValue}
-      onBlur={() => {
-        if (draftValue !== null) commit(draftValue);
-        setDraftValue(null);
-      }}
-      onChange={(event) => {
-        const nextValue = event.currentTarget.value;
-        if (!TWO_DECIMAL_DIMENSION_PATTERN.test(nextValue)) return;
-        setDraftValue(nextValue);
-        if (nextValue !== "") commit(nextValue);
-      }}
-      onFocus={() => setDraftValue(formatDimension(value))}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-        if (event.key === "Escape") setDraftValue(null);
-      }}
+    <ScrubbableNumberInput
+      allowNegativeInput={false}
+      className="px-1.5 font-mono text-[11px]"
+      containerClassName={className}
+      fractionDigits={2}
+      icon={icon}
+      inputStep={0.01}
+      label={ariaLabel}
+      minValue={minValue}
+      scrubDirection={scrubDirection}
+      scrubSensitivity={1}
+      showInvalidState
+      value={value}
+      onValueChange={onChange}
     />
   );
 }
@@ -945,8 +929,10 @@ function TableDataEditorContent({
                     宽
                     <TableDimensionInput
                       aria-label={`第 ${columnIndex + 1} 列宽`}
-                      className="h-6 rounded-sm border-transparent bg-background px-1.5 font-mono text-[11px] shadow-none"
+                      className="h-6 rounded-sm border-transparent bg-background shadow-none"
+                      icon={<Columns3 aria-hidden="true" />}
                       minValue={24}
+                      scrubDirection="horizontal"
                       value={column.width}
                       onChange={(width) => updateColumn(column.id, { width })}
                     />
@@ -976,8 +962,10 @@ function TableDataEditorContent({
                 <span className="text-[11px] text-muted-foreground">高</span>
                 <TableDimensionInput
                   aria-label={`第 ${rowIndex + 1} 行高`}
-                  className="h-7 w-11 flex-none rounded-sm border-transparent bg-background px-1 font-mono text-[11px] shadow-none"
+                  className="h-7 w-16 flex-none rounded-sm border-transparent bg-background shadow-none"
+                  icon={<Rows3 aria-hidden="true" />}
                   minValue={20}
+                  scrubDirection="vertical"
                   value={row.height}
                   onChange={(height) => updateRow(row.id, { height })}
                 />
@@ -1149,36 +1137,54 @@ function TableStyleSelect<TValue extends string>({
 
 function TableStyleNumberControl({
   disabled,
+  icon,
   label,
   minValue,
+  scrubSensitivity,
   value,
   onChange,
+  onPreview,
+  onPreviewEnd,
 }: {
   disabled: boolean;
+  icon: ReactNode;
   label: string;
   minValue: number;
+  scrubSensitivity: number;
   value: number;
   onChange: (value: number) => void;
+  onPreview?: (value: number) => void;
+  onPreviewEnd?: () => void;
 }) {
   const id = useId();
 
   return (
-    <label className="flex flex-col gap-2 text-xs text-muted-foreground" htmlFor={id}>
-      {label}
-      <Input
-        className={cn(CONTROL_CLASS_NAME, NUMBER_INPUT_CLASS_NAME, "font-mono")}
+    <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+      <label htmlFor={id}>{label}</label>
+      <ScrubbableNumberInput
+        className="font-mono"
+        containerClassName={CONTROL_CLASS_NAME}
         disabled={disabled}
+        icon={icon}
         id={id}
-        min={minValue}
-        type="number"
+        label={label}
+        minValue={minValue}
+        scrubDirection="horizontal"
+        scrubSensitivity={scrubSensitivity}
         value={value}
-        onChange={(event) => {
-          const nextValue = Number(event.currentTarget.value);
-          if (!Number.isFinite(nextValue)) return;
-          onChange(Math.max(minValue, nextValue));
-        }}
+        onScrubCancel={onPreviewEnd}
+        onScrubCommit={
+          onPreview
+            ? (nextValue) => {
+                onChange(nextValue);
+                onPreviewEnd?.();
+              }
+            : undefined
+        }
+        onScrubPreview={onPreview}
+        onValueChange={onChange}
       />
-    </label>
+    </div>
   );
 }
 
@@ -1195,11 +1201,15 @@ function TableCellStyleFields({
   style,
   title,
   onChange,
+  onPreview,
+  onPreviewEnd,
 }: {
   disabled: boolean;
   style: TableCellStyle;
   title: string;
   onChange: (patch: Partial<TableCellStyle>) => void;
+  onPreview?: (patch: Partial<TableCellStyle>) => void;
+  onPreviewEnd?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2.5">
@@ -1237,10 +1247,14 @@ function TableCellStyleFields({
       <div className="grid grid-cols-2 gap-2">
         <TableStyleNumberControl
           disabled={disabled}
+          icon={<Type aria-hidden="true" />}
           label="字号"
           minValue={8}
+          scrubSensitivity={1}
           value={style.fontSize}
           onChange={(fontSize) => onChange({ fontSize })}
+          onPreview={(fontSize) => onPreview?.({ fontSize })}
+          onPreviewEnd={onPreviewEnd}
         />
         <TableStyleSelect
           disabled={disabled}
@@ -1260,10 +1274,14 @@ function TableCellStyleFields({
         />
         <TableStyleNumberControl
           disabled={disabled}
+          icon={<PenLine aria-hidden="true" />}
           label="边框宽度"
           minValue={0}
+          scrubSensitivity={0.1}
           value={style.borderWidth}
           onChange={(borderWidth) => onChange({ borderWidth })}
+          onPreview={(borderWidth) => onPreview?.({ borderWidth })}
+          onPreviewEnd={onPreviewEnd}
         />
       </div>
       <StyleColorControl
@@ -1280,10 +1298,14 @@ export function TableFields({
   disabled,
   element,
   onUpdate,
+  onPreview,
+  onPreviewEnd,
 }: {
   disabled: boolean;
   element: TableElement;
   onUpdate: (patch: CanvasElementPatch) => void;
+  onPreview?: (patch: CanvasElementPatch) => void;
+  onPreviewEnd?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -1307,6 +1329,8 @@ export function TableFields({
           style={element.headerStyle}
           title="表头样式"
           onChange={(patch) => onUpdate(patchTableStyle(element, "headerStyle", patch))}
+          onPreview={(patch) => onPreview?.(patchTableStyle(element, "headerStyle", patch))}
+          onPreviewEnd={onPreviewEnd}
         />
         <div className="border-t pt-4">
           <TableCellStyleFields
@@ -1314,6 +1338,8 @@ export function TableFields({
             style={element.cellStyle}
             title="单元格样式"
             onChange={(patch) => onUpdate(patchTableStyle(element, "cellStyle", patch))}
+            onPreview={(patch) => onPreview?.(patchTableStyle(element, "cellStyle", patch))}
+            onPreviewEnd={onPreviewEnd}
           />
         </div>
       </div>

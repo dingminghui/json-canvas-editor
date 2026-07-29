@@ -1,5 +1,4 @@
 import { isChartDataValid } from "@/editor/chart-renderer";
-import { PPT_TEMPLATE_DOCUMENT } from "@/editor/ppt-template";
 import { getTableLayout, isTableDataValid } from "@/editor/table-layout";
 import type { ChartElement, TableElement } from "@/editor/types";
 
@@ -71,21 +70,6 @@ const table: TableElement = {
 };
 
 describe("semantic element data", () => {
-  it("includes bar, line, and pie chart examples in PPT template 2", () => {
-    const assessmentSlide = PPT_TEMPLATE_DOCUMENT.elements.find(
-      (element) => element.type === "group" && element.id === "ppt2-slide-5",
-    );
-    if (!assessmentSlide || assessmentSlide.type !== "group") {
-      throw new Error("assessment slide is missing");
-    }
-
-    const chartTypes = assessmentSlide.children
-      .filter((element) => element.type === "chart")
-      .map((element) => element.chartType);
-
-    expect(chartTypes).toEqual(["bar", "line", "pie"]);
-  });
-
   it("requires shared chart categories for native bar and line charts", () => {
     expect(isChartDataValid(chart)).toBe(true);
     expect(

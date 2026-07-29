@@ -2,7 +2,7 @@
 
 ## 1. 总览
 
-项目是一个无后端的 React SPA。内置模板在启动时加载到编辑器 reducer，Konva 负责画板渲染和交互，右侧 React 表单负责属性编辑。PPT 文档以“顶层分组即页面”的方式保存，通过页面适配层生成当前单页视图；导出时仍使用完整文档。
+项目是一个无后端的 React SPA。首页负责创建和恢复浏览器本地的 AI PPT 项目，Konva 负责画板渲染和交互，右侧 React 表单负责属性编辑。PPT 文档以“顶层分组即页面”的方式保存，通过页面适配层生成当前单页视图；导出时仍使用完整文档。
 
 ## 2. 技术栈
 
@@ -24,9 +24,6 @@
 ```text
 .
 ├── docs/                         # 产品、架构与开发文档
-├── mock/
-│   ├── assets/                   # 内置模板使用的本地 WebP 图片
-│   └── symbicort-longform.json   # 长图源文档
 ├── src/
 │   ├── components/ui/            # 通用 UI 组件
 │   ├── editor/
@@ -37,11 +34,10 @@
 │   │   ├── element-creation.ts    # 新建图形、文本和图片定位
 │   │   ├── fonts.ts               # 画板字体定义与加载
 │   │   ├── markdown.ts            # Markdown 转显示文本和 Canvas
-│   │   ├── ppt-template.ts        # 8 页内置 PPT 模板
 │   │   ├── pptx-export.ts         # Canvas 文档到 PPTX
-│   │   ├── templates.ts           # 模板加载与资源解析
 │   │   └── types.ts               # 文档和元素类型
-│   ├── pages/Home.tsx             # 编辑器页面编排
+│   ├── features/ai-ppt/           # PPT 结构、视觉方案、画布与本地存储
+│   ├── pages/Home.tsx             # AI PPT 项目首页
 │   ├── App.tsx                    # 全局 Tooltip Provider
 │   └── main.tsx                   # React 入口
 ├── package.json
@@ -88,6 +84,34 @@ interface CanvasDocument {
 - `createPageDocument` 创建只包含当前页元素的只读视图对象。
 
 该视图对象只用于画板、图层和缩略图渲染；真实修改仍写回完整源文档。这样可以避免维护两份页面内容。
+
+### 4.4 AI PPT 生成链路
+
+AI PPT 使用“材料分析 → 内容结构 → 视觉计划 → 初稿画布 → 看图评审 → 最终画布”六阶段模型：
+
+```text
+CreatePptStructureInput
+→ PptMaterialPlan
+→ PptStructure
+→ PptVisualPlan
+→ 初稿 CanvasDocument
+→ 逐页低分辨率预览
+→ PptVisualReview
+→ 评审后的 PptVisualPlan
+→ 最终 CanvasDocument
+→ 编辑器 / PPTX
+```
+
+- `PptMaterialPlan` 将已有材料拆成带稳定 ID 的事实、优先级和缺口，并保存用户确认过的核心主张、叙事模式与章节方向。
+- `PptStructure` 表达叙事结构和语义内容块；每页用 `evidenceRefs` 引用实际使用的材料事实。图表保存分类、数值与结论，关系图保存节点、边与关系类型。
+- `PptProject` 保存原始需求、确认后的材料计划、文本结构和累计模型用量。旧项目缺少材料计划时仍可读取。
+- `PptVisualPlan` 为每页指定页面节奏、主视觉类型、构图方式、版式变体和强调块，不重复保存正文内容。
+- 画布渲染器根据以上两层数据生成文本、形状、连线、表格和原生图表。默认不依赖图片，信息层级由字号、留白、色块、网格和几何关系建立。
+- 初稿画布在浏览器内渲染为逐页预览，Qwen 以多模态输入检查层级、密度、节奏、重复、字体、颜色和内容适配。评审只能返回完整的修订 VisualPlan，不能修改内容结构或 Canvas 坐标。
+- 本地校验评审声明的主题变化和页面变化是否与实际 VisualPlan 差异一致；通过后最多执行一次模型指导的重渲染，避免生成流程进入无界循环。
+- 预览图片和 API Key 只存在于当前页面内存。画布产物保存评审摘要、问题账本、最终 VisualPlan 和最终 CanvasDocument，不持久化 base64 图片。
+- 图表在 Canvas 中保留结构化数据并导出为 PPT 原生图表；关系图由可编辑形状和箭头组成。
+- 视觉策划提示词、视觉评审提示词与渲染器分别记录版本。旧产物仍可读取，但版本落后时会标记为需要重新生成，避免静默覆盖用户编辑。
 
 ## 5. 编辑器状态
 

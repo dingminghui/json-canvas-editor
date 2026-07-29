@@ -153,16 +153,11 @@ function PageList({
                       height={document.height}
                       width={document.width}
                     />
-                    <span className="flex min-w-0 flex-col gap-0.5 pr-5">
-                      <span
-                        className={cn(
-                          "overflow-hidden text-xs text-ellipsis whitespace-nowrap",
-                          active && "text-primary",
-                        )}
-                      >
+                    <span className="flex min-w-0 flex-col gap-0.5 overflow-hidden pr-5">
+                      <span className={cn("truncate text-xs", active && "text-primary")}>
                         {document.name}
                       </span>
-                      <span className="overflow-hidden text-[10px] leading-none text-ellipsis whitespace-nowrap text-muted-foreground">
+                      <span className="truncate whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-muted-foreground">
                         {isPresentation ? `${pages.length} 页 · ` : ""}
                         {document.width} × {document.height}
                       </span>

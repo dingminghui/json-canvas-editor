@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 interface MockGestureHandlers {
   onDragEnd?: (event: { target: unknown }) => void;
   onDragMove?: (event: { target: unknown }) => void;
+  onDragStart?: (event: { target: unknown }) => void;
   onTransform?: (event: { target: unknown }) => void;
   onTransformEnd?: (event: { target: unknown }) => void;
 }
@@ -24,9 +25,12 @@ interface MockTransformerProps {
   borderStrokeWidth?: number;
   enabledAnchors?: string[];
   keepRatio?: boolean;
+  onDblClick?: (event: { cancelBubble: boolean }) => void;
+  onDragStart?: () => void;
   padding?: number;
   resizeEnabled?: boolean;
   rotateAnchorOffset?: number;
+  shouldOverdrawWholeArea?: boolean;
 }
 
 interface MockClipContext {
@@ -54,6 +58,10 @@ let textGestureHandlers: MockGestureHandlers = {};
 let textRenderProps: MockTextRenderProps = {};
 let hoverTransformerProps: MockTransformerProps = {};
 let selectionTransformerProps: MockTransformerProps = {};
+let hoverTransformerNodes: ReturnType<typeof vi.fn> | null = null;
+let selectionTransformerNodes: ReturnType<typeof vi.fn> | null = null;
+let linearProxyGestureHandlers: MockGestureHandlers = {};
+let linearProxyProps: Record<string, unknown> = {};
 let transformerNodeSpies: ReturnType<typeof vi.fn>[] = [];
 
 vi.mock("use-image", () => ({
@@ -76,6 +84,8 @@ vi.mock("react-konva", async () => {
     x?: number;
     y?: number;
     onClick?: React.MouseEventHandler<HTMLDivElement>;
+    onMouseEnter?: React.MouseEventHandler<HTMLDivElement>;
+    onMouseLeave?: React.MouseEventHandler<HTMLDivElement>;
   }
 
   interface MockRectProps {
@@ -98,8 +108,11 @@ vi.mock("react-konva", async () => {
       listening,
       name,
       onClick,
+      onMouseEnter,
+      onMouseLeave,
       onDragEnd,
       onDragMove,
+      onDragStart,
       onTransform,
       onTransformEnd,
       width,
@@ -111,7 +124,13 @@ vi.mock("react-konva", async () => {
     ref,
   ) {
     if (name === "photo") {
-      imageGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
+      imageGestureHandlers = {
+        onDragEnd,
+        onDragMove,
+        onDragStart,
+        onTransform,
+        onTransformEnd,
+      };
       imageClipFunc = clipFunc;
     }
     return (
@@ -130,6 +149,8 @@ vi.mock("react-konva", async () => {
         tabIndex={onClick ? 0 : undefined}
         onClick={onClick}
         onKeyDown={onClick ? () => undefined : undefined}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
         {children}
       </div>
@@ -157,8 +178,13 @@ vi.mock("react-konva", async () => {
   const Transformer = React.forwardRef(function Transformer(props: MockTransformerProps, ref) {
     const nodes = vi.fn();
     transformerNodeSpies.push(nodes);
-    if (props.resizeEnabled === false) hoverTransformerProps = props;
-    else selectionTransformerProps = props;
+    if (props.resizeEnabled === false) {
+      hoverTransformerProps = props;
+      hoverTransformerNodes = nodes;
+    } else {
+      selectionTransformerProps = props;
+      selectionTransformerNodes = nodes;
+    }
     React.useImperativeHandle(ref, () => ({
       getLayer: () => ({ batchDraw: vi.fn() }),
       nodes,
@@ -179,7 +205,17 @@ vi.mock("react-konva", async () => {
       return null;
     },
     Layer: Container,
-    Line: (props: Record<string, unknown>) => <ShapePrimitive kind="line" {...props} />,
+    Line: (props: Record<string, unknown>) => {
+      if (props.name === "selected-linear-drag-proxy") {
+        linearProxyProps = props;
+        linearProxyGestureHandlers = {
+          onDragEnd: props.onDragEnd as MockGestureHandlers["onDragEnd"],
+          onDragMove: props.onDragMove as MockGestureHandlers["onDragMove"],
+          onDragStart: props.onDragStart as MockGestureHandlers["onDragStart"],
+        };
+      }
+      return <ShapePrimitive kind="line" {...props} />;
+    },
     Rect,
     RegularPolygon: (props: Record<string, unknown>) => (
       <ShapePrimitive kind="polygon" {...props} />
@@ -193,6 +229,7 @@ vi.mock("react-konva", async () => {
       lineHeight,
       onDragEnd,
       onDragMove,
+      onDragStart,
       onDblClick,
       onTransform,
       onTransformEnd,
@@ -205,13 +242,20 @@ vi.mock("react-konva", async () => {
       onDblClick?: MockTextRenderProps["onDblClick"];
       onDragEnd?: MockGestureHandlers["onDragEnd"];
       onDragMove?: MockGestureHandlers["onDragMove"];
+      onDragStart?: MockGestureHandlers["onDragStart"];
       onTransform?: MockGestureHandlers["onTransform"];
       onTransformEnd?: MockGestureHandlers["onTransformEnd"];
       visible?: boolean;
     }) => {
       lastTextFontFamily = fontFamily;
       lastTextFontStyle = fontStyle;
-      textGestureHandlers = { onDragEnd, onDragMove, onTransform, onTransformEnd };
+      textGestureHandlers = {
+        onDragEnd,
+        onDragMove,
+        onDragStart,
+        onTransform,
+        onTransformEnd,
+      };
       textRenderProps = { draggable, lineHeight, onDblClick, visible };
       return null;
     },
@@ -226,6 +270,8 @@ const document: CanvasDocument = {
     {
       cornerRadius: 12,
       fit: "cover",
+      focalPointX: 0.5,
+      focalPointY: 0.5,
       height: 120,
       id: "photo",
       locked: false,
@@ -258,6 +304,10 @@ describe("CanvasStage", () => {
     textRenderProps = {};
     hoverTransformerProps = {};
     selectionTransformerProps = {};
+    hoverTransformerNodes = null;
+    selectionTransformerNodes = null;
+    linearProxyGestureHandlers = {};
+    linearProxyProps = {};
     transformerNodeSpies = [];
   });
 
@@ -414,6 +464,67 @@ describe("CanvasStage", () => {
       />,
     );
     expect(imageNode).toHaveAttribute("data-draggable", "false");
+  });
+
+  it("gives the selected element a top interaction surface without changing document order", () => {
+    const sharedProps = {
+      document,
+      editingElementId: null,
+      hoveredId: null,
+      isSelectedLocked: false,
+      viewportHeight: 620,
+      viewportPosition: { x: 160, y: 140 },
+      viewportWidth: 720,
+      zoom: 1,
+      onEditText: vi.fn(),
+      onElementChange: vi.fn(),
+      onElementPreview: vi.fn(),
+      onSelect: vi.fn(),
+    };
+
+    const { container, rerender } = render(<CanvasStage {...sharedProps} selectedId="photo" />);
+    const imageNode = container.querySelector('[data-name="photo"]');
+
+    expect(selectionTransformerProps.shouldOverdrawWholeArea).toBe(true);
+    expect(selectionTransformerNodes).toHaveBeenLastCalledWith([imageNode]);
+    expect(document.elements.map((element) => element.id)).toEqual(["photo"]);
+
+    rerender(<CanvasStage {...sharedProps} selectedId={null} />);
+
+    expect(selectionTransformerProps.shouldOverdrawWholeArea).toBe(false);
+  });
+
+  it("reports canvas hover and attaches the hover border only to an unselected element", () => {
+    const onHover = vi.fn();
+    const sharedProps = {
+      document,
+      editingElementId: null,
+      isSelectedLocked: false,
+      selectedId: null,
+      viewportHeight: 620,
+      viewportPosition: { x: 160, y: 140 },
+      viewportWidth: 720,
+      zoom: 1,
+      onEditText: vi.fn(),
+      onElementChange: vi.fn(),
+      onElementPreview: vi.fn(),
+      onHover,
+      onSelect: vi.fn(),
+    };
+    const { container, rerender } = render(<CanvasStage {...sharedProps} hoveredId={null} />);
+    const imageNode = container.querySelector('[data-name="photo"]');
+
+    fireEvent.mouseEnter(imageNode!);
+    expect(onHover).toHaveBeenLastCalledWith("photo");
+
+    rerender(<CanvasStage {...sharedProps} hoveredId="photo" />);
+    expect(hoverTransformerNodes).toHaveBeenLastCalledWith([imageNode]);
+
+    rerender(<CanvasStage {...sharedProps} hoveredId="photo" selectedId="photo" />);
+    expect(hoverTransformerNodes).toHaveBeenLastCalledWith([]);
+
+    fireEvent.mouseLeave(imageNode!);
+    expect(onHover).toHaveBeenLastCalledWith(null);
   });
 
   it("clips image content to the configured rounded rectangle", () => {
@@ -629,10 +740,22 @@ describe("CanvasStage", () => {
     expect(
       screen.getAllByTestId("shape-ellipse")[0].closest('[data-listening="false"]'),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("shape-line")).toHaveAttribute(
-      "data-shape-props",
-      expect.stringContaining('"lineCap":"round"'),
-    );
+    expect(screen.getAllByTestId("shape-line")).toHaveLength(2);
+    expect(
+      screen
+        .getAllByTestId("shape-line")
+        .some((node) => node.getAttribute("data-shape-props")?.includes('"lineCap":"round"')),
+    ).toBe(true);
+    expect(linearProxyProps).toMatchObject({
+      draggable: true,
+      hitStrokeWidth: 12,
+      name: "selected-linear-drag-proxy",
+      points: [0, 0, 100, 40],
+      x: 10,
+      y: 80,
+    });
+    expect(linearProxyGestureHandlers.onDragStart).toBeTypeOf("function");
+    expect(selectionTransformerProps.shouldOverdrawWholeArea).toBe(false);
     expect(screen.getByTestId("shape-arrow")).toHaveAttribute(
       "data-shape-props",
       expect.stringContaining('"pointerLength":14'),
@@ -782,6 +905,13 @@ describe("CanvasStage", () => {
     expect(event.cancelBubble).toBe(true);
     expect(onEditText).toHaveBeenCalledWith("caption");
     expect(textRenderProps.draggable).toBe(true);
+
+    onEditText.mockClear();
+    const transformerEvent = { cancelBubble: false };
+    act(() => selectionTransformerProps.onDblClick?.(transformerEvent));
+
+    expect(transformerEvent.cancelBubble).toBe(true);
+    expect(onEditText).toHaveBeenCalledWith("caption");
 
     rerender(<CanvasStage {...sharedProps} editingElementId="caption" />);
 
@@ -965,6 +1095,64 @@ describe("CanvasStage", () => {
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("fontSize");
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("height");
     expect(onElementChange.mock.calls.at(-1)?.[1]).not.toHaveProperty("width");
+  });
+
+  it("snaps a dragged element to the canvas and clears its translucent guide on drop", () => {
+    const onElementChange = vi.fn();
+    const onElementPreview = vi.fn();
+    let position = { x: 3, y: 47 };
+    const node = {
+      getClientRect: () => ({
+        height: 120,
+        width: 180,
+        x: position.x,
+        y: position.y,
+      }),
+      position: (nextPosition: { x: number; y: number }) => {
+        position = nextPosition;
+      },
+      x: () => position.x,
+      y: () => position.y,
+    };
+
+    render(
+      <CanvasStage
+        document={document}
+        editingElementId={null}
+        hoveredId={null}
+        isSelectedLocked={false}
+        selectedId="photo"
+        viewportHeight={620}
+        viewportPosition={{ x: 160, y: 140 }}
+        viewportWidth={720}
+        zoom={1}
+        onEditText={vi.fn()}
+        onElementChange={onElementChange}
+        onElementPreview={onElementPreview}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    act(() => imageGestureHandlers.onDragStart?.({ target: node }));
+    act(() => imageGestureHandlers.onDragMove?.({ target: node }));
+
+    expect(position).toEqual({ x: 0, y: 47 });
+    expect(onElementPreview).toHaveBeenLastCalledWith("photo", { x: 0, y: 47 });
+    expect(screen.getByTestId("shape-line")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining(
+        '"dash":[6,4],"lineCap":"round","listening":false,"name":"alignment-guide","opacity":0.58',
+      ),
+    );
+    expect(screen.getByTestId("shape-line")).toHaveAttribute(
+      "data-shape-props",
+      expect.stringContaining('"points":[0,0,0,300]'),
+    );
+
+    act(() => imageGestureHandlers.onDragEnd?.({ target: node }));
+
+    expect(onElementChange).toHaveBeenLastCalledWith("photo", { x: 0, y: 47 });
+    expect(screen.queryByTestId("shape-line")).not.toBeInTheDocument();
   });
 
   it("does not attach editable transform handles to groups or hidden elements", () => {

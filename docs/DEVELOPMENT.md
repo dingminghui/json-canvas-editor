@@ -31,22 +31,23 @@ pnpm format
 - 文档操作必须进入历史；纯视图操作不进入历史。
 - 新功能需要补充对应单元或集成测试。
 
-## 4. 新增文档模板
+## 4. 接入 CanvasDocument
 
-1. 创建符合 `CanvasDocument` 的模板。
-2. 提供唯一且稳定的文档 ID、元素 ID。
-3. 在 `src/editor/templates.ts` 的 `EDITOR_TEMPLATES` 中注册。
-4. 为所有字体使用 `CanvasFontFamily` 支持的字体 ID。
-5. 图片使用可由 Vite 解析的导入 URL或 data URL。
-6. 为新增模板补充 reducer 初始化和界面切换测试。
+项目不内置内容模板。编辑器通过 `defaultValue` 或 `value` 接收符合 `CanvasDocument` 契约的文档，AI PPT 流程会在生成视觉方案后构建并保存该文档。
 
-### 4.1 长图模板
+1. 提供唯一且稳定的文档 ID、元素 ID。
+2. 为所有字体使用 `CanvasFontFamily` 支持的字体 ID。
+3. 图片使用可由 Vite 解析的 URL 或 data URL。
+4. 在进入编辑器前完成运行时结构校验。
+5. 为新增文档来源补充生成、存储和编辑器恢复测试。
+
+### 4.1 长图文档
 
 - `documentType` 使用 `longform`。
 - `elements` 是页面根元素。
 - `width`、`height` 是完整长图尺寸。
 
-### 4.2 PPT 模板
+### 4.2 PPT 文档
 
 - `documentType` 使用 `pptx`。
 - `width`、`height` 是单张幻灯片尺寸。
@@ -54,6 +55,19 @@ pnpm format
 - 组内元素必须使用页面本地坐标，不要叠加上一页高度。
 - 页面名称建议使用 `01 标题` 格式。
 - 标准页码文本的元素名称应包含“页码”，内容使用 `01 / 08` 格式，以便排序后自动更新。
+
+### 4.3 AI PPT 六阶段契约
+
+- `PptMaterialPlan` 是材料事实和确认方向的来源；事实使用稳定 `F001` ID，必需事实必须进入推荐方向和最终页面。
+- `PptStructure` 是逐页内容事实源，每页通过 `evidenceRefs` 记录实际使用的材料事实。新增内容类型时需要同步更新 Zod schema、结构生成 Skill、提纲编辑表单、渲染器和测试。
+- `PptProject` 聚合原始需求、材料计划、内容结构和模型用量。新增字段优先采用可选值或 Zod 默认值，保证旧的 localStorage 项目仍可读取。
+- `PptVisualPlan` 只保存主题与页面视觉决策，包括 `rhythm`、`primaryVisual`、`composition`、`layoutVariant` 和强调块索引。
+- 初稿 `CanvasDocument` 会通过隐藏的只读 `CanvasStage` 渲染为逐页低分辨率预览，预览仅用于当前生成请求。
+- `PptVisualReview` 保存评审结论、问题类别、严重度、主题变化、实际修订页面和完整的修订 VisualPlan。评审声明与实际 VisualPlan 差异不一致时必须拒绝。
+- 视觉评审只允许一次模型指导的修订；修订后重新运行确定性 Canvas 校验，不递归调用模型。
+- `CanvasDocument` 是可编辑渲染产物。图表应创建 `ChartElement`，关系图应创建形状、文本和箭头，不要栅格化成整页图片。
+- 旧策划、评审和渲染器版本可以读取；渲染前使用 stale 检查提示重新生成，保留用户手动调整过的画布。
+- 没有图片输入时优先使用排版、数据和结构关系建立变化，不添加装饰性占位图片。
 
 ## 5. 新增元素类型
 
@@ -73,13 +87,13 @@ pnpm format
 
 主要入口：
 
-| 文件                | 作用                             |
-| ------------------- | -------------------------------- |
-| `document-pages.ts` | 完整文档与单页视图转换           |
-| `editor-state.ts`   | 当前页状态、页面内写入、页面排序 |
-| `LayerSidebar.tsx`  | 文档和页面二级菜单               |
-| `SlideOverview.tsx` | 总览、真实缩略图和拖动排序       |
-| `Home.tsx`          | 单页编辑与总览模式切换           |
+| 文件                  | 作用                             |
+| --------------------- | -------------------------------- |
+| `document-pages.ts`   | 完整文档与单页视图转换           |
+| `editor-state.ts`     | 当前页状态、页面内写入、页面排序 |
+| `LayerSidebar.tsx`    | 文档和页面二级菜单               |
+| `SlideOverview.tsx`   | 总览、真实缩略图和拖动排序       |
+| `AiPptCanvasPage.tsx` | AI PPT 画布恢复与编辑器接入      |
 
 不要把 PPT 页面重新拼成超长画板。CanvasStage 应始终接收当前单页文档，PPTX 导出应接收完整源文档。
 
