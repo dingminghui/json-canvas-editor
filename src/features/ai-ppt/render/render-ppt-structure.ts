@@ -9,6 +9,7 @@ import {
   createCanvasArrow,
   createCanvasChart,
   createCanvasGroup,
+  createCanvasImage,
   createCanvasRect,
   createCanvasTable,
   createCanvasText,
@@ -22,7 +23,8 @@ import {
   type PptContentBlock,
   type PptSlide,
   type PptStructureV1,
-  type PptVisualPlanV1,
+  type PptVisualAsset,
+  type PptVisualPlanV2,
 } from "@/features/ai-ppt/schema";
 
 export const AI_PPT_SLIDE_WIDTH = 1600;
@@ -31,10 +33,11 @@ export const AI_PPT_SLIDE_HEIGHT = 900;
 interface RenderContext {
   documentId: string;
   pageCount: number;
-  plan: PptVisualPlanV1["slides"][number];
+  plan: PptVisualPlanV2["slides"][number];
   sectionTitle: string;
   structure: PptStructureV1;
   theme: ResolvedCanvasTheme;
+  assetsById: ReadonlyMap<string, PptVisualAsset>;
 }
 
 type Frame = { x: number; y: number; width: number; height: number };
@@ -49,6 +52,18 @@ export class CanvasRenderError extends Error {
 function fitFontSize(value: string, preferred: number, minimum: number, budget: number): number {
   if (value.length <= budget) return preferred;
   return Math.max(minimum, Math.round(preferred * Math.sqrt(budget / value.length)));
+}
+
+function getTypeScale(theme: ResolvedCanvasTheme): number {
+  return {
+    compact: 0.9,
+    balanced: 1,
+    dramatic: 1.14,
+  }[theme.designSystem.typeScale];
+}
+
+function scaledFontSize(theme: ResolvedCanvasTheme, value: number): number {
+  return Math.round(value * getTypeScale(theme));
 }
 
 function getSlidePrefix(context: RenderContext, slide: PptSlide): string {
@@ -214,6 +229,56 @@ function renderBackground(
       return exhaustiveStyle;
     }
   }
+  const { grid, motif } = theme.designSystem;
+  if (motif === "rules" && style !== "data-journalism" && style !== "research") {
+    elements.push(
+      createCanvasRect(
+        `${prefix}-motif-rule`,
+        "设计系统标尺",
+        {
+          x: grid === "cinematic" ? 72 : grid === "modular" ? 112 : 96,
+          y: 858,
+          width: grid === "cinematic" ? 1456 : grid === "modular" ? 1376 : 1404,
+          height: 2,
+        },
+        colors.border,
+        { locked: true, opacity: 0.72 },
+      ),
+    );
+  }
+  if (motif === "blocks") {
+    elements.push(
+      createCanvasRect(
+        `${prefix}-motif-block`,
+        "设计系统色块",
+        { x: 0, y: 0, width: grid === "cinematic" ? 72 : 28, height: 900 },
+        colors.accent,
+        { locked: true, opacity: 0.86 },
+      ),
+    );
+  }
+  if (motif === "frames" && style !== "technology" && style !== "dark-tech") {
+    const inset = grid === "cinematic" ? 44 : grid === "modular" ? 64 : 54;
+    elements.push(
+      createCanvasRect(
+        `${prefix}-motif-frame`,
+        "设计系统内框",
+        {
+          x: inset,
+          y: inset,
+          width: AI_PPT_SLIDE_WIDTH - inset * 2,
+          height: AI_PPT_SLIDE_HEIGHT - inset * 2,
+        },
+        "transparent",
+        {
+          locked: true,
+          opacity: 0.56,
+          stroke: colors.border,
+          strokeWidth: 1,
+        },
+      ),
+    );
+  }
   return elements;
 }
 
@@ -272,7 +337,12 @@ function renderContentHeader(
       {
         fill: colors.foreground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, breathing ? 66 : dense ? 50 : 58, dense ? 34 : 38, 34),
+        fontSize: fitFontSize(
+          slide.title,
+          scaledFontSize(context.theme, breathing ? 66 : dense ? 50 : 58),
+          dense ? 34 : 38,
+          34,
+        ),
         fontWeight: "800",
         lineHeight: 1.12,
       },
@@ -287,7 +357,7 @@ function renderContentHeader(
         fontFamily: fonts.body,
         fontSize: fitFontSize(
           slide.coreMessage,
-          breathing ? 30 : dense ? 23 : 27,
+          scaledFontSize(context.theme, breathing ? 30 : dense ? 23 : 27),
           dense ? 19 : 21,
           80,
         ),
@@ -298,7 +368,301 @@ function renderContentHeader(
   ];
 }
 
+function getMediaAsset(context: RenderContext): PptVisualAsset | null {
+  return context.plan.assetId ? (context.assetsById.get(context.plan.assetId) ?? null) : null;
+}
+
+function addMedia(
+  children: CanvasElement[],
+  prefix: string,
+  context: RenderContext,
+  asset: PptVisualAsset,
+  frame: Frame,
+  fullBleed: boolean,
+) {
+  children.push(
+    createCanvasImage(`${prefix}-hero-image`, asset.alt, asset.src, frame, {
+      cornerRadius: fullBleed ? 0 : context.theme.cornerRadius,
+      fit: "cover",
+      focalPointX: context.plan.focalPointX,
+      focalPointY: context.plan.focalPointY,
+    }),
+  );
+  const overlayOpacity = {
+    darkened: fullBleed ? 0.64 : 0.46,
+    muted: fullBleed ? 0.54 : 0.22,
+    natural: fullBleed ? 0.48 : 0,
+  }[context.plan.imageTreatment];
+  if (overlayOpacity > 0) {
+    children.push(
+      createCanvasRect(
+        `${prefix}-hero-overlay`,
+        "图片可读性遮罩",
+        frame,
+        context.theme.colors.primary,
+        {
+          cornerRadius: fullBleed ? 0 : context.theme.cornerRadius,
+          locked: true,
+          opacity: overlayOpacity,
+        },
+      ),
+    );
+  }
+}
+
+function renderMediaSlide(
+  slide: PptSlide,
+  context: RenderContext,
+  asset: PptVisualAsset,
+): GroupElement {
+  const prefix = getSlidePrefix(context, slide);
+  const { colors, fonts } = context.theme;
+  const content = slide.contentBlocks.map(blockToText).join("\n");
+  const layout = context.plan.mediaLayout;
+  const fullBleed = layout === "full-bleed";
+  const children = renderBackground(prefix, context.theme);
+
+  if (fullBleed) {
+    addMedia(
+      children,
+      prefix,
+      context,
+      asset,
+      { x: 0, y: 0, width: AI_PPT_SLIDE_WIDTH, height: AI_PPT_SLIDE_HEIGHT },
+      true,
+    );
+    children.push(
+      createCanvasText(
+        `${prefix}-media-kicker`,
+        "媒体页眉题",
+        context.sectionTitle.toUpperCase(),
+        { x: 96, y: 78, width: 920, height: 40 },
+        {
+          fill: colors.accent,
+          fontFamily: fonts.body,
+          fontSize: 20,
+          fontWeight: "700",
+          lineHeight: 1,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-title`,
+        "媒体页标题",
+        slide.title,
+        { x: 96, y: slide.role === "cover" ? 248 : 190, width: 1120, height: 250 },
+        {
+          fill: colors.primaryForeground,
+          fontFamily: fonts.heading,
+          fontSize: fitFontSize(
+            slide.title,
+            scaledFontSize(context.theme, slide.role === "cover" ? 86 : 68),
+            slide.role === "cover" ? 54 : 42,
+            30,
+          ),
+          fontWeight: "800",
+          lineHeight: 1.12,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-message`,
+        "媒体页核心信息",
+        slide.coreMessage,
+        { x: 102, y: slide.role === "cover" ? 536 : 470, width: 930, height: 112 },
+        {
+          fill: colors.primaryForeground,
+          fontFamily: fonts.body,
+          fontSize: fitFontSize(
+            slide.coreMessage,
+            scaledFontSize(context.theme, slide.role === "cover" ? 32 : 28),
+            22,
+            70,
+          ),
+          fontWeight: "500",
+          lineHeight: 1.4,
+          opacity: 0.92,
+        },
+      ),
+    );
+    if (content) {
+      children.push(
+        createCanvasText(
+          `${prefix}-media-content`,
+          "媒体页补充内容",
+          content,
+          { x: 104, y: 680, width: 860, height: 104 },
+          {
+            fill: colors.primaryForeground,
+            fontFamily: fonts.body,
+            fontSize: fitFontSize(content, 22, 17, 90),
+            lineHeight: 1.42,
+            opacity: 0.82,
+          },
+        ),
+      );
+    }
+  } else if (layout === "split-left" || layout === "split-right") {
+    const mediaWidth = {
+      cinematic: 930,
+      editorial: 860,
+      modular: 800,
+    }[context.theme.designSystem.grid];
+    const mediaOnLeft = layout === "split-left";
+    const mediaFrame = {
+      x: mediaOnLeft ? 0 : AI_PPT_SLIDE_WIDTH - mediaWidth,
+      y: 0,
+      width: mediaWidth,
+      height: AI_PPT_SLIDE_HEIGHT,
+    };
+    addMedia(children, prefix, context, asset, mediaFrame, false);
+    const textX = mediaOnLeft ? mediaWidth + 64 : 96;
+    const textWidth = AI_PPT_SLIDE_WIDTH - mediaWidth - 128;
+    children.push(
+      createCanvasText(
+        `${prefix}-media-kicker`,
+        "分栏页眉题",
+        context.sectionTitle.toUpperCase(),
+        { x: textX, y: 92, width: textWidth, height: 38 },
+        {
+          fill: colors.accent,
+          fontFamily: fonts.body,
+          fontSize: 18,
+          fontWeight: "700",
+          lineHeight: 1,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-title`,
+        "分栏页标题",
+        slide.title,
+        { x: textX, y: 178, width: textWidth, height: 225 },
+        {
+          fill: colors.foreground,
+          fontFamily: fonts.heading,
+          fontSize: fitFontSize(
+            slide.title,
+            scaledFontSize(context.theme, slide.role === "cover" ? 66 : 54),
+            38,
+            22,
+          ),
+          fontWeight: "800",
+          lineHeight: 1.12,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-message`,
+        "分栏页核心信息",
+        slide.coreMessage,
+        { x: textX, y: 430, width: textWidth, height: 130 },
+        {
+          fill: colors.muted,
+          fontFamily: fonts.body,
+          fontSize: fitFontSize(slide.coreMessage, 26, 20, 50),
+          lineHeight: 1.42,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-content`,
+        "分栏页补充内容",
+        content,
+        { x: textX, y: 620, width: textWidth, height: 156 },
+        {
+          fill: colors.foreground,
+          fontFamily: fonts.body,
+          fontSize: fitFontSize(content, 21, 16, 75),
+          lineHeight: 1.45,
+        },
+      ),
+    );
+  } else {
+    const mediaFrame = { x: 744, y: 194, width: 756, height: 536 };
+    addMedia(children, prefix, context, asset, mediaFrame, false);
+    children.push(
+      createCanvasText(
+        `${prefix}-media-kicker`,
+        "嵌入式页眉题",
+        context.sectionTitle.toUpperCase(),
+        { x: 96, y: 74, width: 520, height: 38 },
+        {
+          fill: colors.accent,
+          fontFamily: fonts.body,
+          fontSize: 18,
+          fontWeight: "700",
+          lineHeight: 1,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-title`,
+        "嵌入式页标题",
+        slide.title,
+        { x: 96, y: 164, width: 580, height: 220 },
+        {
+          fill: colors.foreground,
+          fontFamily: fonts.heading,
+          fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 56), 38, 24),
+          fontWeight: "800",
+          lineHeight: 1.14,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-message`,
+        "嵌入式核心信息",
+        slide.coreMessage,
+        { x: 100, y: 430, width: 560, height: 126 },
+        {
+          fill: colors.muted,
+          fontFamily: fonts.body,
+          fontSize: fitFontSize(slide.coreMessage, 26, 20, 55),
+          lineHeight: 1.42,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-media-content`,
+        "嵌入式补充内容",
+        content,
+        { x: 100, y: 610, width: 560, height: 150 },
+        {
+          fill: colors.foreground,
+          fontFamily: fonts.body,
+          fontSize: fitFontSize(content, 21, 16, 75),
+          lineHeight: 1.45,
+        },
+      ),
+    );
+  }
+
+  if (asset.credit) {
+    children.push(
+      createCanvasText(
+        `${prefix}-media-credit`,
+        "图片来源",
+        asset.credit,
+        {
+          x: fullBleed ? 1040 : layout === "split-left" ? 24 : 1120,
+          y: 826,
+          width: fullBleed ? 460 : 450,
+          height: 28,
+        },
+        {
+          align: "right",
+          fill: fullBleed ? colors.primaryForeground : colors.muted,
+          fontFamily: fonts.body,
+          fontSize: 16,
+          lineHeight: 1,
+          opacity: 0.78,
+        },
+      ),
+    );
+  }
+  return createCanvasGroup(
+    prefix,
+    `${String(slide.index).padStart(2, "0")} ${slide.title}`,
+    children,
+  );
+}
+
 function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement {
+  const mediaAsset = getMediaAsset(context);
+  if (mediaAsset) return renderMediaSlide(slide, context, mediaAsset);
   const prefix = getSlidePrefix(context, slide);
   const { colors, fonts } = context.theme;
   const isSplit =
@@ -362,7 +726,7 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.foreground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, 82, 54, 28),
+        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 82), 54, 28),
         fontWeight: "800",
         lineHeight: 1.14,
       },
@@ -375,7 +739,7 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.muted,
         fontFamily: fonts.body,
-        fontSize: fitFontSize(slide.coreMessage, 32, 24, 60),
+        fontSize: fitFontSize(slide.coreMessage, scaledFontSize(context.theme, 32), 24, 60),
         lineHeight: 1.45,
       },
     ),
@@ -444,7 +808,7 @@ function renderSectionSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, 78, 52, 30),
+        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 78), 52, 30),
         fontWeight: "800",
         lineHeight: 1.16,
       },
@@ -482,6 +846,7 @@ function renderAgendaSlide(slide: PptSlide, context: RenderContext): GroupElemen
     context.plan.layoutVariant === "agenda-grid" || context.plan.composition === "modular-grid"
       ? 2
       : 1;
+  const usePanels = context.plan.layoutVariant === "agenda-grid";
   const itemWidth = columns === 2 ? 670 : 1400;
   const rows = Math.ceil(items.length / columns);
   const rowGap = 18;
@@ -496,14 +861,28 @@ function renderAgendaSlide(slide: PptSlide, context: RenderContext): GroupElemen
     const row = Math.floor(index / columns);
     const x = 96 + column * (itemWidth + 60);
     const y = 315 + row * (itemHeight + rowGap);
+    if (usePanels) {
+      children.push(
+        createCanvasRect(
+          `${prefix}-agenda-${index}-surface`,
+          `议程 ${index + 1} 底板`,
+          { x, y, width: itemWidth, height: itemHeight },
+          colors.surface,
+          { cornerRadius, stroke: colors.border, strokeWidth: 1 },
+        ),
+      );
+    } else {
+      children.push(
+        createCanvasRect(
+          `${prefix}-agenda-${index}-rule`,
+          `议程 ${index + 1} 分隔线`,
+          { x, y: y + itemHeight - 2, width: itemWidth, height: 2 },
+          index === 0 ? colors.accent : colors.border,
+          { locked: true, opacity: index === 0 ? 0.9 : 0.62 },
+        ),
+      );
+    }
     children.push(
-      createCanvasRect(
-        `${prefix}-agenda-${index}-surface`,
-        `议程 ${index + 1} 底板`,
-        { x, y, width: itemWidth, height: itemHeight },
-        colors.surface,
-        { cornerRadius, stroke: colors.border, strokeWidth: 1 },
-      ),
       createCanvasText(
         `${prefix}-agenda-${index}-number`,
         `议程 ${index + 1} 编号`,
@@ -523,7 +902,7 @@ function renderAgendaSlide(slide: PptSlide, context: RenderContext): GroupElemen
         item,
         { x: x + 110, y: y + 18, width: itemWidth - 140, height: itemHeight - 26 },
         {
-          fill: colors.surfaceForeground,
+          fill: usePanels ? colors.surfaceForeground : colors.foreground,
           fontFamily: fonts.heading,
           fontSize: fitFontSize(item, 30, 22, 35),
           fontWeight: "700",
@@ -1034,7 +1413,7 @@ function renderDiagramSlide(slide: PptSlide, context: RenderContext): GroupEleme
           {
             fill: central ? colors.primaryForeground : colors.muted,
             fontFamily: fonts.body,
-            fontSize: fitFontSize(node.description, 18, 15, 45),
+            fontSize: fitFontSize(node.description, 18, 16, 45),
             lineHeight: 1.35,
             opacity: central ? 0.84 : 1,
           },
@@ -1647,7 +2026,7 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, 76, 48, 32),
+        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 76), 48, 32),
         fontWeight: "800",
         lineHeight: 1.16,
       },
@@ -1701,6 +2080,8 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
 }
 
 function renderSlide(slide: PptSlide, context: RenderContext): GroupElement {
+  const mediaAsset = getMediaAsset(context);
+  if (mediaAsset) return renderMediaSlide(slide, context, mediaAsset);
   if (slide.role === "cover") return renderCoverSlide(slide, context);
   if (slide.role === "section") return renderSectionSlide(slide, context);
   if (slide.role === "agenda") return renderAgendaSlide(slide, context);
@@ -1748,14 +2129,39 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
   }
   const ids = new Set<string>();
 
-  function inspectElement(element: CanvasElement, pageId: string) {
+  function estimateTextHeight(element: Extract<CanvasLeafElement, { type: "text" }>): number {
+    const lineCapacity = Math.max(1, element.width / Math.max(element.fontSize, 1));
+    const lineCount = element.text.split("\n").reduce((total, line) => {
+      const visualUnits = Array.from(line).reduce(
+        (sum, character) => sum + (/[\u2e80-\u9fff]/u.test(character) ? 1 : 0.56),
+        0,
+      );
+      return total + Math.max(1, Math.ceil(visualUnits / lineCapacity));
+    }, 0);
+    return lineCount * element.fontSize * element.lineHeight;
+  }
+
+  function getOverlapArea(left: CanvasLeafElement, right: CanvasLeafElement): number {
+    const width = Math.max(
+      0,
+      Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x),
+    );
+    const height = Math.max(
+      0,
+      Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y),
+    );
+    return width * height;
+  }
+
+  function inspectElement(element: CanvasElement, pageId: string, leaves: CanvasLeafElement[]) {
     if (ids.has(element.id)) issues.push(`画布元素编号重复：${element.id}`);
     ids.add(element.id);
     if (element.type === "group") {
       if (element.children.length === 0) issues.push(`页面 ${pageId} 没有内容`);
-      element.children.forEach((child) => inspectElement(child, pageId));
+      element.children.forEach((child) => inspectElement(child, pageId, leaves));
       return;
     }
+    leaves.push(element);
 
     const values = [
       element.x,
@@ -1775,6 +2181,28 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
     ) {
       issues.push(`元素 ${element.id} 超出页面边界`);
     }
+    if (element.type === "text") {
+      if (element.fontSize < 16) issues.push(`文本 ${element.id} 的字号小于 16`);
+      const estimatedHeight = estimateTextHeight(element);
+      if (estimatedHeight > element.height + element.fontSize * 0.75) {
+        issues.push(`文本 ${element.id} 可能发生溢出`);
+      }
+    }
+    if (element.type === "image") {
+      if (
+        !/^data:image\/(?:png|jpeg|webp);base64,/i.test(element.src) &&
+        !/^https?:\/\//i.test(element.src)
+      ) {
+        issues.push(`图片 ${element.id} 的地址无效`);
+      }
+      if (
+        (element.focalPointX !== undefined &&
+          (element.focalPointX < 0 || element.focalPointX > 1)) ||
+        (element.focalPointY !== undefined && (element.focalPointY < 0 || element.focalPointY > 1))
+      ) {
+        issues.push(`图片 ${element.id} 的裁切焦点无效`);
+      }
+    }
   }
 
   document.elements.forEach((element) => {
@@ -1792,21 +2220,37 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
         child.height === document.height,
     );
     if (!hasFullBackground) issues.push(`页面 ${element.id} 缺少全尺寸背景`);
-    inspectElement(element, element.id);
+    const leaves: CanvasLeafElement[] = [];
+    inspectElement(element, element.id, leaves);
+    const textElements = leaves.filter(
+      (leaf): leaf is Extract<CanvasLeafElement, { type: "text" }> =>
+        leaf.type === "text" && leaf.text.trim().length > 0 && leaf.opacity > 0,
+    );
+    textElements.forEach((left, leftIndex) => {
+      textElements.slice(leftIndex + 1).forEach((right) => {
+        const overlapArea = getOverlapArea(left, right);
+        const smallerArea = Math.min(left.width * left.height, right.width * right.height);
+        if (smallerArea > 0 && overlapArea / smallerArea > 0.6) {
+          issues.push(`页面 ${element.id} 的文本 ${left.id} 与 ${right.id} 明显重叠`);
+        }
+      });
+    });
   });
   return issues;
 }
 
 export function renderPptStructureToCanvas(
   structure: PptStructureV1,
-  visualPlan: PptVisualPlanV1,
+  visualPlan: PptVisualPlanV2,
   documentId: string,
+  assets: readonly PptVisualAsset[] = [],
 ): CanvasDocument {
-  const planIssues = getPptVisualPlanStructureIssues(visualPlan, structure);
+  const planIssues = getPptVisualPlanStructureIssues(visualPlan, structure, assets);
   if (planIssues.length > 0) throw new CanvasRenderError(planIssues);
 
-  const theme = resolveCanvasTheme(visualPlan.theme);
+  const theme = resolveCanvasTheme(visualPlan.theme, visualPlan.designSystem);
   const planBySlideId = new Map(visualPlan.slides.map((slide) => [slide.slideId, slide]));
+  const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const sectionTitleById = new Map(
     structure.sections.map((section) => [section.id, section.title]),
   );
@@ -1823,6 +2267,7 @@ export function renderPptStructureToCanvas(
         sectionTitle: sectionTitleById.get(slide.sectionId) ?? slide.sectionId,
         structure,
         theme,
+        assetsById,
       });
     }),
     height: AI_PPT_SLIDE_HEIGHT,

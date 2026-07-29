@@ -721,6 +721,42 @@ function ElementSpecificFields({
             value={element.fit}
             onChange={(fit) => onUpdate({ fit: fit as typeof element.fit })}
           />
+          {element.fit === "cover" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <PropertyNumberField
+                disabled={disabled}
+                icon={<ArrowLeftRight aria-hidden="true" />}
+                label="水平焦点 %"
+                minValue={0}
+                scrubDirection="horizontal"
+                scrubSensitivity={1}
+                value={Math.round((element.focalPointX ?? 0.5) * 100)}
+                onChange={(value) =>
+                  onUpdate({ focalPointX: Math.min(1, Math.max(0, value / 100)) })
+                }
+                onPreview={(value) =>
+                  onPreview?.({ focalPointX: Math.min(1, Math.max(0, value / 100)) })
+                }
+                onPreviewEnd={onPreviewEnd}
+              />
+              <PropertyNumberField
+                disabled={disabled}
+                icon={<AlignVerticalSpaceAround aria-hidden="true" />}
+                label="垂直焦点 %"
+                minValue={0}
+                scrubDirection="vertical"
+                scrubSensitivity={1}
+                value={Math.round((element.focalPointY ?? 0.5) * 100)}
+                onChange={(value) =>
+                  onUpdate({ focalPointY: Math.min(1, Math.max(0, value / 100)) })
+                }
+                onPreview={(value) =>
+                  onPreview?.({ focalPointY: Math.min(1, Math.max(0, value / 100)) })
+                }
+                onPreviewEnd={onPreviewEnd}
+              />
+            </div>
+          ) : null}
           <PropertyNumberField
             disabled={disabled}
             icon={<SquareRoundCorner aria-hidden="true" />}

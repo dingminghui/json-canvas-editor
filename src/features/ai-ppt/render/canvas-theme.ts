@@ -1,5 +1,5 @@
 import type { CanvasFontFamily } from "@/editor/fonts";
-import type { PptVisualPlanV1 } from "@/features/ai-ppt/schema";
+import type { PptVisualPlanV2 } from "@/features/ai-ppt/schema";
 
 export interface ResolvedCanvasTheme {
   colors: {
@@ -19,7 +19,8 @@ export interface ResolvedCanvasTheme {
     body: CanvasFontFamily;
     heading: CanvasFontFamily;
   };
-  style: PptVisualPlanV1["theme"]["style"];
+  designSystem: PptVisualPlanV2["designSystem"];
+  style: PptVisualPlanV2["theme"]["style"];
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -54,7 +55,10 @@ function ensureReadableForeground(candidate: string, background: string): string
     : "#FFFFFF";
 }
 
-export function resolveCanvasTheme(theme: PptVisualPlanV1["theme"]): ResolvedCanvasTheme {
+export function resolveCanvasTheme(
+  theme: PptVisualPlanV2["theme"],
+  designSystem: PptVisualPlanV2["designSystem"],
+): ResolvedCanvasTheme {
   const foreground = ensureReadableForeground(theme.foregroundColor, theme.backgroundColor);
   return {
     colors: {
@@ -78,6 +82,7 @@ export function resolveCanvasTheme(theme: PptVisualPlanV1["theme"]): ResolvedCan
       body: theme.bodyFont,
       heading: theme.headingFont,
     },
+    designSystem,
     style: theme.style,
   };
 }

@@ -15,7 +15,8 @@ import {
   PptVisualReviewDecisionSchema,
   type PptStructureV1,
   type PptTokenUsageV1,
-  type PptVisualPlanV1,
+  type PptVisualAsset,
+  type PptVisualPlanV2,
   type PptVisualReviewDecisionV1,
   type PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
@@ -30,13 +31,14 @@ interface GeneratePptVisualPlanOptions {
   apiKey: string;
   apiHost?: string;
   structure: PptStructureV1;
+  assets?: readonly PptVisualAsset[];
   visualPreference?: string;
   signal?: AbortSignal;
   onPhaseChange?: (phase: PptVisualGenerationPhase) => void;
 }
 
 export interface GeneratePptVisualPlanResult {
-  visualPlan: PptVisualPlanV1;
+  visualPlan: PptVisualPlanV2;
   usage: PptTokenUsageV1;
 }
 
@@ -49,7 +51,8 @@ interface ReviewPptVisualPlanOptions {
   apiKey: string;
   apiHost?: string;
   structure: PptStructureV1;
-  visualPlan: PptVisualPlanV1;
+  visualPlan: PptVisualPlanV2;
+  assets?: readonly PptVisualAsset[];
   previews: readonly PptSlidePreview[];
   visualPreference?: string;
   signal?: AbortSignal;
@@ -75,9 +78,32 @@ function createVisualReviewSystemPrompt(): string {
   );
 }
 
-function createUserPrompt(structure: PptStructureV1, visualPreference: string): string {
-  return [
+function getVisualAssetIssues(assets: readonly PptVisualAsset[]): string[] {
+  const issues: string[] = [];
+  const ids = new Set<string>();
+  assets.forEach((asset, index) => {
+    if (ids.has(asset.id)) issues.push(`图片素材 ${index + 1} 的编号重复`);
+    ids.add(asset.id);
+    if (
+      !/^data:image\/(?:png|jpeg|webp);base64,/i.test(asset.src) &&
+      !/^https?:\/\//i.test(asset.src)
+    ) {
+      issues.push(`图片素材 ${asset.id} 不是受支持的图片地址`);
+    }
+  });
+  return issues;
+}
+
+function createUserContent(
+  structure: PptStructureV1,
+  visualPreference: string,
+  assets: readonly PptVisualAsset[],
+): BailianMessageContent {
+  const instruction = [
     "为下面的 PPT 文本结构规划完整视觉方案。",
+    assets.length > 0
+      ? "已提供可选图片素材。仅在图片能承担证据或主视觉时引用，并使用准确的 assetId。"
+      : "没有提供图片素材；所有页面必须使用 mediaLayout=none 且 assetId=null。",
     "",
     "<visual_preference>",
     visualPreference.trim() || "未指定，由你根据主题、听众和演示目标判断。",
@@ -86,20 +112,50 @@ function createUserPrompt(structure: PptStructureV1, visualPreference: string): 
     "<ppt_structure>",
     JSON.stringify(structure, null, 2),
     "</ppt_structure>",
+    "",
+    "<available_assets>",
+    JSON.stringify(
+      assets.map(({ alt, credit, id, name }) => ({ alt, credit, id, name })),
+      null,
+      2,
+    ),
+    "</available_assets>",
   ].join("\n");
+
+  if (assets.length === 0) return instruction;
+  return [
+    { type: "text", text: instruction },
+    ...assets.flatMap((asset) => [
+      { type: "text" as const, text: `<visual_asset id="${asset.id}">${asset.alt}</visual_asset>` },
+      {
+        type: "image_url" as const,
+        image_url: { url: asset.src },
+        min_pixels: 65_536,
+        max_pixels: 1_048_576,
+      },
+    ]),
+  ];
 }
 
-function getCandidateIssues(value: unknown, structure: PptStructureV1): string[] {
+function getCandidateIssues(
+  value: unknown,
+  structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
+): string[] {
   const result = PptVisualPlanSchema.safeParse(value);
   if (!result.success) {
     return result.error.issues.map(
       (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
     );
   }
-  return getPptVisualPlanStructureIssues(result.data, structure);
+  return getPptVisualPlanStructureIssues(result.data, structure, assets);
 }
 
-function parseVisualPlan(content: string, structure: PptStructureV1): PptVisualPlanV1 {
+function parseVisualPlan(
+  content: string,
+  structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
+): PptVisualPlanV2 {
   let value: unknown;
   try {
     value = JSON.parse(content);
@@ -108,7 +164,10 @@ function parseVisualPlan(content: string, structure: PptStructureV1): PptVisualP
   }
 
   const result = PptVisualPlanSchema.safeParse(value);
-  if (!result.success || getPptVisualPlanStructureIssues(result.data, structure).length > 0) {
+  if (
+    !result.success ||
+    getPptVisualPlanStructureIssues(result.data, structure, assets).length > 0
+  ) {
     throw new PptGenerationError("invalid-visual-plan", "模型返回的视觉方案未通过校验。");
   }
   return result.data;
@@ -118,6 +177,7 @@ function createRepairPrompt(
   content: string,
   issues: readonly string[],
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
 ): string {
   return [
     "修复下面的视觉方案，使其严格满足 JSON Schema，并与 PPT 文本结构逐页对应。",
@@ -130,6 +190,10 @@ function createRepairPrompt(
     "<expected_slide_ids>",
     structure.slides.map((slide) => slide.id).join(", "),
     "</expected_slide_ids>",
+    "",
+    "<available_asset_ids>",
+    assets.map((asset) => asset.id).join(", ") || "none",
+    "</available_asset_ids>",
     "",
     "<candidate_output>",
     content.slice(0, 120_000),
@@ -159,7 +223,7 @@ function getPreviewIssues(
 
 function createVisualReviewUserContent(
   structure: PptStructureV1,
-  visualPlan: PptVisualPlanV1,
+  visualPlan: PptVisualPlanV2,
   previews: readonly PptSlidePreview[],
   visualPreference: string,
   repair?: { content: string; issues: readonly string[] },
@@ -215,8 +279,9 @@ function createVisualReviewUserContent(
 
 function getVisualReviewCandidateIssues(
   value: unknown,
-  sourcePlan: PptVisualPlanV1,
+  sourcePlan: PptVisualPlanV2,
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
 ): string[] {
   const result = PptVisualReviewDecisionSchema.safeParse(value);
   if (!result.success) {
@@ -224,7 +289,7 @@ function getVisualReviewCandidateIssues(
       (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
     );
   }
-  return buildVisualReview(result.data, sourcePlan, structure).issues;
+  return buildVisualReview(result.data, sourcePlan, structure, assets).issues;
 }
 
 function flatValuesDiffer(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
@@ -234,12 +299,14 @@ function flatValuesDiffer(left: Record<string, unknown>, right: Record<string, u
 
 function buildVisualReview(
   decision: PptVisualReviewDecisionV1,
-  sourcePlan: PptVisualPlanV1,
+  sourcePlan: PptVisualPlanV2,
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
 ): { review?: PptVisualReviewV1; issues: string[] } {
   const issues: string[] = [];
   const revisedPlan = structuredClone(sourcePlan);
   Object.assign(revisedPlan.theme, decision.themePatch);
+  Object.assign(revisedPlan.designSystem, decision.designSystemPatch);
 
   const revisedSlidesById = new Map(revisedPlan.slides.map((slide) => [slide.slideId, slide]));
   const patchedSlideIds = new Set<string>();
@@ -268,12 +335,16 @@ function buildVisualReview(
     };
   }
   const validatedPlan = revisedPlanResult.data;
-  const planIssues = getPptVisualPlanStructureIssues(validatedPlan, structure);
+  const planIssues = getPptVisualPlanStructureIssues(validatedPlan, structure, assets);
   if (planIssues.length > 0) return { issues: planIssues };
 
   const themeChanged = flatValuesDiffer(
     sourcePlan.theme as Record<string, unknown>,
     validatedPlan.theme as Record<string, unknown>,
+  );
+  const designSystemChanged = flatValuesDiffer(
+    sourcePlan.designSystem as Record<string, unknown>,
+    validatedPlan.designSystem as Record<string, unknown>,
   );
   const revisedSlideIds = sourcePlan.slides
     .filter((sourceSlide, index) =>
@@ -285,22 +356,25 @@ function buildVisualReview(
     .map((slide) => slide.slideId);
   const review: PptVisualReviewV1 = {
     schemaVersion: "ppt-visual-review/v1",
-    verdict: themeChanged || revisedSlideIds.length > 0 ? "revised" : "approved",
+    verdict:
+      themeChanged || designSystemChanged || revisedSlideIds.length > 0 ? "revised" : "approved",
     summary: decision.summary,
     strengths: decision.strengths,
     issues: decision.issues,
     themeChanged,
+    designSystemChanged,
     revisedSlideIds,
     revisedVisualPlan: validatedPlan,
   };
-  const reviewIssues = getPptVisualReviewStructureIssues(review, sourcePlan, structure);
+  const reviewIssues = getPptVisualReviewStructureIssues(review, sourcePlan, structure, assets);
   return reviewIssues.length > 0 ? { issues: reviewIssues } : { review, issues: [] };
 }
 
 function parseVisualReviewDecision(
   content: string,
-  sourcePlan: PptVisualPlanV1,
+  sourcePlan: PptVisualPlanV2,
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[],
 ): PptVisualReviewV1 {
   let value: unknown;
   try {
@@ -313,7 +387,7 @@ function parseVisualReviewDecision(
   if (!result.success) {
     throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审未通过校验。");
   }
-  const builtReview = buildVisualReview(result.data, sourcePlan, structure);
+  const builtReview = buildVisualReview(result.data, sourcePlan, structure, assets);
   if (!builtReview.review) {
     throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审未通过校验。");
   }
@@ -333,10 +407,15 @@ export async function generatePptVisualPlan({
   apiKey,
   apiHost = DEFAULT_BAILIAN_API_HOST,
   structure,
+  assets = [],
   visualPreference = "",
   signal,
   onPhaseChange,
 }: GeneratePptVisualPlanOptions): Promise<GeneratePptVisualPlanResult> {
+  const assetIssues = getVisualAssetIssues(assets);
+  if (assetIssues.length > 0) {
+    throw new PptGenerationError("invalid-visual-plan", assetIssues[0]);
+  }
   const normalizedHost = normalizeBailianApiHost(apiHost);
   const controller = new AbortController();
   let timedOut = false;
@@ -351,7 +430,7 @@ export async function generatePptVisualPlan({
     const systemMessage = { role: "system" as const, content: createSystemPrompt() };
     const userMessage = {
       role: "user" as const,
-      content: createUserPrompt(structure, visualPreference),
+      content: createUserContent(structure, visualPreference, assets),
     };
     onPhaseChange?.("planning-visuals");
     const firstCompletion = await requestBailianCompletion(
@@ -364,7 +443,7 @@ export async function generatePptVisualPlan({
 
     try {
       return {
-        visualPlan: parseVisualPlan(firstCompletion.content, structure),
+        visualPlan: parseVisualPlan(firstCompletion.content, structure, assets),
         usage: firstCompletion.usage,
       };
     } catch {
@@ -374,7 +453,7 @@ export async function generatePptVisualPlan({
       } catch {
         // 保留原始文本，让修复请求处理格式问题。
       }
-      const issues = getCandidateIssues(candidate, structure);
+      const issues = getCandidateIssues(candidate, structure, assets);
       onPhaseChange?.("repairing-visuals");
       const repairedCompletion = await requestBailianCompletion(
         normalizedHost,
@@ -383,7 +462,7 @@ export async function generatePptVisualPlan({
           systemMessage,
           {
             role: "user",
-            content: createRepairPrompt(firstCompletion.content, issues, structure),
+            content: createRepairPrompt(firstCompletion.content, issues, structure, assets),
           },
         ],
         controller.signal,
@@ -392,7 +471,7 @@ export async function generatePptVisualPlan({
 
       try {
         return {
-          visualPlan: parseVisualPlan(repairedCompletion.content, structure),
+          visualPlan: parseVisualPlan(repairedCompletion.content, structure, assets),
           usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
         };
       } catch {
@@ -422,11 +501,16 @@ export async function reviewPptVisualPlan({
   apiHost = DEFAULT_BAILIAN_API_HOST,
   structure,
   visualPlan,
+  assets = [],
   previews,
   visualPreference = "",
   signal,
   onPhaseChange,
 }: ReviewPptVisualPlanOptions): Promise<ReviewPptVisualPlanResult> {
+  const assetIssues = getVisualAssetIssues(assets);
+  if (assetIssues.length > 0) {
+    throw new PptGenerationError("invalid-visual-review", assetIssues[0]);
+  }
   const previewIssues = getPreviewIssues(previews, structure);
   if (previewIssues.length > 0) {
     throw new PptGenerationError("invalid-visual-review", previewIssues[0]);
@@ -464,7 +548,7 @@ export async function reviewPptVisualPlan({
 
     try {
       return {
-        review: parseVisualReviewDecision(firstCompletion.content, visualPlan, structure),
+        review: parseVisualReviewDecision(firstCompletion.content, visualPlan, structure, assets),
         usage: firstCompletion.usage,
       };
     } catch {
@@ -474,7 +558,7 @@ export async function reviewPptVisualPlan({
       } catch {
         // 保留原始文本，让修复请求处理格式问题。
       }
-      const issues = getVisualReviewCandidateIssues(candidate, visualPlan, structure);
+      const issues = getVisualReviewCandidateIssues(candidate, visualPlan, structure, assets);
       onPhaseChange?.("repairing-visual-review");
       const repairedCompletion = await requestBailianCompletion(
         normalizedHost,
@@ -498,7 +582,12 @@ export async function reviewPptVisualPlan({
 
       try {
         return {
-          review: parseVisualReviewDecision(repairedCompletion.content, visualPlan, structure),
+          review: parseVisualReviewDecision(
+            repairedCompletion.content,
+            visualPlan,
+            structure,
+            assets,
+          ),
           usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
         };
       } catch {
@@ -512,6 +601,7 @@ export async function reviewPptVisualPlan({
           repairedCandidate,
           visualPlan,
           structure,
+          assets,
         );
         throw new PptGenerationError(
           "invalid-visual-review",

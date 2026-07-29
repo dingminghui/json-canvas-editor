@@ -182,6 +182,32 @@ describe("PptStructureSchema", () => {
     );
   });
 
+  it("只允许视觉方案引用登记过的图片素材", () => {
+    const plan = createTestPptVisualPlan();
+    const assets = [
+      {
+        id: "A01",
+        name: "building.png",
+        alt: "现代建筑外景",
+        src: "data:image/png;base64,dGVzdA==",
+      },
+    ];
+    plan.designSystem.mediaPolicy = "evidence-first";
+    plan.slides[0] = {
+      ...plan.slides[0],
+      assetId: "A01",
+      mediaLayout: "full-bleed",
+      imageTreatment: "muted",
+      focalPointX: 0.75,
+      focalPointY: 0.4,
+    };
+
+    expect(getPptVisualPlanStructureIssues(plan, createTestPptStructure(), assets)).toEqual([]);
+    expect(getPptVisualPlanStructureIssues(plan, createTestPptStructure())).toContain(
+      "视觉方案 P01 引用了不存在的图片素材 A01",
+    );
+  });
+
   it("校验视觉评审声明与实际 VisualPlan 修订一致", () => {
     const sourcePlan = createTestPptVisualPlan();
     const revisedPlan = structuredClone(sourcePlan);
@@ -245,6 +271,9 @@ describe("PptStructureSchema", () => {
       theme: Object.fromEntries(
         Object.entries(sourcePlan.theme).reverse(),
       ) as typeof sourcePlan.theme,
+      designSystem: Object.fromEntries(
+        Object.entries(sourcePlan.designSystem).reverse(),
+      ) as typeof sourcePlan.designSystem,
       slides: sourcePlan.slides.map(
         (slide) =>
           Object.fromEntries(Object.entries(slide).reverse()) as (typeof sourcePlan.slides)[number],

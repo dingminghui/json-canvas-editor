@@ -13,7 +13,7 @@ import {
   isPptCanvasArtifactStale,
   savePptCanvasArtifact,
   updatePptCanvasArtifactDocument,
-  type PptCanvasArtifactV1,
+  type PptCanvasArtifactV2,
 } from "@/features/ai-ppt/canvas-storage";
 import { getPptProject } from "@/features/ai-ppt/storage";
 import { Check, CircleAlert } from "lucide-react";
@@ -43,7 +43,7 @@ function MissingCanvas({ projectId }: { projectId: string }) {
 
 function CanvasEditorPage({ projectId }: { projectId: string }) {
   const project = getPptProject(projectId);
-  const [artifact, setArtifact] = useState<PptCanvasArtifactV1 | null>(() =>
+  const [artifact, setArtifact] = useState<PptCanvasArtifactV2 | null>(() =>
     getPptCanvasArtifact(projectId),
   );
   const [saveState, setSaveState] = useState<CanvasSaveState>("saved");

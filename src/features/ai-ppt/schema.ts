@@ -7,12 +7,12 @@ export const PPT_PROMPT_VERSION = "ppt-structure/v3" as const;
 export const PPT_MATERIAL_PLAN_SCHEMA_VERSION = "ppt-material-plan/v1" as const;
 export const DEFAULT_PPT_SOURCE_TREATMENT =
   "以已有材料为内容边界；允许围绕演示目标重组、提炼和调整顺序，但不得新增材料外的事实、数字或结论。" as const;
-export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v1" as const;
-export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v3" as const;
+export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v2" as const;
+export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v4" as const;
 export const PPT_VISUAL_REVIEW_SCHEMA_VERSION = "ppt-visual-review/v1" as const;
 export const PPT_VISUAL_REVIEW_DECISION_SCHEMA_VERSION = "ppt-visual-review-decision/v1" as const;
-export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v2" as const;
-export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v2" as const;
+export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v3" as const;
+export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v3" as const;
 export const DEFAULT_BAILIAN_API_HOST =
   "https://dashscope.aliyuncs.com/compatible-mode/v1" as const;
 
@@ -70,6 +70,10 @@ export const PPT_VISUAL_STYLES = [
 
 export const PPT_VISUAL_DENSITIES = ["spacious", "standard", "compact"] as const;
 export const PPT_PAGE_RHYTHMS = ["anchor", "dense", "breathing"] as const;
+export const PPT_DESIGN_GRIDS = ["editorial", "cinematic", "modular"] as const;
+export const PPT_TYPE_SCALES = ["dramatic", "balanced", "compact"] as const;
+export const PPT_DESIGN_MOTIFS = ["none", "rules", "blocks", "frames"] as const;
+export const PPT_MEDIA_POLICIES = ["none", "evidence-first"] as const;
 export const PPT_PRIMARY_VISUALS = [
   "typography",
   "chart",
@@ -116,6 +120,14 @@ export const PPT_CANVAS_LAYOUT_VARIANTS = [
 ] as const;
 
 export const PPT_TABLE_STYLE_VARIANTS = ["minimal", "contrast", "soft"] as const;
+export const PPT_MEDIA_LAYOUTS = [
+  "none",
+  "full-bleed",
+  "split-left",
+  "split-right",
+  "inset",
+] as const;
+export const PPT_IMAGE_TREATMENTS = ["natural", "muted", "darkened"] as const;
 export const PPT_VISUAL_REVIEW_VERDICTS = ["approved", "revised"] as const;
 export const PPT_VISUAL_REVIEW_SEVERITIES = ["suggestion", "important", "critical"] as const;
 export const PPT_VISUAL_REVIEW_CATEGORIES = [
@@ -573,6 +585,26 @@ export const PptMaterialPlanSchema = z
   });
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const VisualAssetIdSchema = z.string().regex(/^A\d{2,}$/);
+
+export const PptVisualAssetSchema = z
+  .object({
+    id: VisualAssetIdSchema,
+    name: NonEmptyText.max(160),
+    alt: NonEmptyText.max(300),
+    credit: z.string().trim().max(300).optional(),
+    src: z.string().min(1).max(3_000_000),
+  })
+  .strict();
+
+const PptDesignSystemSchema = z
+  .object({
+    grid: z.enum(PPT_DESIGN_GRIDS),
+    typeScale: z.enum(PPT_TYPE_SCALES),
+    motif: z.enum(PPT_DESIGN_MOTIFS),
+    mediaPolicy: z.enum(PPT_MEDIA_POLICIES),
+  })
+  .strict();
 
 const PptVisualThemeSchema = z
   .object({
@@ -598,9 +630,14 @@ const PptVisualSlideSchema = z
     visualFocus: NonEmptyText.max(200),
     accentBlockIndex: z.number().int().min(0).max(7).nullable(),
     tableStyle: z.enum(PPT_TABLE_STYLE_VARIANTS),
-    rhythm: z.enum(PPT_PAGE_RHYTHMS).default("anchor"),
-    primaryVisual: z.enum(PPT_PRIMARY_VISUALS).default("typography"),
-    composition: z.enum(PPT_COMPOSITIONS).default("editorial-flow"),
+    rhythm: z.enum(PPT_PAGE_RHYTHMS),
+    primaryVisual: z.enum(PPT_PRIMARY_VISUALS),
+    composition: z.enum(PPT_COMPOSITIONS),
+    assetId: VisualAssetIdSchema.nullable(),
+    mediaLayout: z.enum(PPT_MEDIA_LAYOUTS),
+    imageTreatment: z.enum(PPT_IMAGE_TREATMENTS),
+    focalPointX: z.number().finite().min(0).max(1),
+    focalPointY: z.number().finite().min(0).max(1),
   })
   .strict();
 
@@ -608,6 +645,7 @@ export const PptVisualPlanSchema = z
   .object({
     schemaVersion: z.literal(PPT_VISUAL_PLAN_SCHEMA_VERSION),
     theme: PptVisualThemeSchema,
+    designSystem: PptDesignSystemSchema,
     slides: z.array(PptVisualSlideSchema).min(4).max(20),
   })
   .strict()
@@ -652,6 +690,7 @@ export const PptVisualReviewDecisionSchema = z
     strengths: z.array(NonEmptyText.max(240)).max(5),
     issues: z.array(PptVisualReviewIssueSchema).max(30),
     themePatch: PptVisualThemeSchema.partial().strict(),
+    designSystemPatch: PptDesignSystemSchema.partial().strict(),
     slidePatches: z
       .array(
         z
@@ -673,6 +712,7 @@ export const PptVisualReviewSchema = z
     strengths: z.array(NonEmptyText.max(240)).max(5),
     issues: z.array(PptVisualReviewIssueSchema).max(30),
     themeChanged: z.boolean(),
+    designSystemChanged: z.boolean(),
     revisedSlideIds: z.array(z.string().regex(/^P\d{2,}$/)).max(20),
     revisedVisualPlan: PptVisualPlanSchema,
   })
@@ -740,7 +780,8 @@ export type PptContentBlock = z.infer<typeof PptContentBlockSchema>;
 export type PptSlide = z.infer<typeof PptSlideSchema>;
 export type PptStructureV1 = z.infer<typeof PptStructureSchema>;
 export type PptMaterialPlanV1 = z.infer<typeof PptMaterialPlanSchema>;
-export type PptVisualPlanV1 = z.infer<typeof PptVisualPlanSchema>;
+export type PptVisualAsset = z.infer<typeof PptVisualAssetSchema>;
+export type PptVisualPlanV2 = z.infer<typeof PptVisualPlanSchema>;
 export type PptVisualReviewDecisionV1 = z.infer<typeof PptVisualReviewDecisionSchema>;
 export type PptVisualReviewV1 = z.infer<typeof PptVisualReviewSchema>;
 export type CreatePptStructureInput = z.infer<typeof CreatePptStructureInputSchema>;
@@ -818,10 +859,13 @@ export function getPptMaterialCoverage(structure: PptStructureV1, materialPlan: 
 }
 
 export function getPptVisualPlanStructureIssues(
-  plan: PptVisualPlanV1,
+  plan: PptVisualPlanV2,
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[] = [],
 ): string[] {
   const issues: string[] = [];
+  const assetIds = new Set(assets.map((asset) => asset.id));
+  const usedAssetIds = new Set<string>();
   if (plan.slides.length !== structure.slides.length) {
     issues.push("视觉方案页数必须与 PPT 文本结构页数一致");
   }
@@ -840,6 +884,28 @@ export function getPptVisualPlanStructureIssues(
     const sourceSlide = structure.slides[index];
     if (!sourceSlide) return;
     const blockTypes = new Set(sourceSlide.contentBlocks.map((block) => block.type));
+    if (slide.assetId === null && slide.mediaLayout !== "none") {
+      issues.push(`视觉方案 ${slide.slideId} 选择了媒体构图但没有引用图片素材`);
+    }
+    if (slide.assetId !== null && slide.mediaLayout === "none") {
+      issues.push(`视觉方案 ${slide.slideId} 引用了图片素材但没有选择媒体构图`);
+    }
+    if (slide.assetId !== null && !assetIds.has(slide.assetId)) {
+      issues.push(`视觉方案 ${slide.slideId} 引用了不存在的图片素材 ${slide.assetId}`);
+    }
+    if (slide.assetId !== null && usedAssetIds.has(slide.assetId)) {
+      issues.push(`视觉方案重复使用了图片素材 ${slide.assetId}`);
+    }
+    if (slide.assetId !== null) usedAssetIds.add(slide.assetId);
+    if (slide.assetId !== null && plan.designSystem.mediaPolicy === "none") {
+      issues.push(`视觉方案 ${slide.slideId} 使用了图片，但整套设计的媒体策略为 none`);
+    }
+    if (
+      slide.assetId !== null &&
+      !["typography", "mixed", "metrics"].includes(slide.primaryVisual)
+    ) {
+      issues.push(`视觉方案 ${slide.slideId} 的图片构图只能搭配 typography、mixed 或 metrics`);
+    }
     if (
       blockTypes.has("chart") &&
       slide.primaryVisual !== "chart" &&
@@ -909,10 +975,11 @@ function valuesEqual(left: unknown, right: unknown): boolean {
 
 export function getPptVisualReviewStructureIssues(
   review: PptVisualReviewV1,
-  sourcePlan: PptVisualPlanV1,
+  sourcePlan: PptVisualPlanV2,
   structure: PptStructureV1,
+  assets: readonly PptVisualAsset[] = [],
 ): string[] {
-  const issues = getPptVisualPlanStructureIssues(review.revisedVisualPlan, structure);
+  const issues = getPptVisualPlanStructureIssues(review.revisedVisualPlan, structure, assets);
   const expectedSlideIds = structure.slides.map((slide) => slide.id);
   const expectedSlideIdSet = new Set(expectedSlideIds);
 
@@ -935,20 +1002,27 @@ export function getPptVisualReviewStructureIssues(
     .filter((slide) => !valuesEqual(slide, revisedPlanBySlideId.get(slide.slideId)))
     .map((slide) => slide.slideId);
   const themeChanged = !valuesEqual(sourcePlan.theme, review.revisedVisualPlan.theme);
+  const designSystemChanged = !valuesEqual(
+    sourcePlan.designSystem,
+    review.revisedVisualPlan.designSystem,
+  );
 
   if (review.themeChanged !== themeChanged) {
     issues.push("视觉评审对主题是否变化的声明与实际修订不一致");
+  }
+  if (review.designSystemChanged !== designSystemChanged) {
+    issues.push("视觉评审对设计系统是否变化的声明与实际修订不一致");
   }
   if (!valuesEqual(review.revisedSlideIds, changedSlideIds)) {
     issues.push("视觉评审声明的修订页面与实际 VisualPlan 变化不一致");
   }
 
-  const hasRevision = themeChanged || changedSlideIds.length > 0;
+  const hasRevision = themeChanged || designSystemChanged || changedSlideIds.length > 0;
   if (review.verdict === "approved" && hasRevision) {
     issues.push("视觉评审结论为通过时不得修改 VisualPlan");
   }
   if (review.verdict === "revised" && !hasRevision) {
-    issues.push("视觉评审结论为修订时必须至少修改主题或一页视觉方案");
+    issues.push("视觉评审结论为修订时必须至少修改主题、设计系统或一页视觉方案");
   }
   if (review.verdict === "revised" && review.issues.length === 0) {
     issues.push("视觉评审执行修订时必须说明至少一个视觉问题");

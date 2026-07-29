@@ -270,6 +270,8 @@ const document: CanvasDocument = {
     {
       cornerRadius: 12,
       fit: "cover",
+      focalPointX: 0.5,
+      focalPointY: 0.5,
       height: 120,
       id: "photo",
       locked: false,

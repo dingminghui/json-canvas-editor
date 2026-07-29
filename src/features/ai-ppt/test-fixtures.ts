@@ -4,7 +4,7 @@ import type {
   PptProjectV1,
   PptStructureV1,
   PptTokenUsageV1,
-  PptVisualPlanV1,
+  PptVisualPlanV2,
   PptVisualReviewDecisionV1,
   PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
@@ -187,9 +187,9 @@ export function createTestPptProject(
   };
 }
 
-export function createTestPptVisualPlan(): PptVisualPlanV1 {
+export function createTestPptVisualPlan(): PptVisualPlanV2 {
   return {
-    schemaVersion: "ppt-visual-plan/v1",
+    schemaVersion: "ppt-visual-plan/v2",
     theme: {
       style: "editorial",
       primaryColor: "#4F46E5",
@@ -203,6 +203,12 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
       bodyFont: "noto-sans-sc",
       cornerStyle: "soft",
     },
+    designSystem: {
+      grid: "editorial",
+      typeScale: "balanced",
+      motif: "rules",
+      mediaPolicy: "none",
+    },
     slides: [
       {
         slideId: "P01",
@@ -214,6 +220,11 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
         rhythm: "breathing",
         primaryVisual: "typography",
         composition: "centered-statement",
+        assetId: null,
+        mediaLayout: "none",
+        imageTreatment: "natural",
+        focalPointX: 0.5,
+        focalPointY: 0.5,
       },
       {
         slideId: "P02",
@@ -225,6 +236,11 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
         rhythm: "anchor",
         primaryVisual: "typography",
         composition: "modular-grid",
+        assetId: null,
+        mediaLayout: "none",
+        imageTreatment: "natural",
+        focalPointX: 0.5,
+        focalPointY: 0.5,
       },
       {
         slideId: "P03",
@@ -236,6 +252,11 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
         rhythm: "anchor",
         primaryVisual: "mixed",
         composition: "asymmetric-split",
+        assetId: null,
+        mediaLayout: "none",
+        imageTreatment: "natural",
+        focalPointX: 0.5,
+        focalPointY: 0.5,
       },
       {
         slideId: "P04",
@@ -247,13 +268,18 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
         rhythm: "breathing",
         primaryVisual: "typography",
         composition: "action-close",
+        assetId: null,
+        mediaLayout: "none",
+        imageTreatment: "natural",
+        focalPointX: 0.5,
+        focalPointY: 0.5,
       },
     ],
   };
 }
 
 export function createTestPptVisualReview(
-  visualPlan: PptVisualPlanV1 = createTestPptVisualPlan(),
+  visualPlan: PptVisualPlanV2 = createTestPptVisualPlan(),
 ): PptVisualReviewV1 {
   return {
     schemaVersion: "ppt-visual-review/v1",
@@ -262,6 +288,7 @@ export function createTestPptVisualReview(
     strengths: ["封面与内容页层级明确", "相邻页面轮廓具有变化"],
     issues: [],
     themeChanged: false,
+    designSystemChanged: false,
     revisedSlideIds: [],
     revisedVisualPlan: visualPlan,
   };
@@ -274,6 +301,7 @@ export function createTestPptVisualReviewDecision(): PptVisualReviewDecisionV1 {
     strengths: ["封面与内容页层级明确", "相邻页面轮廓具有变化"],
     issues: [],
     themePatch: {},
+    designSystemPatch: {},
     slidePatches: [],
   };
 }

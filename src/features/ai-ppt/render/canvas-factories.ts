@@ -3,6 +3,7 @@ import type {
   CanvasElement,
   ChartElement,
   GroupElement,
+  ImageElement,
   RectElement,
   TableCellStyle,
   TableElement,
@@ -150,6 +151,32 @@ export function createCanvasChart(
     showValue: options.showValue ?? true,
     title: options.title ?? "",
     type: "chart",
+    visible: true,
+  };
+}
+
+export function createCanvasImage(
+  id: string,
+  name: string,
+  src: string,
+  frame: Frame,
+  options: Partial<
+    Pick<ImageElement, "cornerRadius" | "fit" | "focalPointX" | "focalPointY" | "opacity">
+  > = {},
+): ImageElement {
+  return {
+    cornerRadius: options.cornerRadius ?? 0,
+    fit: options.fit ?? "cover",
+    focalPointX: options.focalPointX ?? 0.5,
+    focalPointY: options.focalPointY ?? 0.5,
+    ...frame,
+    id,
+    locked: false,
+    name,
+    opacity: options.opacity ?? 1,
+    rotation: 0,
+    src,
+    type: "image",
     visible: true,
   };
 }

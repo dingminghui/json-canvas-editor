@@ -5,12 +5,14 @@ import {
   PPT_MODEL,
   PPT_VISUAL_PROMPT_VERSION,
   PPT_VISUAL_REVIEW_PROMPT_VERSION,
+  PptVisualAssetSchema,
   PptVisualPlanSchema,
   PptVisualReviewSchema,
+  type PptVisualAsset,
 } from "@/features/ai-ppt/schema";
 import { z } from "zod";
 
-export const PPT_CANVAS_ARTIFACT_STORAGE_KEY = "json-canvas-editor:ppt-canvas-artifacts:v1";
+export const PPT_CANVAS_ARTIFACT_STORAGE_KEY = "json-canvas-editor:ppt-canvas-artifacts:v2";
 
 const FontWeightSchema = z.enum(["400", "500", "600", "700", "800"]);
 const ElementMetaSchema = z
@@ -84,6 +86,8 @@ const ImageElementSchema = TransformableElementSchema.extend({
   src: z.string().min(1),
   fit: z.enum(["cover", "contain"]),
   cornerRadius: z.number().finite().nonnegative(),
+  focalPointX: z.number().finite().min(0).max(1),
+  focalPointY: z.number().finite().min(0).max(1),
 }).strict();
 const ChartElementSchema = TransformableElementSchema.extend({
   type: z.literal("chart"),
@@ -180,21 +184,18 @@ export const CanvasDocumentSchema: z.ZodType<CanvasDocument> = z
 
 export const PptCanvasArtifactSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     projectId: z.string().uuid(),
     sourceStructureUpdatedAt: z.string().datetime(),
     visualPreference: z.string().max(500),
+    assets: z.array(PptVisualAssetSchema.omit({ src: true })).max(6),
     visualPlan: PptVisualPlanSchema,
     visualReview: PptVisualReviewSchema.optional(),
     document: CanvasDocumentSchema,
     generator: z
       .object({
         model: z.literal(PPT_MODEL),
-        promptVersion: z.enum([
-          "ppt-visual-plan/v1",
-          "ppt-visual-plan/v2",
-          PPT_VISUAL_PROMPT_VERSION,
-        ]),
+        promptVersion: z.literal(PPT_VISUAL_PROMPT_VERSION),
       })
       .strict(),
     reviewer: z
@@ -204,13 +205,13 @@ export const PptCanvasArtifactSchema = z
       })
       .strict()
       .optional(),
-    rendererVersion: z.enum(["canvas-render/v1", PPT_CANVAS_RENDERER_VERSION]),
+    rendererVersion: z.literal(PPT_CANVAS_RENDERER_VERSION),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
   .strict();
 
-export type PptCanvasArtifactV1 = z.infer<typeof PptCanvasArtifactSchema>;
+export type PptCanvasArtifactV2 = z.infer<typeof PptCanvasArtifactSchema>;
 
 function getStorage(): Storage | null {
   try {
@@ -220,7 +221,7 @@ function getStorage(): Storage | null {
   }
 }
 
-export function listPptCanvasArtifacts(): PptCanvasArtifactV1[] {
+export function listPptCanvasArtifacts(): PptCanvasArtifactV2[] {
   const storage = getStorage();
   if (!storage) return [];
 
@@ -239,11 +240,11 @@ export function listPptCanvasArtifacts(): PptCanvasArtifactV1[] {
   }
 }
 
-export function getPptCanvasArtifact(projectId: string): PptCanvasArtifactV1 | null {
+export function getPptCanvasArtifact(projectId: string): PptCanvasArtifactV2 | null {
   return listPptCanvasArtifacts().find((artifact) => artifact.projectId === projectId) ?? null;
 }
 
-function writeArtifacts(artifacts: readonly PptCanvasArtifactV1[]): boolean {
+function writeArtifacts(artifacts: readonly PptCanvasArtifactV2[]): boolean {
   const storage = getStorage();
   if (!storage) return false;
 
@@ -255,7 +256,7 @@ function writeArtifacts(artifacts: readonly PptCanvasArtifactV1[]): boolean {
   }
 }
 
-export function savePptCanvasArtifact(artifact: PptCanvasArtifactV1): boolean {
+export function savePptCanvasArtifact(artifact: PptCanvasArtifactV2): boolean {
   const result = PptCanvasArtifactSchema.safeParse(artifact);
   if (!result.success) return false;
   const artifacts = [
@@ -275,16 +276,18 @@ export function createPptCanvasArtifact(
   projectId: string,
   sourceStructureUpdatedAt: string,
   visualPreference: string,
-  visualPlan: PptCanvasArtifactV1["visualPlan"],
+  assets: readonly PptVisualAsset[],
+  visualPlan: PptCanvasArtifactV2["visualPlan"],
   document: CanvasDocument,
-  visualReview: NonNullable<PptCanvasArtifactV1["visualReview"]>,
-): PptCanvasArtifactV1 {
+  visualReview: NonNullable<PptCanvasArtifactV2["visualReview"]>,
+): PptCanvasArtifactV2 {
   const timestamp = new Date().toISOString();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId,
     sourceStructureUpdatedAt,
     visualPreference,
+    assets: assets.map(({ alt, credit, id, name }) => ({ alt, credit, id, name })),
     visualPlan,
     visualReview,
     document,
@@ -303,9 +306,9 @@ export function createPptCanvasArtifact(
 }
 
 export function updatePptCanvasArtifactDocument(
-  artifact: PptCanvasArtifactV1,
+  artifact: PptCanvasArtifactV2,
   document: CanvasDocument,
-): PptCanvasArtifactV1 {
+): PptCanvasArtifactV2 {
   return {
     ...artifact,
     document,
@@ -314,7 +317,7 @@ export function updatePptCanvasArtifactDocument(
 }
 
 export function isPptCanvasArtifactStale(
-  artifact: PptCanvasArtifactV1,
+  artifact: PptCanvasArtifactV2,
   projectUpdatedAt: string,
 ): boolean {
   return (

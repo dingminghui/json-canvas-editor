@@ -35,7 +35,7 @@ import {
   getPptCanvasArtifact,
   isPptCanvasArtifactStale,
   savePptCanvasArtifact,
-  type PptCanvasArtifactV1,
+  type PptCanvasArtifactV2,
 } from "@/features/ai-ppt/canvas-storage";
 import {
   addSlideAfter,
@@ -55,6 +55,7 @@ import {
   type PptProjectV1,
   type PptSlide,
   type PptStructureV1,
+  type PptVisualAsset,
 } from "@/features/ai-ppt/schema";
 import { getPptProject, savePptProject } from "@/features/ai-ppt/storage";
 import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
@@ -88,6 +89,32 @@ const PptVisualReviewCapture = lazy(() =>
     default: module.PptVisualReviewCapture,
   })),
 );
+
+const MAX_VISUAL_ASSET_COUNT = 6;
+const MAX_VISUAL_ASSET_BYTES = 1_500_000;
+const MAX_VISUAL_ASSET_TOTAL_BYTES = 4_000_000;
+const ACCEPTED_VISUAL_ASSET_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+
+function readVisualAssetFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("图片读取结果无效"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getNextVisualAssetId(assets: readonly PptVisualAsset[]): string {
+  const usedIds = new Set(assets.map((asset) => asset.id));
+  for (let index = 1; index <= MAX_VISUAL_ASSET_COUNT + 1; index += 1) {
+    const id = `A${String(index).padStart(2, "0")}`;
+    if (!usedIds.has(id)) return id;
+  }
+  return `A${String(assets.length + 1).padStart(2, "0")}`;
+}
 
 type SaveState = "saved" | "saving" | "error";
 type CanvasGenerationState =
@@ -591,19 +618,22 @@ function OutlineEditor({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const [project, setProject] = useState<PptProjectV1 | null>(() => getPptProject(projectId));
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [canvasArtifact, setCanvasArtifact] = useState<PptCanvasArtifactV1 | null>(() =>
+  const [canvasArtifact, setCanvasArtifact] = useState<PptCanvasArtifactV2 | null>(() =>
     getPptCanvasArtifact(projectId),
   );
   const [canvasDialogOpen, setCanvasDialogOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiHost, setApiHost] = useState<string>(DEFAULT_BAILIAN_API_HOST);
   const [visualPreference, setVisualPreference] = useState("");
+  const [visualAssets, setVisualAssets] = useState<PptVisualAsset[]>([]);
+  const [visualAssetError, setVisualAssetError] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [canvasGeneration, setCanvasGeneration] = useState<CanvasGenerationState>({
     status: "idle",
   });
-  const [previewCaptureRequest, setPreviewCaptureRequest] =
-    useState<PreviewCaptureRequest | null>(null);
+  const [previewCaptureRequest, setPreviewCaptureRequest] = useState<PreviewCaptureRequest | null>(
+    null,
+  );
   const canvasAbortControllerRef = useRef<AbortController | null>(null);
   const previewCapturePendingRef = useRef<PreviewCapturePending | null>(null);
   const materialFactById = useMemo(
@@ -664,9 +694,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
             const pending = previewCapturePendingRef.current;
             previewCapturePendingRef.current = null;
             pending?.removeAbortListener();
-            pending?.reject(
-              error instanceof Error ? error : new Error("无法加载视觉评审预览组件"),
-            );
+            pending?.reject(error instanceof Error ? error : new Error("无法加载视觉评审预览组件"));
           },
         );
       }),
@@ -758,9 +786,59 @@ function OutlineEditor({ projectId }: { projectId: string }) {
       canvasAbortControllerRef.current?.abort();
       setApiKey("");
       setShowApiKey(false);
+      setVisualAssets([]);
+      setVisualAssetError(null);
       setCanvasGeneration({ status: "idle" });
     }
     setCanvasDialogOpen(open);
+  }
+
+  async function handleVisualAssetFiles(files: FileList | null) {
+    const selectedFiles = Array.from(files ?? []);
+    if (selectedFiles.length === 0) return;
+    if (visualAssets.length + selectedFiles.length > MAX_VISUAL_ASSET_COUNT) {
+      setVisualAssetError(`最多添加 ${MAX_VISUAL_ASSET_COUNT} 张图片。`);
+      return;
+    }
+    const unsupported = selectedFiles.find(
+      (file) =>
+        !ACCEPTED_VISUAL_ASSET_TYPES.includes(
+          file.type as (typeof ACCEPTED_VISUAL_ASSET_TYPES)[number],
+        ),
+    );
+    if (unsupported) {
+      setVisualAssetError("仅支持 PNG、JPEG 或 WebP 图片。");
+      return;
+    }
+    if (selectedFiles.some((file) => file.size > MAX_VISUAL_ASSET_BYTES)) {
+      setVisualAssetError("单张图片不能超过 1.5MB。");
+      return;
+    }
+    const currentBytes = visualAssets.reduce((total, asset) => total + asset.src.length, 0);
+    const selectedBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+    if (currentBytes + selectedBytes > MAX_VISUAL_ASSET_TOTAL_BYTES) {
+      setVisualAssetError("图片总大小不能超过 4MB，以确保画布可以稳定保存。");
+      return;
+    }
+
+    try {
+      const sources = await Promise.all(selectedFiles.map(readVisualAssetFile));
+      setVisualAssets((current) => {
+        const next = current.slice();
+        selectedFiles.forEach((file, index) => {
+          next.push({
+            id: getNextVisualAssetId(next),
+            name: file.name,
+            alt: file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+            src: sources[index],
+          });
+        });
+        return next;
+      });
+      setVisualAssetError(null);
+    } catch {
+      setVisualAssetError("图片读取失败，请重试。");
+    }
   }
 
   async function handleGenerateCanvas(event: React.FormEvent<HTMLFormElement>) {
@@ -786,6 +864,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         onPhaseChange: (phase) => setCanvasGeneration({ status: "generating", phase }),
         signal: controller.signal,
         structure,
+        assets: visualAssets,
         visualPreference,
       });
       setCanvasGeneration({ status: "generating", phase: "rendering" });
@@ -793,6 +872,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         structure,
         visualPlan,
         `ai-ppt-canvas-${currentProject.id}`,
+        visualAssets,
       );
       setCanvasGeneration({ status: "generating", phase: "capturing-previews" });
       const previews = await captureSlidePreviews(
@@ -808,6 +888,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         signal: controller.signal,
         structure,
         visualPlan,
+        assets: visualAssets,
         visualPreference,
       });
       const reviewedVisualPlan = review.revisedVisualPlan;
@@ -818,6 +899,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
           structure,
           reviewedVisualPlan,
           `ai-ppt-canvas-${currentProject.id}`,
+          visualAssets,
         );
       }
       const projectWithUsage = recordPptProjectUsage(
@@ -828,6 +910,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         currentProject.id,
         projectWithUsage.updatedAt,
         visualPreference.trim(),
+        visualAssets,
         reviewedVisualPlan,
         document,
         review,
@@ -1461,6 +1544,74 @@ function OutlineEditor({ projectId }: { projectId: string }) {
                 <FieldDescription className="text-right tabular-nums">
                   {visualPreference.length} / 500 字
                 </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="visual-assets">
+                  图片素材
+                  <span className="font-normal text-muted-foreground">选填</span>
+                </FieldLabel>
+                <Input
+                  accept={ACCEPTED_VISUAL_ASSET_TYPES.join(",")}
+                  disabled={isGeneratingCanvas || visualAssets.length >= MAX_VISUAL_ASSET_COUNT}
+                  id="visual-assets"
+                  multiple
+                  onChange={(event) => {
+                    void handleVisualAssetFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+                <FieldDescription>
+                  最多 {MAX_VISUAL_ASSET_COUNT}{" "}
+                  张；模型只会从这些已登记图片中选择主视觉，不会编造图片地址。
+                </FieldDescription>
+                {visualAssets.length > 0 ? (
+                  <div className="grid gap-2">
+                    {visualAssets.map((asset) => (
+                      <div className="flex items-center gap-2 rounded-lg border p-2" key={asset.id}>
+                        <img
+                          alt=""
+                          className="size-12 shrink-0 rounded-md object-cover"
+                          src={asset.src}
+                        />
+                        <Input
+                          aria-label={`${asset.name} 的图片描述`}
+                          disabled={isGeneratingCanvas}
+                          maxLength={300}
+                          onChange={(event) =>
+                            setVisualAssets((current) =>
+                              current.map((item) =>
+                                item.id === asset.id ? { ...item, alt: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          placeholder="描述图片主体及适合表达的内容"
+                          value={asset.alt}
+                        />
+                        <Button
+                          aria-label={`移除图片 ${asset.name}`}
+                          disabled={isGeneratingCanvas}
+                          onClick={() =>
+                            setVisualAssets((current) =>
+                              current.filter((item) => item.id !== asset.id),
+                            )
+                          }
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {visualAssetError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {visualAssetError}
+                  </p>
+                ) : null}
               </Field>
 
               <Field>

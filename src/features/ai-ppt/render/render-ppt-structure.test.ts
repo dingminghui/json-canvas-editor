@@ -1,12 +1,12 @@
 import { getDocumentPages } from "@/editor/document-pages";
 import { createCanvasDocumentPresentation } from "@/editor/pptx-export";
-import type { ChartElement, TableElement } from "@/editor/types";
+import type { ChartElement, ImageElement, TableElement } from "@/editor/types";
 import {
   CanvasRenderError,
   getCanvasDocumentIssues,
   renderPptStructureToCanvas,
 } from "@/features/ai-ppt/render/render-ppt-structure";
-import type { PptContentBlock, PptSlide, PptVisualPlanV1 } from "@/features/ai-ppt/schema";
+import type { PptContentBlock, PptSlide, PptVisualPlanV2 } from "@/features/ai-ppt/schema";
 import { createTestPptStructure, createTestPptVisualPlan } from "@/features/ai-ppt/test-fixtures";
 import JSZip from "jszip";
 
@@ -89,7 +89,7 @@ describe("PPT 画布渲染器", () => {
     name: string;
     block: PptContentBlock;
     intent: PptSlide["layoutIntent"];
-    variant: PptVisualPlanV1["slides"][number]["layoutVariant"];
+    variant: PptVisualPlanV2["slides"][number]["layoutVariant"];
   }> = [
     {
       name: "对比",
@@ -247,6 +247,53 @@ describe("PPT 画布渲染器", () => {
 
     expect(elements.some((element) => element.name === "Swiss 顶部粗线")).toBe(true);
     expect(elements.some((element) => element.name === "页面视觉钩子")).toBe(true);
+    expect(getCanvasDocumentIssues(document)).toEqual([]);
+  });
+
+  it("用登记图片生成全幅媒体页并保留裁切焦点", () => {
+    const structure = createTestPptStructure();
+    const visualPlan = createTestPptVisualPlan();
+    const assets = [
+      {
+        id: "A01",
+        name: "architecture.webp",
+        alt: "建筑与水面倒影，主体位于画面右侧",
+        credit: "用户提供",
+        src: "data:image/webp;base64,dGVzdA==",
+      },
+    ];
+    visualPlan.designSystem = {
+      ...visualPlan.designSystem,
+      grid: "cinematic",
+      typeScale: "dramatic",
+      mediaPolicy: "evidence-first",
+    };
+    visualPlan.slides[0] = {
+      ...visualPlan.slides[0],
+      assetId: "A01",
+      mediaLayout: "full-bleed",
+      imageTreatment: "darkened",
+      focalPointX: 0.8,
+      focalPointY: 0.45,
+    };
+
+    const document = renderPptStructureToCanvas(structure, visualPlan, "media-layout", assets);
+    const page = getDocumentPages(document)[0];
+    const image = page.elements.find(
+      (element): element is ImageElement => element.type === "image",
+    );
+
+    expect(image).toMatchObject({
+      fit: "cover",
+      focalPointX: 0.8,
+      focalPointY: 0.45,
+      height: 900,
+      width: 1600,
+      x: 0,
+      y: 0,
+    });
+    expect(page.elements.some((element) => element.name === "图片可读性遮罩")).toBe(true);
+    expect(page.elements.some((element) => element.name === "媒体页标题")).toBe(true);
     expect(getCanvasDocumentIssues(document)).toEqual([]);
   });
 

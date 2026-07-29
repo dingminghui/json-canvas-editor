@@ -28,6 +28,7 @@ function createArtifact() {
     project.id,
     project.updatedAt,
     "克制、专业",
+    [],
     visualPlan,
     document,
     createTestPptVisualReview(visualPlan),
@@ -59,28 +60,6 @@ describe("PPT 画布产物存储", () => {
     const artifact = createArtifact();
     expect(isPptCanvasArtifactStale(artifact, artifact.sourceStructureUpdatedAt)).toBe(false);
     expect(isPptCanvasArtifactStale(artifact, "2026-07-30T00:00:00.000Z")).toBe(true);
-
-    const legacyArtifact = {
-      ...artifact,
-      generator: { ...artifact.generator, promptVersion: "ppt-visual-plan/v1" as const },
-      rendererVersion: "canvas-render/v1" as const,
-    };
-    expect(savePptCanvasArtifact(legacyArtifact)).toBe(true);
-    expect(isPptCanvasArtifactStale(legacyArtifact, artifact.sourceStructureUpdatedAt)).toBe(true);
-  });
-
-  it("直接丢弃旧视觉评审提示版本的本地产物", () => {
-    const artifact = createArtifact();
-    const legacyReviewArtifact = {
-      ...artifact,
-      reviewer: {
-        ...artifact.reviewer,
-        promptVersion: "ppt-visual-review/v1",
-      },
-    };
-    localStorage.setItem(PPT_CANVAS_ARTIFACT_STORAGE_KEY, JSON.stringify([legacyReviewArtifact]));
-
-    expect(listPptCanvasArtifacts()).toEqual([]);
   });
 
   it("忽略损坏数据且永不持久化接口密钥", () => {

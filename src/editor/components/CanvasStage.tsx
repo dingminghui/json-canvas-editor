@@ -8,6 +8,7 @@ import {
 import { renderChartToDataUrl } from "@/editor/chart-renderer";
 import { findElementContext } from "@/editor/editor-state";
 import { getCanvasFont, loadCanvasFont, type CanvasFontFamily } from "@/editor/fonts";
+import { getCoverImageCrop } from "@/editor/image-layout";
 import {
   invalidateMarkdownCanvasCache,
   markdownToDisplayText,
@@ -327,20 +328,15 @@ function getImageRenderGeometry(
     };
   }
 
-  const frameAspectRatio = element.width / element.height;
-  const imageAspectRatio = image.width / image.height;
-  const cropWidth =
-    imageAspectRatio > frameAspectRatio ? image.height * frameAspectRatio : image.width;
-  const cropHeight =
-    imageAspectRatio > frameAspectRatio ? image.height : image.width / frameAspectRatio;
+  const crop = getCoverImageCrop(
+    image,
+    element,
+    element.focalPointX ?? 0.5,
+    element.focalPointY ?? 0.5,
+  );
 
   return {
-    crop: {
-      height: cropHeight,
-      width: cropWidth,
-      x: (image.width - cropWidth) / 2,
-      y: (image.height - cropHeight) / 2,
-    },
+    crop: crop ?? undefined,
     height: element.height,
     width: element.width,
     x: 0,

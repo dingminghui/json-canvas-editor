@@ -1,6 +1,9 @@
 import { App } from "@/App";
 import * as api from "@/features/ai-ppt/api";
-import { getPptCanvasArtifact } from "@/features/ai-ppt/canvas-storage";
+import {
+  getPptCanvasArtifact,
+  PPT_CANVAS_ARTIFACT_STORAGE_KEY,
+} from "@/features/ai-ppt/canvas-storage";
 import { getPptProject, savePptProject } from "@/features/ai-ppt/storage";
 import {
   createTestPptMaterialPlan,
@@ -266,7 +269,7 @@ describe("AI 生成 PPT 文本结构页面", () => {
     const user = userEvent.setup();
     const project = createTestPptProject();
     savePptProject(project);
-    vi.spyOn(visualApi, "generatePptVisualPlan").mockResolvedValue({
+    const generateVisualPlan = vi.spyOn(visualApi, "generatePptVisualPlan").mockResolvedValue({
       visualPlan: createTestPptVisualPlan(),
       usage: createTestPptTokenUsage(),
     });
@@ -279,6 +282,11 @@ describe("AI 生成 PPT 文本结构页面", () => {
     await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
     await user.type(screen.getByLabelText("百炼接口密钥"), "sk-canvas-not-persisted");
     await user.type(screen.getByLabelText(/视觉偏好/), "克制、专业，突出行动项");
+    await user.upload(
+      screen.getByLabelText(/图片素材/),
+      new File(["hero"], "hero.png", { type: "image/png" }),
+    );
+    await screen.findByLabelText("hero.png 的图片描述");
     await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
 
     const backLink = await screen.findByRole("link", { name: "返回文本大纲" });
@@ -289,7 +297,15 @@ describe("AI 生成 PPT 文本结构页面", () => {
     expect(artifact?.document.documentType).toBe("pptx");
     expect(artifact?.document.elements).toHaveLength(4);
     expect(artifact?.visualReview?.verdict).toBe("approved");
-    const persisted = globalThis.localStorage.getItem("json-canvas-editor:ppt-canvas-artifacts:v1");
+    expect(artifact?.assets).toEqual([
+      expect.objectContaining({ id: "A01", name: "hero.png", alt: "hero" }),
+    ]);
+    expect(generateVisualPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assets: [expect.objectContaining({ id: "A01", name: "hero.png" })],
+      }),
+    );
+    const persisted = globalThis.localStorage.getItem(PPT_CANVAS_ARTIFACT_STORAGE_KEY);
     expect(persisted).not.toContain("sk-canvas-not-persisted");
     expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(30_330);
   });

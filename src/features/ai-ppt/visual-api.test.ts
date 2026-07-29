@@ -73,6 +73,47 @@ describe("百炼视觉方案客户端", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("把登记图片作为多模态视觉规划输入", async () => {
+    const plan = createTestPptVisualPlan();
+    const assets = [
+      {
+        id: "A01",
+        name: "product.png",
+        alt: "产品位于画面右侧，左侧留白",
+        src: "data:image/png;base64,dGVzdA==",
+      },
+    ];
+    plan.designSystem.mediaPolicy = "evidence-first";
+    plan.slides[0] = {
+      ...plan.slides[0],
+      assetId: "A01",
+      mediaLayout: "full-bleed",
+      imageTreatment: "darkened",
+      focalPointX: 0.8,
+      focalPointY: 0.5,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(completionResponse(JSON.stringify(plan)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await generatePptVisualPlan({
+      apiKey: "sk-visual-secret",
+      structure: createTestPptStructure(),
+      assets,
+    });
+
+    expect(result.visualPlan.slides[0].assetId).toBe("A01");
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      messages: Array<{ content: unknown }>;
+    };
+    expect(body.messages[1]?.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "image_url" }),
+        expect.objectContaining({ type: "text", text: expect.stringContaining("A01") }),
+      ]),
+    );
+  });
+
   it("两次视觉方案都无效时停止且错误不包含密钥", async () => {
     vi.stubGlobal(
       "fetch",
@@ -179,6 +220,7 @@ describe("百炼视觉方案客户端", () => {
         },
       ],
       themePatch: { accentColor: "#2563eb" },
+      designSystemPatch: { typeScale: "dramatic" as const },
       slidePatches: [
         {
           slideId: "P03",
@@ -204,8 +246,10 @@ describe("百炼视觉方案客户端", () => {
     expect(result.review).toMatchObject({
       verdict: "revised",
       themeChanged: true,
+      designSystemChanged: true,
       revisedSlideIds: ["P03"],
       revisedVisualPlan: {
+        designSystem: { typeScale: "dramatic" },
         theme: { accentColor: "#2563eb" },
       },
     });

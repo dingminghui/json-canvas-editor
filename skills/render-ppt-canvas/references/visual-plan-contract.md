@@ -1,6 +1,6 @@
 # Visual plan contract
 
-`PptVisualPlanV1` is the only model-generated input accepted by the canvas renderer.
+`PptVisualPlanV2` is the only model-generated input accepted by the canvas renderer.
 
 ## Deck theme
 
@@ -10,6 +10,7 @@ Require:
 - seven six-digit hexadecimal colors;
 - one supported Chinese heading font and body font;
 - one corner treatment.
+- one deck grid, type scale, motif, and media policy.
 
 Treat model colors as proposals. Resolve foreground colors locally to maintain readable contrast.
 
@@ -28,6 +29,8 @@ Each plan contains:
 - page rhythm: anchor, dense, or breathing;
 - one primary visual: typography, chart, diagram, table, metrics, or mixed;
 - one executable composition selected from the supported composition catalog.
+- an optional registered image asset ID;
+- one media layout, image treatment, and normalized focal point.
 
 Reject duplicated IDs, missing pages, reordered pages, references to missing content blocks, unsupported variants, unsupported fonts, and invalid colors.
 
@@ -43,13 +46,13 @@ The visual plan may choose:
 - page rhythm and cross-page pacing;
 - native editable visual form;
 - executable composition.
+- registered asset selection, crop focus, and media treatment.
 
 It may not contain:
 
 - coordinates or dimensions;
 - canvas elements;
 - SVG or drawing commands;
-- image prompts;
-- image references or asset requests;
+- image prompts, arbitrary image URLs, or asset requests;
 - revised presentation facts;
 - executable code.
