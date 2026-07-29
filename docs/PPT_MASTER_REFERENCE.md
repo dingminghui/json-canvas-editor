@@ -1,18 +1,15 @@
 # PPT Master 参考基线
 
-本文固化对 [hugohe3/ppt-master](https://github.com/hugohe3/ppt-master) 的调研结果，供后续 AI PPT 设计与实现优先复用。目标是避免每次从头读取远端仓库、重复建立相同上下文。
+本文固化此前对 PPT Master 的调研结果，供后续 AI PPT 设计与实现优先复用。后续判断以本文为本地研究缓存，不要求重新检查或比较远端仓库。
 
 ## 1. 基线信息
 
-| 字段                         | 内容                                                   |
-| ---------------------------- | ------------------------------------------------------ |
-| 完整调研日期                 | 2026-07-29                                             |
-| 首次完整审计 commit          | `081e56323d0869c79913a5fb03405df1523ce49f`             |
-| 最近本地复核的 `main` commit | `69bc4377e0cefe458d20217a0a0d75a356250ca1`             |
-| PPT Master Skill 版本        | `4.2.0`                                                |
-| 结论适用范围                 | PPT 内容规划、视觉规划、可编辑元素生成、模板与质量检查 |
-
-从首次完整审计到最近本地复核，本文依赖的 Skill 入口、技术架构、模板架构、图表库和视觉检查规则没有发生实质变化。`strategist.md` 的变化集中在确认界面提示和条件生产能力的表述，不影响本文总结的生成架构。
+| 字段                  | 内容                                                   |
+| --------------------- | ------------------------------------------------------ |
+| 完整调研日期          | 2026-07-29                                             |
+| 调研基线 commit       | `081e56323d0869c79913a5fb03405df1523ce49f`             |
+| PPT Master Skill 版本 | `4.2.0`                                                |
+| 结论适用范围          | PPT 内容规划、视觉规划、可编辑元素生成、模板与质量检查 |
 
 ### 1.1 已检查资料
 
@@ -177,7 +174,8 @@ PPT Master 的确定性检查关注：
 
 | PPT Master                   | 本项目                                              |
 | ---------------------------- | --------------------------------------------------- |
-| 来源、事实和页面内容计划     | `PptProject` / `PptStructure`                       |
+| 来源与事实分析               | `PptMaterialPlan`                                   |
+| 页面内容计划                 | `PptStructure` + `evidenceRefs`                     |
 | `design_spec` 与页面视觉决策 | `PptVisualPlan`                                     |
 | 页面 SVG                     | `CanvasDocument`                                    |
 | SVG → DrawingML 转换器       | Canvas 元素 → PptxGenJS                             |
@@ -186,7 +184,8 @@ PPT Master 的确定性检查关注：
 本项目已经采用：
 
 ```text
-PptProject
+PptMaterialPlan
+→ PptStructure
 → PptVisualPlan
 → CanvasDocument
 → 编辑器
@@ -305,41 +304,21 @@ PPT Master 对图片搜索、生成、裁切和溯源有完整流程，但本项
 | 视觉产物版本和兼容   | `src/features/ai-ppt/canvas-storage.ts`              |
 | PPTX 原生元素导出    | `src/editor/pptx-export.ts`                          |
 
-## 6. 后续使用与刷新规则
+## 6. 后续使用规则
 
 处理新的 PPT 生成需求时：
 
-1. 先读本文，不要从头读取 PPT Master。
-2. 查看本文记录的最近复核 commit。
-3. 轻量检查远端 `main` 的 HEAD：
-
-   ```bash
-   git ls-remote https://github.com/hugohe3/ppt-master.git refs/heads/main
-   ```
-
-4. 如果 HEAD 仍为 `69bc4377e0cefe458d20217a0a0d75a356250ca1`，直接使用本文，不再下载或重复阅读远端文件。
-5. 如果 HEAD 已变化，只检查与当前问题相关的 diff，优先关注：
-   - `skills/ppt-master/SKILL.md`
-   - 对应 route 的 workflow
-   - `references/strategist.md`
-   - `docs/technical-design.md`
-   - `docs/templates-architecture.md`
-   - `templates/charts/README.md`
-   - `references/visual-review.md`
-6. 只有以下架构发生变化时，才重新做完整调研：
-   - 顶层路由或阶段所有权变化。
-   - Strategist、Executor 或质量门的职责变化。
-   - SVG 中间表示或 SVG → PPTX 编译边界变化。
-   - 模板 Brand/Layout/Deck 模型变化。
-   - 原生图表、表格或 OOXML 路线变化。
-7. 完成增量检查后，更新本文的 commit、日期和相关结论。
+1. 先读本文，不要重新读取或比较远端 PPT Master 仓库。
+2. 将本文记录的原则与本项目当前架构进行比较，并结合具体需求独立判断。
+3. 只有用户明确要求重新调研 PPT Master 时，才访问远端资料并决定是否更新本文。
 
 ## 7. 当前推荐方案
 
 本项目继续坚持以下路线：
 
 ```text
-语义内容结构
+材料事实与确认方向
+→ 语义内容结构
 → 页面级视觉计划
 → 确定性 Canvas 原生元素
 → 人工可编辑

@@ -87,16 +87,20 @@ interface CanvasDocument {
 
 ### 4.4 AI PPT 生成链路
 
-AI PPT 使用“内容结构 → 视觉计划 → 可编辑画布”三阶段模型：
+AI PPT 使用“材料分析 → 内容结构 → 视觉计划 → 可编辑画布”四阶段模型：
 
 ```text
-PptProject
+CreatePptStructureInput
+→ PptMaterialPlan
+→ PptStructure
 → PptVisualPlan
 → CanvasDocument
 → 编辑器 / PPTX
 ```
 
-- `PptProject` 只表达叙事结构和语义内容块；图表保存分类、数值与结论，关系图保存节点、边与关系类型。
+- `PptMaterialPlan` 将已有材料拆成带稳定 ID 的事实、优先级和缺口，并保存用户确认过的核心主张、叙事模式与章节方向。
+- `PptStructure` 表达叙事结构和语义内容块；每页用 `evidenceRefs` 引用实际使用的材料事实。图表保存分类、数值与结论，关系图保存节点、边与关系类型。
+- `PptProject` 保存原始需求、确认后的材料计划、文本结构和累计模型用量。旧项目缺少材料计划时仍可读取。
 - `PptVisualPlan` 为每页指定页面节奏、主视觉类型、构图方式、版式变体和强调块，不重复保存正文内容。
 - 画布渲染器根据以上两层数据生成文本、形状、连线、表格和原生图表。默认不依赖图片，信息层级由字号、留白、色块、网格和几何关系建立。
 - 图表在 Canvas 中保留结构化数据并导出为 PPT 原生图表；关系图由可编辑形状和箭头组成。

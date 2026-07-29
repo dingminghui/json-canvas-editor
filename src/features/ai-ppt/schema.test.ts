@@ -1,14 +1,19 @@
 import {
   CreatePptStructureInputSchema,
+  getPptMaterialCoverage,
+  getPptMaterialPlanJsonSchema,
   getPptStructureJsonSchema,
+  getPptStructureMaterialIssues,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
+  PptMaterialPlanSchema,
   PptProjectSchema,
   PptStructureSchema,
   PptVisualPlanSchema,
 } from "@/features/ai-ppt/schema";
 import {
   createTestPptInput,
+  createTestPptMaterialPlan,
   createTestPptProject,
   createTestPptStructure,
   createTestPptVisualPlan,
@@ -119,6 +124,32 @@ describe("PptStructureSchema", () => {
     input.sourceMarkdown = "字".repeat(50_001);
 
     expect(CreatePptStructureInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("校验材料事实、方向引用和逐页来源覆盖", () => {
+    const materialPlan = createTestPptMaterialPlan();
+    const structure = createTestPptStructure();
+
+    expect(PptMaterialPlanSchema.parse(materialPlan)).toEqual(materialPlan);
+    expect(getPptMaterialPlanJsonSchema()).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+    });
+    expect(getPptStructureMaterialIssues(structure, materialPlan)).toEqual([]);
+    expect(getPptMaterialCoverage(structure, materialPlan)).toMatchObject({
+      coveragePercent: 100,
+      coveredFactCount: 2,
+      totalFactCount: 2,
+      coveredRequiredFactCount: 1,
+      requiredFactCount: 1,
+    });
+
+    structure.slides.forEach((slide) => {
+      slide.evidenceRefs = slide.evidenceRefs.filter((factId) => factId !== "F001");
+    });
+    expect(getPptStructureMaterialIssues(structure, materialPlan)).toContain(
+      "必需材料事实 F001 未被任何页面使用",
+    );
   });
 
   it("校验视觉方案并导出相同的结构契约", () => {

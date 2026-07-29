@@ -56,9 +56,11 @@ pnpm format
 - 页面名称建议使用 `01 标题` 格式。
 - 标准页码文本的元素名称应包含“页码”，内容使用 `01 / 08` 格式，以便排序后自动更新。
 
-### 4.3 AI PPT 三阶段契约
+### 4.3 AI PPT 四阶段契约
 
-- `PptProject` 是内容事实源。新增内容类型时需要同步更新 Zod schema、结构生成 Skill、提纲编辑表单、渲染器和测试。
+- `PptMaterialPlan` 是材料事实和确认方向的来源；事实使用稳定 `F001` ID，必需事实必须进入推荐方向和最终页面。
+- `PptStructure` 是逐页内容事实源，每页通过 `evidenceRefs` 记录实际使用的材料事实。新增内容类型时需要同步更新 Zod schema、结构生成 Skill、提纲编辑表单、渲染器和测试。
+- `PptProject` 聚合原始需求、材料计划、内容结构和模型用量。新增字段优先采用可选值或 Zod 默认值，保证旧的 localStorage 项目仍可读取。
 - `PptVisualPlan` 只保存主题与页面视觉决策，包括 `rhythm`、`primaryVisual`、`composition`、`layoutVariant` 和强调块索引。
 - `CanvasDocument` 是可编辑渲染产物。图表应创建 `ChartElement`，关系图应创建形状、文本和箭头，不要栅格化成整页图片。
 - 旧提示词版本可以读取；渲染前使用 stale 检查提示重新生成，保留用户手动调整过的画布。

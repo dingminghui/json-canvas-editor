@@ -40,6 +40,23 @@ describe("PPT project storage", () => {
     expect(listPptProjects()).toEqual([]);
   });
 
+  it("读取新增材料字段之前保存的兼容项目", () => {
+    const legacy = structuredClone(createTestPptProject()) as Record<string, unknown>;
+    delete legacy.materialPlan;
+    const input = legacy.input as Record<string, unknown>;
+    delete input.sourceTreatment;
+    const structure = legacy.structure as { slides: Array<Record<string, unknown>> };
+    structure.slides.forEach((slide) => delete slide.evidenceRefs);
+    const generator = legacy.generator as Record<string, unknown>;
+    generator.promptVersion = "ppt-structure/v2";
+    localStorage.setItem(PPT_PROJECT_STORAGE_KEY, JSON.stringify([legacy]));
+
+    const project = listPptProjects()[0];
+    expect(project?.materialPlan).toBeUndefined();
+    expect(project?.input.sourceTreatment).toContain("已有材料为内容边界");
+    expect(project?.structure.slides.every((slide) => slide.evidenceRefs.length === 0)).toBe(true);
+  });
+
   it("never persists an API key field", () => {
     expect(savePptProject(createTestPptProject())).toBe(true);
     const persisted = localStorage.getItem(PPT_PROJECT_STORAGE_KEY) ?? "";

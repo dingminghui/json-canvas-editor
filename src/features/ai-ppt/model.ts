@@ -3,6 +3,7 @@ import {
   PPT_PROJECT_SCHEMA_VERSION,
   PPT_PROMPT_VERSION,
   type CreatePptStructureInput,
+  type PptMaterialPlanV1,
   type PptProjectV1,
   type PptSlide,
   type PptStructureV1,
@@ -12,6 +13,7 @@ import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
 
 export function createPptProject(
   input: CreatePptStructureInput,
+  materialPlan: PptMaterialPlanV1,
   structure: PptStructureV1,
   usage: PptTokenUsageV1,
 ): PptProjectV1 {
@@ -20,6 +22,7 @@ export function createPptProject(
     schemaVersion: PPT_PROJECT_SCHEMA_VERSION,
     id: globalThis.crypto.randomUUID(),
     input,
+    materialPlan,
     structure,
     generator: {
       model: PPT_MODEL,
@@ -84,6 +87,7 @@ function createBlankSlide(sectionId: string): PptSlide {
     },
     layoutIntent: "title-body",
     contentBlocks: [{ type: "paragraph", text: "在这里补充正文内容。" }],
+    evidenceRefs: [],
     speakerNotes: "",
   };
 }

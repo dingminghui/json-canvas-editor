@@ -20,6 +20,9 @@
 - Give every `chart` one takeaway that interprets the data without overstating it.
 - Give every `diagram` stable node IDs and only connect existing, distinct nodes.
 - Use the supplied material as the factual boundary. General framing is allowed; unsupported precise numbers, quotations, or claims are not.
+- Add every fact ID used by a page to that page's `evidenceRefs`; do not cite facts that the page does not use.
+- Cover and transition pages may have empty `evidenceRefs` when they contain no material-backed claim.
+- Use every fact marked `required` in the confirmed material plan at least once.
 - Respect required and excluded content literally.
 - In presentation reading mode, keep on-slide copy sparse and move explanation into notes.
 - In text reading mode, keep enough visible explanation for independent reading.

@@ -3,6 +3,7 @@ import * as api from "@/features/ai-ppt/api";
 import { getPptCanvasArtifact } from "@/features/ai-ppt/canvas-storage";
 import { getPptProject, savePptProject } from "@/features/ai-ppt/storage";
 import {
+  createTestPptMaterialPlan,
   createTestPptProject,
   createTestPptStructure,
   createTestPptTokenUsage,
@@ -53,9 +54,12 @@ describe("AI 生成 PPT 文本结构页面", () => {
     renderApp("/ai-ppt/new");
 
     await user.type(screen.getByLabelText(/已有材料/), "三字文");
+    await user.type(screen.getByLabelText("PPT 主题"), "材料测试");
+    await user.type(screen.getByLabelText("目标听众"), "管理层");
+    await user.type(screen.getByLabelText("演示目标"), "形成决策");
     expect(screen.getByText("3 / 50,000 字")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "生成 PPT 结构" }));
+    await user.click(screen.getByRole("button", { name: "分析材料并生成方向" }));
     expect(screen.getByRole("alert")).toHaveTextContent("请输入百炼接口密钥");
   });
 
@@ -64,11 +68,15 @@ describe("AI 生成 PPT 文本结构页面", () => {
     renderApp("/ai-ppt/new");
 
     expect(screen.getByText("本功能仅支持从本机地址运行。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "生成 PPT 结构" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "分析材料并生成方向" })).toBeDisabled();
   });
 
   it("生成成功后保存非敏感输入并进入大纲页", async () => {
     const user = userEvent.setup();
+    vi.spyOn(api, "analyzePptMaterial").mockResolvedValue({
+      materialPlan: createTestPptMaterialPlan(),
+      usage: createTestPptTokenUsage(),
+    });
     vi.spyOn(api, "generatePptStructure").mockResolvedValue({
       structure: createTestPptStructure(),
       usage: createTestPptTokenUsage(),
@@ -79,12 +87,15 @@ describe("AI 生成 PPT 文本结构页面", () => {
     await user.type(screen.getByLabelText("PPT 主题"), "AI 产品战略");
     await user.type(screen.getByLabelText("目标听众"), "公司管理层");
     await user.type(screen.getByLabelText("演示目标"), "获得研发预算批准");
-    await user.click(screen.getByRole("button", { name: "生成 PPT 结构" }));
+    await user.type(screen.getByLabelText(/已有材料/), "当前产品进入规模化阶段。");
+    await user.click(screen.getByRole("button", { name: "分析材料并生成方向" }));
+    expect(await screen.findByRole("heading", { name: "确认生成方向" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认方向并生成 PPT 结构" }));
 
     expect(await screen.findByDisplayValue("AI 产品战略")).toBeInTheDocument();
     const persisted = globalThis.localStorage.getItem("json-canvas-editor:ppt-projects:v1");
     expect(persisted).not.toContain("sk-not-persisted");
-    expect(persisted).toContain('"total_tokens":10110');
+    expect(persisted).toContain('"total_tokens":20220');
     expect(api.generatePptStructure).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKey: "sk-not-persisted",
@@ -92,13 +103,14 @@ describe("AI 生成 PPT 文本结构页面", () => {
           topic: "AI 产品战略",
           language: "zh-CN",
         }),
+        materialPlan: createTestPptMaterialPlan(),
       }),
     );
   });
 
   it("生成过程中允许用户取消", async () => {
     const user = userEvent.setup();
-    vi.spyOn(api, "generatePptStructure").mockImplementation(
+    vi.spyOn(api, "analyzePptMaterial").mockImplementation(
       ({ signal }) =>
         new Promise((_resolve, reject) => {
           signal?.addEventListener(
@@ -114,7 +126,8 @@ describe("AI 生成 PPT 文本结构页面", () => {
     await user.type(screen.getByLabelText("PPT 主题"), "AI 产品战略");
     await user.type(screen.getByLabelText("目标听众"), "公司管理层");
     await user.type(screen.getByLabelText("演示目标"), "获得研发预算批准");
-    await user.click(screen.getByRole("button", { name: "生成 PPT 结构" }));
+    await user.type(screen.getByLabelText(/已有材料/), "当前产品进入规模化阶段。");
+    await user.click(screen.getByRole("button", { name: "分析材料并生成方向" }));
     await user.click(await screen.findByRole("button", { name: "取消生成" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("已取消生成");
@@ -167,6 +180,17 @@ describe("AI 生成 PPT 文本结构页面", () => {
 
     const headings = screen.getAllByRole("heading").map((heading) => heading.textContent);
     expect(headings.indexOf("结构元数据")).toBeLessThan(headings.indexOf("章节结构"));
+  });
+
+  it("大纲页显示材料覆盖率和逐页事实来源", () => {
+    const project = createTestPptProject();
+    savePptProject(project);
+    renderApp(`/ai-ppt/${project.id}`);
+
+    expect(screen.getByText("材料覆盖 100%")).toBeInTheDocument();
+    expect(screen.getByText("必需事实 1/1")).toBeInTheDocument();
+    expect(screen.getByLabelText("P03 材料依据 ID")).toHaveValue("F001");
+    expect(screen.getAllByText("当前产品进入规模化阶段。").length).toBeGreaterThan(0);
   });
 
   it("大纲页可以继续编辑图表数据和关系图结构", () => {

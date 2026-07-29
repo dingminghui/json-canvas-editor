@@ -3,7 +3,10 @@ import { z } from "zod";
 export const PPT_STRUCTURE_SCHEMA_VERSION = "ppt-structure/v1" as const;
 export const PPT_PROJECT_SCHEMA_VERSION = 1 as const;
 export const PPT_MODEL = "qwen3.7-plus" as const;
-export const PPT_PROMPT_VERSION = "ppt-structure/v2" as const;
+export const PPT_PROMPT_VERSION = "ppt-structure/v3" as const;
+export const PPT_MATERIAL_PLAN_SCHEMA_VERSION = "ppt-material-plan/v1" as const;
+export const DEFAULT_PPT_SOURCE_TREATMENT =
+  "以已有材料为内容边界；允许围绕演示目标重组、提炼和调整顺序，但不得新增材料外的事实、数字或结论。" as const;
 export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v1" as const;
 export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v2" as const;
 export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v2" as const;
@@ -46,6 +49,8 @@ export const PPT_NARRATIVE_MODES = [
   "showcase",
   "briefing",
 ] as const;
+export const PPT_MATERIAL_FACT_KINDS = ["fact", "data", "claim", "constraint"] as const;
+export const PPT_MATERIAL_FACT_PRIORITIES = ["required", "supporting", "optional"] as const;
 
 export const PPT_VISUAL_STYLES = [
   "editorial",
@@ -111,6 +116,7 @@ export const PPT_TABLE_STYLE_VARIANTS = ["minimal", "contrast", "soft"] as const
 
 const NonEmptyText = z.string().trim().min(1);
 const ShortItem = NonEmptyText.max(300);
+const FactIdSchema = z.string().regex(/^F\d{3,}$/);
 
 const ParagraphBlockSchema = z
   .object({
@@ -324,6 +330,7 @@ export const PptSlideSchema = z
       .strict(),
     layoutIntent: z.enum(PPT_LAYOUT_INTENTS),
     contentBlocks: z.array(PptContentBlockSchema).min(1).max(8),
+    evidenceRefs: z.array(FactIdSchema).max(20).default([]),
     speakerNotes: z.string().trim().max(4000).optional(),
   })
   .strict();
@@ -464,6 +471,90 @@ export const PptStructureSchema = z
     });
   });
 
+const PptMaterialFactSchema = z
+  .object({
+    id: FactIdSchema,
+    kind: z.enum(PPT_MATERIAL_FACT_KINDS),
+    priority: z.enum(PPT_MATERIAL_FACT_PRIORITIES),
+    statement: NonEmptyText.max(500),
+    sourceExcerpt: NonEmptyText.max(500),
+    sourceLocation: z.string().trim().max(200).optional(),
+  })
+  .strict();
+
+const PptMaterialDirectionSectionSchema = z
+  .object({
+    id: z.string().regex(/^S\d{2,}$/),
+    title: NonEmptyText.max(120),
+    objective: NonEmptyText.max(400),
+    factIds: z.array(FactIdSchema).min(1).max(30),
+  })
+  .strict();
+
+export const PptMaterialPlanSchema = z
+  .object({
+    schemaVersion: z.literal(PPT_MATERIAL_PLAN_SCHEMA_VERSION),
+    sourceSummary: NonEmptyText.max(1200),
+    facts: z.array(PptMaterialFactSchema).min(1).max(100),
+    gaps: z.array(NonEmptyText.max(300)).max(20),
+    direction: z
+      .object({
+        title: NonEmptyText.max(100),
+        coreMessage: NonEmptyText.max(500),
+        narrativeMode: z.enum(PPT_NARRATIVE_MODES),
+        rationale: NonEmptyText.max(800),
+        sections: z.array(PptMaterialDirectionSectionSchema).min(1).max(10),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const factIds = new Set<string>();
+    plan.facts.forEach((fact, index) => {
+      if (factIds.has(fact.id)) {
+        context.addIssue({
+          code: "custom",
+          message: "材料事实 ID 必须唯一",
+          path: ["facts", index, "id"],
+        });
+      }
+      factIds.add(fact.id);
+    });
+
+    const sectionIds = new Set<string>();
+    const plannedFactIds = new Set<string>();
+    plan.direction.sections.forEach((section, sectionIndex) => {
+      if (sectionIds.has(section.id)) {
+        context.addIssue({
+          code: "custom",
+          message: "方向章节 ID 必须唯一",
+          path: ["direction", "sections", sectionIndex, "id"],
+        });
+      }
+      sectionIds.add(section.id);
+      section.factIds.forEach((factId, factIndex) => {
+        if (!factIds.has(factId)) {
+          context.addIssue({
+            code: "custom",
+            message: "方向章节引用了不存在的材料事实",
+            path: ["direction", "sections", sectionIndex, "factIds", factIndex],
+          });
+        }
+        plannedFactIds.add(factId);
+      });
+    });
+
+    plan.facts.forEach((fact, index) => {
+      if (fact.priority === "required" && !plannedFactIds.has(fact.id)) {
+        context.addIssue({
+          code: "custom",
+          message: "必需材料事实必须进入推荐方向",
+          path: ["facts", index, "id"],
+        });
+      }
+    });
+  });
+
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 export const PptVisualPlanSchema = z
@@ -524,6 +615,7 @@ export const CreatePptStructureInputSchema = z
     audience: NonEmptyText.max(300),
     objective: NonEmptyText.max(500),
     sourceMarkdown: z.string().max(50_000).optional(),
+    sourceTreatment: z.string().trim().max(500).default(DEFAULT_PPT_SOURCE_TREATMENT),
     slideCount: z.union([z.literal("auto"), z.number().int().min(4).max(20)]),
     deliveryContext: z.string().trim().max(200).optional(),
     durationMinutes: z.number().int().min(1).max(480).optional(),
@@ -561,11 +653,12 @@ export const PptProjectSchema = z
     schemaVersion: z.literal(PPT_PROJECT_SCHEMA_VERSION),
     id: z.string().uuid(),
     input: CreatePptStructureInputSchema,
+    materialPlan: PptMaterialPlanSchema.optional(),
     structure: PptStructureSchema,
     generator: z
       .object({
         model: z.literal(PPT_MODEL),
-        promptVersion: z.enum(["ppt-structure/v1", PPT_PROMPT_VERSION]),
+        promptVersion: z.enum(["ppt-structure/v1", "ppt-structure/v2", PPT_PROMPT_VERSION]),
         usage: PptTokenUsageSchema,
       })
       .strict(),
@@ -577,6 +670,7 @@ export const PptProjectSchema = z
 export type PptContentBlock = z.infer<typeof PptContentBlockSchema>;
 export type PptSlide = z.infer<typeof PptSlideSchema>;
 export type PptStructureV1 = z.infer<typeof PptStructureSchema>;
+export type PptMaterialPlanV1 = z.infer<typeof PptMaterialPlanSchema>;
 export type PptVisualPlanV1 = z.infer<typeof PptVisualPlanSchema>;
 export type CreatePptStructureInput = z.infer<typeof CreatePptStructureInputSchema>;
 export type PptTokenUsageV1 = z.infer<typeof PptTokenUsageSchema>;
@@ -586,8 +680,62 @@ export function getPptStructureJsonSchema() {
   return z.toJSONSchema(PptStructureSchema, { target: "draft-07" });
 }
 
+export function getPptMaterialPlanJsonSchema() {
+  return z.toJSONSchema(PptMaterialPlanSchema, { target: "draft-07" });
+}
+
 export function getPptVisualPlanJsonSchema() {
   return z.toJSONSchema(PptVisualPlanSchema, { target: "draft-07" });
+}
+
+export function getPptStructureMaterialIssues(
+  structure: PptStructureV1,
+  materialPlan: PptMaterialPlanV1,
+): string[] {
+  const issues: string[] = [];
+  const knownFactIds = new Set(materialPlan.facts.map((fact) => fact.id));
+  const referencedFactIds = new Set(structure.slides.flatMap((slide) => slide.evidenceRefs));
+
+  structure.slides.forEach((slide) => {
+    slide.evidenceRefs.forEach((factId) => {
+      if (!knownFactIds.has(factId)) {
+        issues.push(`${slide.id} 引用了不存在的材料事实 ${factId}`);
+      }
+    });
+  });
+
+  materialPlan.facts.forEach((fact) => {
+    if (fact.priority === "required" && !referencedFactIds.has(fact.id)) {
+      issues.push(`必需材料事实 ${fact.id} 未被任何页面使用`);
+    }
+  });
+
+  return issues;
+}
+
+export function getPptMaterialCoverage(structure: PptStructureV1, materialPlan: PptMaterialPlanV1) {
+  const referencedFactIds = new Set(structure.slides.flatMap((slide) => slide.evidenceRefs));
+  const requiredFacts = materialPlan.facts.filter((fact) => fact.priority === "required");
+  const coveredFacts = materialPlan.facts.filter((fact) => referencedFactIds.has(fact.id));
+  const coveredRequiredFacts = requiredFacts.filter((fact) => referencedFactIds.has(fact.id));
+  const weightByPriority = { required: 3, supporting: 2, optional: 1 } as const;
+  const totalWeight = materialPlan.facts.reduce(
+    (sum, fact) => sum + weightByPriority[fact.priority],
+    0,
+  );
+  const coveredWeight = coveredFacts.reduce(
+    (sum, fact) => sum + weightByPriority[fact.priority],
+    0,
+  );
+
+  return {
+    coveragePercent: totalWeight === 0 ? 100 : Math.round((coveredWeight / totalWeight) * 100),
+    coveredFactCount: coveredFacts.length,
+    totalFactCount: materialPlan.facts.length,
+    coveredRequiredFactCount: coveredRequiredFacts.length,
+    requiredFactCount: requiredFacts.length,
+    missingRequiredFacts: requiredFacts.filter((fact) => !referencedFactIds.has(fact.id)),
+  };
 }
 
 export function getPptVisualPlanStructureIssues(

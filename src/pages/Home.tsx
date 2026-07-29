@@ -66,7 +66,7 @@ export function Home() {
               先整理观点，再开始设计幻灯片。
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
-              输入主题、听众、目标和 Markdown 材料，生成可继续编辑的章节与逐页内容结构。
+              提供主题、听众、目标和已有材料，先确认有依据的演示方向，再生成可继续编辑的逐页内容结构。
             </p>
             <Button asChild className="mt-8" size="lg">
               <Link to="/ai-ppt/new">
@@ -77,7 +77,7 @@ export function Home() {
           </div>
 
           <div className="flex flex-col justify-end gap-4">
-            {["规划叙事与章节", "明确逐页核心信息", "组织语义内容块"].map((item, index) => (
+            {["提取材料事实", "确认演示方向", "生成逐页内容与来源"].map((item, index) => (
               <div className="flex items-center gap-4 text-sm" key={item}>
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
                   0{index + 1}

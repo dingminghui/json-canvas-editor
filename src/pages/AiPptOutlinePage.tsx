@@ -47,6 +47,7 @@ import {
 import { renderPptStructureToCanvas } from "@/features/ai-ppt/render/render-ppt-structure";
 import {
   DEFAULT_BAILIAN_API_HOST,
+  getPptMaterialCoverage,
   PPT_LAYOUT_INTENTS,
   PPT_SLIDE_ROLES,
   type PptContentBlock,
@@ -71,7 +72,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 type SaveState = "saved" | "saving" | "error";
@@ -556,6 +557,10 @@ function OutlineEditor({ projectId }: { projectId: string }) {
     status: "idle",
   });
   const canvasAbortControllerRef = useRef<AbortController | null>(null);
+  const materialFactById = useMemo(
+    () => new Map(project?.materialPlan?.facts.map((fact) => [fact.id, fact] as const) ?? []),
+    [project?.materialPlan],
+  );
 
   useEffect(() => {
     if (!project || saveState !== "saving") return;
@@ -626,6 +631,9 @@ function OutlineEditor({ projectId }: { projectId: string }) {
   }
 
   const structure = project.structure;
+  const materialCoverage = project.materialPlan
+    ? getPptMaterialCoverage(structure, project.materialPlan)
+    : null;
   const artifactIsStale = canvasArtifact
     ? isPptCanvasArtifactStale(canvasArtifact, project.updatedAt)
     : false;
@@ -814,6 +822,51 @@ function OutlineEditor({ projectId }: { projectId: string }) {
                 </FieldGroup>
               </div>
 
+              {project.materialPlan && materialCoverage ? (
+                <section className="mb-9 border-y py-6" aria-labelledby="material-coverage-title">
+                  <div className="flex items-start justify-between gap-6">
+                    <div>
+                      <p className="text-xs font-medium text-primary">材料主导生成</p>
+                      <h2 className="mt-1 text-lg font-semibold" id="material-coverage-title">
+                        {project.materialPlan.direction.title}
+                      </h2>
+                    </div>
+                    <Badge className="tabular-nums" variant="secondary">
+                      材料覆盖 {materialCoverage.coveragePercent}%
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {project.materialPlan.direction.coreMessage}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">
+                      已使用 {materialCoverage.coveredFactCount}/{materialCoverage.totalFactCount}{" "}
+                      条事实
+                    </Badge>
+                    <Badge
+                      variant={
+                        materialCoverage.coveredRequiredFactCount ===
+                        materialCoverage.requiredFactCount
+                          ? "outline"
+                          : "destructive"
+                      }
+                    >
+                      必需事实 {materialCoverage.coveredRequiredFactCount}/
+                      {materialCoverage.requiredFactCount}
+                    </Badge>
+                  </div>
+                  {materialCoverage.missingRequiredFacts.length > 0 ? (
+                    <ul className="mt-4 list-disc space-y-1 pl-5 text-xs leading-5 text-destructive">
+                      {materialCoverage.missingRequiredFacts.map((fact) => (
+                        <li key={fact.id}>
+                          {fact.id}：{fact.statement}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              ) : null}
+
               <div>
                 {structure.slides.map((slide, slideIndex) => (
                   <article
@@ -989,6 +1042,44 @@ function OutlineEditor({ projectId }: { projectId: string }) {
                           />
                         </Field>
                       </FieldGroup>
+
+                      {project.materialPlan ? (
+                        <Field className="mt-4">
+                          <FieldLabel htmlFor={`${slide.id}-evidence-refs`}>材料依据 ID</FieldLabel>
+                          <Input
+                            aria-label={`${slide.id} 材料依据 ID`}
+                            defaultValue={slide.evidenceRefs.join(", ")}
+                            id={`${slide.id}-evidence-refs`}
+                            key={`${slide.id}-${slide.evidenceRefs.join("-")}`}
+                            onBlur={(event) => {
+                              const evidenceRefs = Array.from(
+                                new Set(
+                                  event.target.value
+                                    .split(/[\s,，]+/)
+                                    .map((value) => value.trim().toUpperCase())
+                                    .filter((value) => /^F\d{3,}$/.test(value)),
+                                ),
+                              ).slice(0, 20);
+                              updateSlide(slide.id, { evidenceRefs });
+                            }}
+                            placeholder="F001, F002"
+                          />
+                          {slide.evidenceRefs.length > 0 ? (
+                            <div className="mt-2 flex flex-col gap-1">
+                              {slide.evidenceRefs.map((factId) => (
+                                <p className="text-xs leading-5 text-muted-foreground" key={factId}>
+                                  <span className="mr-2 font-mono text-foreground">{factId}</span>
+                                  {materialFactById.get(factId)?.statement ?? "未找到对应材料事实"}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <FieldDescription>
+                              本页没有标记材料事实；封面或纯转场页可以留空。
+                            </FieldDescription>
+                          )}
+                        </Field>
+                      ) : null}
 
                       <div className="mt-5 flex flex-col gap-3">
                         <div className="flex items-center justify-between">

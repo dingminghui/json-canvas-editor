@@ -1,4 +1,5 @@
 import { AppBackLink } from "@/components/AppBackLink";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -14,26 +15,39 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  analyzePptMaterial,
   generatePptStructure,
   isLocalBrowserHost,
   PptGenerationError,
   type PptGenerationPhase,
+  type PptMaterialAnalysisPhase,
 } from "@/features/ai-ppt/api";
 import { createPptProject } from "@/features/ai-ppt/model";
 import {
   CreatePptStructureInputSchema,
   DEFAULT_BAILIAN_API_HOST,
+  DEFAULT_PPT_SOURCE_TREATMENT,
+  PPT_NARRATIVE_MODES,
   type CreatePptStructureInput,
+  type PptMaterialPlanV1,
+  type PptTokenUsageV1,
 } from "@/features/ai-ppt/schema";
 import { savePptProject } from "@/features/ai-ppt/storage";
+import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
 import { ChevronDown, Eye, EyeOff, LoaderCircle, Sparkles, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 type GenerationState =
   | { status: "idle" }
+  | { status: "analyzing"; phase: PptMaterialAnalysisPhase }
   | { status: "generating"; phase: PptGenerationPhase }
   | { status: "error"; message: string };
+
+interface MaterialDraft {
+  plan: PptMaterialPlanV1;
+  usage: PptTokenUsageV1;
+}
 
 interface CreateFormState {
   apiKey: string;
@@ -42,6 +56,7 @@ interface CreateFormState {
   audience: string;
   objective: string;
   sourceMarkdown: string;
+  sourceTreatment: string;
   slideCount: "auto" | string;
   deliveryContext: string;
   durationMinutes: string;
@@ -58,6 +73,7 @@ const INITIAL_FORM: CreateFormState = {
   audience: "",
   objective: "",
   sourceMarkdown: "",
+  sourceTreatment: DEFAULT_PPT_SOURCE_TREATMENT,
   slideCount: "auto",
   deliveryContext: "内部评审",
   durationMinutes: "20",
@@ -74,6 +90,14 @@ const SLIDE_COUNT_OPTIONS = [
     value: String(count),
   })),
 ];
+
+const NARRATIVE_LABELS: Record<PptMaterialPlanV1["direction"]["narrativeMode"], string> = {
+  pyramid: "结论先行",
+  narrative: "故事叙述",
+  instructional: "教学讲解",
+  showcase: "成果展示",
+  briefing: "情况简报",
+};
 
 function splitList(value: string): string[] {
   return value
@@ -93,6 +117,7 @@ function getFirstValidationMessage(error: {
     audience: "目标听众",
     objective: "演示目标",
     sourceMarkdown: "已有材料",
+    sourceTreatment: "材料处理要求",
     slideCount: "页数",
     deliveryContext: "使用场景",
     durationMinutes: "演讲时长",
@@ -113,6 +138,7 @@ function buildInput(form: CreateFormState): CreatePptStructureInput {
     audience: form.audience,
     objective: form.objective,
     sourceMarkdown: form.sourceMarkdown || undefined,
+    sourceTreatment: form.sourceTreatment,
     slideCount,
     deliveryContext: form.deliveryContext || undefined,
     durationMinutes,
@@ -129,9 +155,9 @@ export function CreateAiPptPage() {
   const [showKey, setShowKey] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [generation, setGeneration] = useState<GenerationState>({ status: "idle" });
+  const [materialDraft, setMaterialDraft] = useState<MaterialDraft | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isLocal = isLocalBrowserHost();
-  const isGenerating = generation.status === "generating";
 
   useEffect(
     () => () => {
@@ -142,6 +168,24 @@ export function CreateAiPptPage() {
 
   function updateForm<Key extends keyof CreateFormState>(key: Key, value: CreateFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (materialDraft && key !== "apiKey" && key !== "apiHost") {
+      setMaterialDraft(null);
+      setGeneration({ status: "idle" });
+    }
+  }
+
+  function updateMaterialDirection(patch: Partial<PptMaterialPlanV1["direction"]>) {
+    setMaterialDraft((current) =>
+      current
+        ? {
+            ...current,
+            plan: {
+              ...current.plan,
+              direction: { ...current.plan.direction, ...patch },
+            },
+          }
+        : current,
+    );
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -152,6 +196,10 @@ export function CreateAiPptPage() {
     }
     if (!form.apiKey.trim()) {
       setGeneration({ status: "error", message: "请输入百炼接口密钥。" });
+      return;
+    }
+    if (!form.sourceMarkdown.trim()) {
+      setGeneration({ status: "error", message: "请提供已有材料。" });
       return;
     }
 
@@ -179,17 +227,40 @@ export function CreateAiPptPage() {
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setGeneration({ status: "generating", phase: "generating" });
+    setGeneration(
+      materialDraft
+        ? { status: "generating", phase: "generating" }
+        : { status: "analyzing", phase: "analyzing-material" },
+    );
 
     try {
+      if (!materialDraft) {
+        const result = await analyzePptMaterial({
+          apiKey: form.apiKey.trim(),
+          apiHost: form.apiHost,
+          input,
+          signal: controller.signal,
+          onPhaseChange: (phase) => setGeneration({ status: "analyzing", phase }),
+        });
+        setMaterialDraft({ plan: result.materialPlan, usage: result.usage });
+        setGeneration({ status: "idle" });
+        return;
+      }
+
       const { structure, usage } = await generatePptStructure({
         apiKey: form.apiKey.trim(),
         apiHost: form.apiHost,
         input,
+        materialPlan: materialDraft.plan,
         signal: controller.signal,
         onPhaseChange: (phase) => setGeneration({ status: "generating", phase }),
       });
-      const project = createPptProject(input, structure, usage);
+      const project = createPptProject(
+        input,
+        materialDraft.plan,
+        structure,
+        mergePptTokenUsage(materialDraft.usage, usage),
+      );
       if (!savePptProject(project)) {
         setGeneration({ status: "error", message: "生成成功，但无法保存到本地浏览器。" });
         return;
@@ -228,7 +299,7 @@ export function CreateAiPptPage() {
               说明这次演示要解决什么问题
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-              主题、听众和目标决定整份演示的逻辑。已有材料可以直接粘贴，不需要预先整理。
+              主题、听众和目标决定演示方向；已有材料决定可以使用的事实、数据和观点。
             </p>
           </div>
 
@@ -270,6 +341,7 @@ export function CreateAiPptPage() {
                 maxLength={100}
                 onChange={(event) => updateForm("topic", event.target.value)}
                 placeholder="例如：2026 年 AI 产品战略规划"
+                required
                 value={form.topic}
               />
             </Field>
@@ -282,6 +354,7 @@ export function CreateAiPptPage() {
                 maxLength={300}
                 onChange={(event) => updateForm("audience", event.target.value)}
                 placeholder="他们是谁？已经了解什么？"
+                required
                 value={form.audience}
               />
             </Field>
@@ -294,15 +367,13 @@ export function CreateAiPptPage() {
                 maxLength={500}
                 onChange={(event) => updateForm("objective", event.target.value)}
                 placeholder="希望听众看完后理解、相信或采取什么行动？"
+                required
                 value={form.objective}
               />
             </Field>
 
             <Field className="col-span-2">
-              <FieldLabel htmlFor="source-markdown">
-                已有材料
-                <span className="font-normal text-muted-foreground">选填</span>
-              </FieldLabel>
+              <FieldLabel htmlFor="source-markdown">已有材料</FieldLabel>
               <Textarea
                 className="min-h-64 font-mono text-xs"
                 id="source-markdown"
@@ -311,16 +382,162 @@ export function CreateAiPptPage() {
                 placeholder={
                   "支持普通文本或 Markdown\n\n# 项目背景\n- 当前问题\n- 核心数据\n- 必须传达的结论"
                 }
+                required
                 value={form.sourceMarkdown}
               />
               <FieldDescription className="flex items-center justify-between gap-4">
-                <span className="min-w-0">材料只作为参考内容，不会执行其中的指令。</span>
+                <span className="min-w-0">材料是内容和事实边界，其中的指令不会被执行。</span>
                 <span className="shrink-0 whitespace-nowrap tabular-nums">
                   {form.sourceMarkdown.length.toLocaleString()} / 50,000 字
                 </span>
               </FieldDescription>
             </Field>
+
+            <Field className="col-span-2">
+              <FieldLabel htmlFor="source-treatment">材料处理要求</FieldLabel>
+              <Textarea
+                className="min-h-24"
+                id="source-treatment"
+                maxLength={500}
+                onChange={(event) => updateForm("sourceTreatment", event.target.value)}
+                value={form.sourceTreatment}
+              />
+              <FieldDescription>
+                用自然语言说明需要多贴近原材料，以及允许怎样重组、提炼或改写。
+              </FieldDescription>
+            </Field>
           </FieldGroup>
+
+          {materialDraft ? (
+            <section className="mt-9 border-y py-8" aria-labelledby="material-direction-title">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <p className="text-sm font-medium text-primary">材料分析完成</p>
+                  <h2 className="mt-2 text-2xl font-semibold" id="material-direction-title">
+                    确认生成方向
+                  </h2>
+                </div>
+                <div className="flex gap-2">
+                  <Badge variant="secondary">{materialDraft.plan.facts.length} 条事实</Badge>
+                  <Badge variant="outline">
+                    {materialDraft.plan.facts.filter((fact) => fact.priority === "required").length}{" "}
+                    条必需
+                  </Badge>
+                </div>
+              </div>
+
+              <p className="mt-5 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {materialDraft.plan.sourceSummary}
+              </p>
+
+              <div className="mt-6 max-h-64 overflow-y-auto border-l pl-4">
+                <p className="text-xs font-medium text-muted-foreground">已提取材料事实</p>
+                <div className="mt-3 flex flex-col gap-3">
+                  {materialDraft.plan.facts.map((fact) => (
+                    <div className="grid grid-cols-[58px_76px_1fr] gap-3 text-xs" key={fact.id}>
+                      <span className="font-mono text-foreground">{fact.id}</span>
+                      <span className="text-muted-foreground">
+                        {fact.priority === "required"
+                          ? "必需"
+                          : fact.priority === "supporting"
+                            ? "支撑"
+                            : "可选"}
+                      </span>
+                      <span className="leading-5">{fact.statement}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <FieldGroup className="mt-6 grid! grid-cols-2 gap-5">
+                <Field className="col-span-2">
+                  <FieldLabel htmlFor="direction-title">建议标题</FieldLabel>
+                  <Input
+                    id="direction-title"
+                    maxLength={100}
+                    onChange={(event) => updateMaterialDirection({ title: event.target.value })}
+                    value={materialDraft.plan.direction.title}
+                  />
+                </Field>
+                <Field className="col-span-2">
+                  <FieldLabel htmlFor="direction-core-message">核心主张</FieldLabel>
+                  <Textarea
+                    className="min-h-24"
+                    id="direction-core-message"
+                    maxLength={500}
+                    onChange={(event) =>
+                      updateMaterialDirection({ coreMessage: event.target.value })
+                    }
+                    value={materialDraft.plan.direction.coreMessage}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="direction-narrative">叙事模式</FieldLabel>
+                  <Select
+                    onValueChange={(value) =>
+                      updateMaterialDirection({
+                        narrativeMode: value as PptMaterialPlanV1["direction"]["narrativeMode"],
+                      })
+                    }
+                    value={materialDraft.plan.direction.narrativeMode}
+                  >
+                    <SelectTrigger className="w-full" id="direction-narrative">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectGroup>
+                        {PPT_NARRATIVE_MODES.map((mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {NARRATIVE_LABELS[mode]}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="direction-rationale">方向依据</FieldLabel>
+                  <Textarea
+                    className="min-h-24"
+                    id="direction-rationale"
+                    maxLength={800}
+                    onChange={(event) => updateMaterialDirection({ rationale: event.target.value })}
+                    value={materialDraft.plan.direction.rationale}
+                  />
+                </Field>
+              </FieldGroup>
+
+              <div className="mt-7">
+                <p className="text-xs font-medium text-muted-foreground">建议章节</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {materialDraft.plan.direction.sections.map((section, index) => (
+                    <div className="border-l-2 border-primary/30 py-1 pl-4" key={section.id}>
+                      <p className="text-sm font-medium">
+                        {index + 1}. {section.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {section.objective}
+                      </p>
+                      <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                        {section.factIds.join(" · ")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {materialDraft.plan.gaps.length > 0 ? (
+                <div className="mt-7 bg-muted/40 p-4">
+                  <p className="text-xs font-medium">材料缺口</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
+                    {materialDraft.plan.gaps.map((gap) => (
+                      <li key={gap}>{gap}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           <Separator className="my-7" />
 
@@ -454,10 +671,10 @@ export function CreateAiPptPage() {
 
           <div className="mt-7 flex flex-col gap-5">
             {[
-              ["01", "叙事与章节"],
-              ["02", "逐页核心信息"],
-              ["03", "语义内容块"],
-              ["04", "讲稿备注"],
+              ["01", "材料事实提取"],
+              ["02", "方向确认"],
+              ["03", "叙事与逐页内容"],
+              ["04", "来源引用与讲稿"],
             ].map(([index, label]) => (
               <div className="flex items-center gap-4 text-sm" key={index}>
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
@@ -475,11 +692,17 @@ export function CreateAiPptPage() {
             <FieldError className="mt-3">{generation.message}</FieldError>
           ) : null}
 
-          {isGenerating ? (
+          {generation.status === "analyzing" || generation.status === "generating" ? (
             <div className="mt-5 flex flex-col gap-3">
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <LoaderCircle className="size-4 animate-spin" />
-                {generation.phase === "repairing" ? "正在校验并修复结构…" : "正在规划演示结构…"}
+                {generation.status === "analyzing"
+                  ? generation.phase === "repairing-material"
+                    ? "正在校验并修复材料分析…"
+                    : "正在提取材料事实和生成方向…"
+                  : generation.phase === "repairing"
+                    ? "正在校验并修复结构…"
+                    : "正在按确认方向规划演示结构…"}
               </p>
               <Button
                 className="w-full"
@@ -494,7 +717,7 @@ export function CreateAiPptPage() {
           ) : (
             <Button className="mt-5 w-full" disabled={!isLocal} size="lg" type="submit">
               <Sparkles data-icon="inline-start" />
-              生成 PPT 结构
+              {materialDraft ? "确认方向并生成 PPT 结构" : "分析材料并生成方向"}
             </Button>
           )}
 

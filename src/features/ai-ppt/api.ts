@@ -1,17 +1,23 @@
 import {
   DEFAULT_BAILIAN_API_HOST,
+  getPptMaterialPlanJsonSchema,
   getPptStructureJsonSchema,
+  getPptStructureMaterialIssues,
   PPT_MODEL,
+  PptMaterialPlanSchema,
   PptStructureSchema,
   PptTokenUsageSchema,
   type CreatePptStructureInput,
+  type PptMaterialPlanV1,
   type PptStructureV1,
   type PptTokenUsageV1,
 } from "@/features/ai-ppt/schema";
 import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
+import materialAnalysisPrompt from "../../../skills/generate-ppt-structure/references/material-analysis-prompt.md?raw";
 import runtimePrompt from "../../../skills/generate-ppt-structure/references/runtime-prompt.md?raw";
 
 export type PptGenerationPhase = "generating" | "repairing";
+export type PptMaterialAnalysisPhase = "analyzing-material" | "repairing-material";
 
 export type PptGenerationErrorCode =
   | "invalid-host"
@@ -22,6 +28,7 @@ export type PptGenerationErrorCode =
   | "network"
   | "timeout"
   | "cancelled"
+  | "invalid-material-plan"
   | "invalid-structure"
   | "invalid-visual-plan";
 
@@ -39,8 +46,17 @@ interface GeneratePptStructureOptions {
   apiKey: string;
   apiHost?: string;
   input: CreatePptStructureInput;
+  materialPlan: PptMaterialPlanV1;
   signal?: AbortSignal;
   onPhaseChange?: (phase: PptGenerationPhase) => void;
+}
+
+interface AnalyzePptMaterialOptions {
+  apiKey: string;
+  apiHost?: string;
+  input: CreatePptStructureInput;
+  signal?: AbortSignal;
+  onPhaseChange?: (phase: PptMaterialAnalysisPhase) => void;
 }
 
 interface ChatCompletionResponse {
@@ -59,6 +75,11 @@ export interface BailianCompletionResult {
 
 export interface GeneratePptStructureResult {
   structure: PptStructureV1;
+  usage: PptTokenUsageV1;
+}
+
+export interface AnalyzePptMaterialResult {
+  materialPlan: PptMaterialPlanV1;
   usage: PptTokenUsageV1;
 }
 
@@ -95,10 +116,17 @@ export function normalizeBailianApiHost(apiHost: string = DEFAULT_BAILIAN_API_HO
   return `${url.origin}${pathname}`;
 }
 
-function createSystemPrompt(): string {
+function createStructureSystemPrompt(): string {
   return runtimePrompt.replace(
     "{{OUTPUT_SCHEMA}}",
     JSON.stringify(getPptStructureJsonSchema(), null, 2),
+  );
+}
+
+function createMaterialSystemPrompt(): string {
+  return materialAnalysisPrompt.replace(
+    "{{OUTPUT_SCHEMA}}",
+    JSON.stringify(getPptMaterialPlanJsonSchema(), null, 2),
   );
 }
 
@@ -106,14 +134,33 @@ function escapeSourceMaterial(source: string): string {
   return source.replace(/<\/source_material>/gi, "&lt;/source_material&gt;");
 }
 
-function createUserPrompt(input: CreatePptStructureInput): string {
+function createMaterialUserPrompt(input: CreatePptStructureInput): string {
   const { sourceMarkdown = "", ...brief } = input;
   return [
-    "根据以下演示需求生成完整 PPT 文本结构。",
+    "分析以下材料，并为这次演示提出一个有材料依据的推荐方向。",
     "",
     "<presentation_brief>",
     JSON.stringify(brief, null, 2),
     "</presentation_brief>",
+    "",
+    "<source_material>",
+    escapeSourceMaterial(sourceMarkdown),
+    "</source_material>",
+  ].join("\n");
+}
+
+function createUserPrompt(input: CreatePptStructureInput, materialPlan: PptMaterialPlanV1): string {
+  const { sourceMarkdown = "", ...brief } = input;
+  return [
+    "根据以下演示需求和已经确认的材料方向生成完整 PPT 文本结构。",
+    "",
+    "<presentation_brief>",
+    JSON.stringify(brief, null, 2),
+    "</presentation_brief>",
+    "",
+    "<confirmed_material_plan>",
+    JSON.stringify(materialPlan, null, 2),
+    "</confirmed_material_plan>",
     "",
     "<source_material>",
     escapeSourceMaterial(sourceMarkdown),
@@ -136,14 +183,67 @@ function createRepairPrompt(content: string, issues: string[]): string {
   ].join("\n");
 }
 
-function getValidationIssues(error: unknown): string[] {
-  if (error instanceof SyntaxError) return ["输出不是合法的结构化数据。"];
-  const result = PptStructureSchema.safeParse(error);
-  if (result.success) return [];
-  return result.error.issues.map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`);
+function createMaterialRepairPrompt(
+  content: string,
+  issues: string[],
+  sourceMarkdown: string,
+): string {
+  return [
+    "修复下面的材料分析，使其严格满足系统消息中的 JSON Schema 和材料事实约束。",
+    "sourceExcerpt 必须从 source_material 中复制一个连续的原文片段，不得拼接、改写、补充标点或添加说明。",
+    "只返回修复后的 JSON 对象。",
+    "",
+    "<validation_issues>",
+    issues.slice(0, 30).join("\n"),
+    "</validation_issues>",
+    "",
+    "<candidate_output>",
+    content.slice(0, 120_000),
+    "</candidate_output>",
+    "",
+    "<source_material>",
+    escapeSourceMaterial(sourceMarkdown),
+    "</source_material>",
+  ].join("\n");
 }
 
-function parsePptStructure(content: string): PptStructureV1 {
+function getValidationIssues(error: unknown, materialPlan: PptMaterialPlanV1): string[] {
+  if (error instanceof SyntaxError) return ["输出不是合法的结构化数据。"];
+  const result = PptStructureSchema.safeParse(error);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
+    );
+  }
+  return getPptStructureMaterialIssues(result.data, materialPlan);
+}
+
+function normalizeSourceText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function getMaterialSourceIssues(
+  materialPlan: PptMaterialPlanV1,
+  sourceMarkdown: string,
+): string[] {
+  const normalizedSource = normalizeSourceText(sourceMarkdown);
+  return materialPlan.facts
+    .filter((fact) => !normalizedSource.includes(normalizeSourceText(fact.sourceExcerpt)))
+    .map((fact) => `${fact.id} 的 sourceExcerpt 必须逐字来自已有材料`);
+}
+
+function getMaterialValidationIssues(error: unknown, sourceMarkdown: string): string[] {
+  if (error instanceof SyntaxError) return ["输出不是合法的结构化数据。"];
+  const result = PptMaterialPlanSchema.safeParse(error);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
+    );
+  }
+  return getMaterialSourceIssues(result.data, sourceMarkdown);
+}
+
+function parsePptStructure(content: string, materialPlan: PptMaterialPlanV1): PptStructureV1 {
   let value: unknown;
   try {
     value = JSON.parse(content);
@@ -152,8 +252,23 @@ function parsePptStructure(content: string): PptStructureV1 {
   }
 
   const result = PptStructureSchema.safeParse(value);
-  if (!result.success) {
+  if (!result.success || getPptStructureMaterialIssues(result.data, materialPlan).length > 0) {
     throw new PptGenerationError("invalid-structure", "模型返回的 PPT 结构未通过校验。");
+  }
+  return result.data;
+}
+
+function parsePptMaterialPlan(content: string, sourceMarkdown: string): PptMaterialPlanV1 {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new PptGenerationError("invalid-material-plan", "模型返回的材料分析格式无效。");
+  }
+
+  const result = PptMaterialPlanSchema.safeParse(value);
+  if (!result.success || getMaterialSourceIssues(result.data, sourceMarkdown).length > 0) {
+    throw new PptGenerationError("invalid-material-plan", "模型返回的材料分析未通过校验。");
   }
   return result.data;
 }
@@ -190,6 +305,7 @@ export async function requestBailianCompletion(
         model: PPT_MODEL,
         messages,
         response_format: { type: "json_object" },
+        enable_thinking: false,
         temperature,
         stream: false,
       }),
@@ -218,26 +334,145 @@ export async function requestBailianCompletion(
   };
 }
 
-export async function generatePptStructure({
+export async function analyzePptMaterial({
   apiKey,
   apiHost = DEFAULT_BAILIAN_API_HOST,
   input,
   signal,
   onPhaseChange,
-}: GeneratePptStructureOptions): Promise<GeneratePptStructureResult> {
+}: AnalyzePptMaterialOptions): Promise<AnalyzePptMaterialResult> {
+  const sourceMarkdown = input.sourceMarkdown;
+  if (!sourceMarkdown?.trim()) {
+    throw new PptGenerationError("invalid-material-plan", "请先提供已有材料。");
+  }
+
   const normalizedHost = normalizeBailianApiHost(apiHost);
   const controller = new AbortController();
   let timedOut = false;
-  const timeoutId = globalThis.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 180_000);
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined;
+  const clearRequestTimeout = () => {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+  };
+  const restartTimeout = () => {
+    clearRequestTimeout();
+    timedOut = false;
+    timeoutId = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 180_000);
+  };
+  restartTimeout();
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (signal?.aborted) abortFromCaller();
 
   try {
-    const systemMessage = { role: "system" as const, content: createSystemPrompt() };
-    const userMessage = { role: "user" as const, content: createUserPrompt(input) };
+    const systemMessage = { role: "system" as const, content: createMaterialSystemPrompt() };
+    const userMessage = { role: "user" as const, content: createMaterialUserPrompt(input) };
+    onPhaseChange?.("analyzing-material");
+    const firstCompletion = await requestBailianCompletion(
+      normalizedHost,
+      apiKey,
+      [systemMessage, userMessage],
+      controller.signal,
+      0.2,
+    );
+
+    try {
+      return {
+        materialPlan: parsePptMaterialPlan(firstCompletion.content, sourceMarkdown),
+        usage: firstCompletion.usage,
+      };
+    } catch {
+      let candidate: unknown = firstCompletion.content;
+      try {
+        candidate = JSON.parse(firstCompletion.content);
+      } catch {
+        // 保留原始文本，让修复请求处理格式问题。
+      }
+      const issues = getMaterialValidationIssues(candidate, sourceMarkdown);
+      onPhaseChange?.("repairing-material");
+      restartTimeout();
+      const repairedCompletion = await requestBailianCompletion(
+        normalizedHost,
+        apiKey,
+        [
+          systemMessage,
+          {
+            role: "user",
+            content: createMaterialRepairPrompt(firstCompletion.content, issues, sourceMarkdown),
+          },
+        ],
+        controller.signal,
+        0.1,
+      );
+
+      try {
+        return {
+          materialPlan: parsePptMaterialPlan(repairedCompletion.content, sourceMarkdown),
+          usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
+        };
+      } catch {
+        throw new PptGenerationError(
+          "invalid-material-plan",
+          "模型两次返回的材料分析都未通过校验，请整理材料后重试。",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof PptGenerationError) throw error;
+    if (controller.signal.aborted) {
+      throw new PptGenerationError(
+        timedOut ? "timeout" : "cancelled",
+        timedOut ? "材料分析超时，请缩短材料后重试。" : "已取消材料分析。",
+      );
+    }
+    throw new PptGenerationError("network", "材料分析失败，请检查网络后重试。");
+  } finally {
+    clearRequestTimeout();
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function generatePptStructure({
+  apiKey,
+  apiHost = DEFAULT_BAILIAN_API_HOST,
+  input,
+  materialPlan,
+  signal,
+  onPhaseChange,
+}: GeneratePptStructureOptions): Promise<GeneratePptStructureResult> {
+  const materialPlanResult = PptMaterialPlanSchema.safeParse(materialPlan);
+  if (!materialPlanResult.success) {
+    throw new PptGenerationError("invalid-material-plan", "请先修正材料方向后再生成结构。");
+  }
+  const confirmedMaterialPlan = materialPlanResult.data;
+  const normalizedHost = normalizeBailianApiHost(apiHost);
+  const controller = new AbortController();
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined;
+  const clearRequestTimeout = () => {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+  };
+  const restartTimeout = () => {
+    clearRequestTimeout();
+    timedOut = false;
+    timeoutId = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 180_000);
+  };
+  restartTimeout();
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (signal?.aborted) abortFromCaller();
+
+  try {
+    const systemMessage = { role: "system" as const, content: createStructureSystemPrompt() };
+    const userMessage = {
+      role: "user" as const,
+      content: createUserPrompt(input, confirmedMaterialPlan),
+    };
     onPhaseChange?.("generating");
     const firstCompletion = await requestBailianCompletion(
       normalizedHost,
@@ -248,7 +483,7 @@ export async function generatePptStructure({
 
     try {
       return {
-        structure: parsePptStructure(firstCompletion.content),
+        structure: parsePptStructure(firstCompletion.content, confirmedMaterialPlan),
         usage: firstCompletion.usage,
       };
     } catch {
@@ -258,8 +493,9 @@ export async function generatePptStructure({
       } catch {
         // Keep the original string so the repair prompt can fix malformed JSON.
       }
-      const issues = getValidationIssues(parsedCandidate);
+      const issues = getValidationIssues(parsedCandidate, confirmedMaterialPlan);
       onPhaseChange?.("repairing");
+      restartTimeout();
       const repairedCompletion = await requestBailianCompletion(
         normalizedHost,
         apiKey,
@@ -275,7 +511,7 @@ export async function generatePptStructure({
 
       try {
         return {
-          structure: parsePptStructure(repairedCompletion.content),
+          structure: parsePptStructure(repairedCompletion.content, confirmedMaterialPlan),
           usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
         };
       } catch {
@@ -295,7 +531,7 @@ export async function generatePptStructure({
     }
     throw new PptGenerationError("network", "生成失败，请检查网络后重试。");
   } finally {
-    globalThis.clearTimeout(timeoutId);
+    clearRequestTimeout();
     signal?.removeEventListener("abort", abortFromCaller);
   }
 }

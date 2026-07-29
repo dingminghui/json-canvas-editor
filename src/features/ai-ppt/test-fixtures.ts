@@ -1,5 +1,6 @@
 import type {
   CreatePptStructureInput,
+  PptMaterialPlanV1,
   PptProjectV1,
   PptStructureV1,
   PptTokenUsageV1,
@@ -28,7 +29,10 @@ export function createTestPptInput(): CreatePptStructureInput {
     topic: "AI 产品战略",
     audience: "公司管理层",
     objective: "获得下一阶段研发预算批准",
-    sourceMarkdown: "# 背景\n当前产品进入规模化阶段。",
+    sourceMarkdown:
+      "# 背景\n当前产品进入规模化阶段。\n\n# 资源需求\n下一阶段需要明确资源配置方案。",
+    sourceTreatment:
+      "以已有材料为内容边界；允许围绕演示目标重组、提炼和调整顺序，但不得新增材料外的事实、数字或结论。",
     slideCount: 4,
     deliveryContext: "内部评审",
     durationMinutes: 20,
@@ -36,6 +40,46 @@ export function createTestPptInput(): CreatePptStructureInput {
     mustInclude: ["资源需求"],
     exclude: ["未经支持的数据"],
     language: "zh-CN",
+  };
+}
+
+export function createTestPptMaterialPlan(): PptMaterialPlanV1 {
+  return {
+    schemaVersion: "ppt-material-plan/v1",
+    sourceSummary: "产品已进入规模化阶段，需要围绕资源投入形成管理层决策材料。",
+    facts: [
+      {
+        id: "F001",
+        kind: "fact",
+        priority: "required",
+        statement: "当前产品进入规模化阶段。",
+        sourceExcerpt: "当前产品进入规模化阶段。",
+        sourceLocation: "背景",
+      },
+      {
+        id: "F002",
+        kind: "constraint",
+        priority: "supporting",
+        statement: "下一阶段需要明确资源配置方案。",
+        sourceExcerpt: "下一阶段需要明确资源配置方案。",
+        sourceLocation: "资源需求",
+      },
+    ],
+    gaps: ["材料未提供可验证的投入产出数字。"],
+    direction: {
+      title: "AI 产品规模化投入决策",
+      coreMessage: "围绕规模化阶段的重点场景配置资源，并用明确验证路径控制投入风险。",
+      narrativeMode: "pyramid",
+      rationale: "管理层需要先看到决策结论，再理解材料支持的背景和资源安排。",
+      sections: [
+        {
+          id: "S01",
+          title: "决策背景与行动",
+          objective: "说明规模化阶段及其资源要求。",
+          factIds: ["F001", "F002"],
+        },
+      ],
+    },
   };
 }
 
@@ -73,6 +117,7 @@ export function createTestPptStructure(): PptStructureV1 {
         audienceMove: { before: "等待了解主题", after: "明确本次汇报的决策焦点" },
         layoutIntent: "cover",
         contentBlocks: [{ type: "paragraph", text: "2026 年内部战略评审" }],
+        evidenceRefs: [],
         speakerNotes: "说明汇报目标。",
       },
       {
@@ -87,6 +132,7 @@ export function createTestPptStructure(): PptStructureV1 {
         contentBlocks: [
           { type: "bullet-list", items: ["为什么现在做", "优先做什么", "需要什么投入"] },
         ],
+        evidenceRefs: ["F002"],
       },
       {
         id: "P03",
@@ -100,6 +146,7 @@ export function createTestPptStructure(): PptStructureV1 {
         contentBlocks: [
           { type: "paragraph", text: "优先选择需求稳定、数据可得、收益可量化的场景。" },
         ],
+        evidenceRefs: ["F001"],
       },
       {
         id: "P04",
@@ -113,6 +160,7 @@ export function createTestPptStructure(): PptStructureV1 {
         contentBlocks: [
           { type: "bullet-list", items: ["确认试点范围", "配置核心团队", "设定季度指标"] },
         ],
+        evidenceRefs: ["F001", "F002"],
       },
     ],
   };
@@ -125,6 +173,7 @@ export function createTestPptProject(
     schemaVersion: 1,
     id: overrides.id ?? "11111111-1111-4111-8111-111111111111",
     input: createTestPptInput(),
+    materialPlan: createTestPptMaterialPlan(),
     structure: createTestPptStructure(),
     generator: {
       model: "qwen3.7-plus",

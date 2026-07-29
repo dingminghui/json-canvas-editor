@@ -22,6 +22,7 @@ Each slide must contain:
 - `audienceMove.before` and `audienceMove.after`
 - semantic `layoutIntent`
 - one or more `contentBlocks`
+- zero or more material fact IDs in `evidenceRefs`
 - optional `speakerNotes`
 
 Available content-block types are `paragraph`, `bullet-list`, `numbered-list`, `comparison`, `process`, `metrics`, `quote`, `table`, `chart`, and `diagram`.
