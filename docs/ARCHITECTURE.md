@@ -87,14 +87,18 @@ interface CanvasDocument {
 
 ### 4.4 AI PPT 生成链路
 
-AI PPT 使用“材料分析 → 内容结构 → 视觉计划 → 可编辑画布”四阶段模型：
+AI PPT 使用“材料分析 → 内容结构 → 视觉计划 → 初稿画布 → 看图评审 → 最终画布”六阶段模型：
 
 ```text
 CreatePptStructureInput
 → PptMaterialPlan
 → PptStructure
 → PptVisualPlan
-→ CanvasDocument
+→ 初稿 CanvasDocument
+→ 逐页低分辨率预览
+→ PptVisualReview
+→ 评审后的 PptVisualPlan
+→ 最终 CanvasDocument
 → 编辑器 / PPTX
 ```
 
@@ -103,8 +107,11 @@ CreatePptStructureInput
 - `PptProject` 保存原始需求、确认后的材料计划、文本结构和累计模型用量。旧项目缺少材料计划时仍可读取。
 - `PptVisualPlan` 为每页指定页面节奏、主视觉类型、构图方式、版式变体和强调块，不重复保存正文内容。
 - 画布渲染器根据以上两层数据生成文本、形状、连线、表格和原生图表。默认不依赖图片，信息层级由字号、留白、色块、网格和几何关系建立。
+- 初稿画布在浏览器内渲染为逐页预览，Qwen 以多模态输入检查层级、密度、节奏、重复、字体、颜色和内容适配。评审只能返回完整的修订 VisualPlan，不能修改内容结构或 Canvas 坐标。
+- 本地校验评审声明的主题变化和页面变化是否与实际 VisualPlan 差异一致；通过后最多执行一次模型指导的重渲染，避免生成流程进入无界循环。
+- 预览图片和 API Key 只存在于当前页面内存。画布产物保存评审摘要、问题账本、最终 VisualPlan 和最终 CanvasDocument，不持久化 base64 图片。
 - 图表在 Canvas 中保留结构化数据并导出为 PPT 原生图表；关系图由可编辑形状和箭头组成。
-- 视觉提示词与渲染器分别记录版本。旧产物仍可读取，但版本落后时会标记为需要重新生成，避免静默覆盖用户编辑。
+- 视觉策划提示词、视觉评审提示词与渲染器分别记录版本。旧产物仍可读取，但版本落后时会标记为需要重新生成，避免静默覆盖用户编辑。
 
 ## 5. 编辑器状态
 

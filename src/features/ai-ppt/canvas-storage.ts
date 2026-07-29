@@ -4,7 +4,9 @@ import {
   PPT_CANVAS_RENDERER_VERSION,
   PPT_MODEL,
   PPT_VISUAL_PROMPT_VERSION,
+  PPT_VISUAL_REVIEW_PROMPT_VERSION,
   PptVisualPlanSchema,
+  PptVisualReviewSchema,
 } from "@/features/ai-ppt/schema";
 import { z } from "zod";
 
@@ -183,13 +185,25 @@ export const PptCanvasArtifactSchema = z
     sourceStructureUpdatedAt: z.string().datetime(),
     visualPreference: z.string().max(500),
     visualPlan: PptVisualPlanSchema,
+    visualReview: PptVisualReviewSchema.optional(),
     document: CanvasDocumentSchema,
     generator: z
       .object({
         model: z.literal(PPT_MODEL),
-        promptVersion: z.enum(["ppt-visual-plan/v1", PPT_VISUAL_PROMPT_VERSION]),
+        promptVersion: z.enum([
+          "ppt-visual-plan/v1",
+          "ppt-visual-plan/v2",
+          PPT_VISUAL_PROMPT_VERSION,
+        ]),
       })
       .strict(),
+    reviewer: z
+      .object({
+        model: z.literal(PPT_MODEL),
+        promptVersion: z.literal(PPT_VISUAL_REVIEW_PROMPT_VERSION),
+      })
+      .strict()
+      .optional(),
     rendererVersion: z.enum(["canvas-render/v1", PPT_CANVAS_RENDERER_VERSION]),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -263,6 +277,7 @@ export function createPptCanvasArtifact(
   visualPreference: string,
   visualPlan: PptCanvasArtifactV1["visualPlan"],
   document: CanvasDocument,
+  visualReview: NonNullable<PptCanvasArtifactV1["visualReview"]>,
 ): PptCanvasArtifactV1 {
   const timestamp = new Date().toISOString();
   return {
@@ -271,10 +286,15 @@ export function createPptCanvasArtifact(
     sourceStructureUpdatedAt,
     visualPreference,
     visualPlan,
+    visualReview,
     document,
     generator: {
       model: PPT_MODEL,
       promptVersion: PPT_VISUAL_PROMPT_VERSION,
+    },
+    reviewer: {
+      model: PPT_MODEL,
+      promptVersion: PPT_VISUAL_REVIEW_PROMPT_VERSION,
     },
     rendererVersion: PPT_CANVAS_RENDERER_VERSION,
     createdAt: timestamp,
@@ -300,6 +320,7 @@ export function isPptCanvasArtifactStale(
   return (
     artifact.sourceStructureUpdatedAt !== projectUpdatedAt ||
     artifact.generator.promptVersion !== PPT_VISUAL_PROMPT_VERSION ||
+    artifact.reviewer?.promptVersion !== PPT_VISUAL_REVIEW_PROMPT_VERSION ||
     artifact.rendererVersion !== PPT_CANVAS_RENDERER_VERSION
   );
 }

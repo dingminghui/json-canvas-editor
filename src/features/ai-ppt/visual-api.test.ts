@@ -3,8 +3,9 @@ import {
   createTestPptStructure,
   createTestPptTokenUsage,
   createTestPptVisualPlan,
+  createTestPptVisualReview,
 } from "@/features/ai-ppt/test-fixtures";
-import { generatePptVisualPlan } from "@/features/ai-ppt/visual-api";
+import { generatePptVisualPlan, reviewPptVisualPlan } from "@/features/ai-ppt/visual-api";
 
 function completionResponse(content: string, status = 200): Response {
   return new Response(
@@ -89,5 +90,56 @@ describe("百炼视觉方案客户端", () => {
     expect(error).toBeInstanceOf(PptGenerationError);
     expect(error).toMatchObject({ code: "invalid-visual-plan" });
     expect(JSON.stringify(error)).not.toContain("sk-never-persist");
+  });
+
+  it("把逐页预览作为多模态输入并返回结构化视觉评审", async () => {
+    const structure = createTestPptStructure();
+    const visualPlan = createTestPptVisualPlan();
+    const review = createTestPptVisualReview(visualPlan);
+    const fetchMock = vi.fn().mockResolvedValue(completionResponse(JSON.stringify(review)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await reviewPptVisualPlan({
+      apiKey: "sk-visual-review",
+      structure,
+      visualPlan,
+      visualPreference: "克制、编辑式排版",
+      previews: structure.slides.map((slide) => ({
+        slideId: slide.id,
+        dataUrl: "data:image/png;base64,dGVzdA==",
+      })),
+    });
+
+    expect(result.review.verdict).toBe("approved");
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      messages: Array<{ content: unknown }>;
+    };
+    expect(body.messages[1]?.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "image_url" }),
+        expect.objectContaining({ type: "text", text: expect.stringContaining("P01") }),
+      ]),
+    );
+    expect(String(request.body)).toContain("克制、编辑式排版");
+    expect(String(request.body)).not.toContain("sk-visual-review");
+  });
+
+  it("拒绝与文本结构顺序不一致的视觉评审预览", async () => {
+    const structure = createTestPptStructure();
+    const error = await reviewPptVisualPlan({
+      apiKey: "sk-visual-review",
+      structure,
+      visualPlan: createTestPptVisualPlan(),
+      previews: [
+        {
+          slideId: "P02",
+          dataUrl: "data:image/png;base64,dGVzdA==",
+        },
+      ],
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(PptGenerationError);
+    expect(error).toMatchObject({ code: "invalid-visual-review" });
   });
 });

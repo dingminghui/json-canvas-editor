@@ -5,6 +5,7 @@ import type {
   PptStructureV1,
   PptTokenUsageV1,
   PptVisualPlanV1,
+  PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
 
 export function createTestPptTokenUsage(overrides: Partial<PptTokenUsageV1> = {}): PptTokenUsageV1 {
@@ -247,5 +248,20 @@ export function createTestPptVisualPlan(): PptVisualPlanV1 {
         composition: "action-close",
       },
     ],
+  };
+}
+
+export function createTestPptVisualReview(
+  visualPlan: PptVisualPlanV1 = createTestPptVisualPlan(),
+): PptVisualReviewV1 {
+  return {
+    schemaVersion: "ppt-visual-review/v1",
+    verdict: "approved",
+    summary: "整套页面层级清楚，疏密节奏和构图变化达到专业演示基线。",
+    strengths: ["封面与内容页层级明确", "相邻页面轮廓具有变化"],
+    issues: [],
+    themeChanged: false,
+    revisedSlideIds: [],
+    revisedVisualPlan: visualPlan,
   };
 }

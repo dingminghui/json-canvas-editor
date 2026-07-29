@@ -2,20 +2,28 @@ import {
   normalizeBailianApiHost,
   PptGenerationError,
   requestBailianCompletion,
+  type BailianChatMessage,
+  type BailianMessageContent,
 } from "@/features/ai-ppt/api";
 import {
   DEFAULT_BAILIAN_API_HOST,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
+  getPptVisualReviewJsonSchema,
+  getPptVisualReviewStructureIssues,
   PptVisualPlanSchema,
+  PptVisualReviewSchema,
   type PptStructureV1,
   type PptTokenUsageV1,
   type PptVisualPlanV1,
+  type PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
 import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
 import runtimePrompt from "../../../skills/render-ppt-canvas/references/runtime-prompt.md?raw";
+import visualReviewPrompt from "../../../skills/render-ppt-canvas/references/visual-review-prompt.md?raw";
 
 export type PptVisualGenerationPhase = "planning-visuals" | "repairing-visuals";
+export type PptVisualReviewPhase = "reviewing-visuals" | "repairing-visual-review";
 
 interface GeneratePptVisualPlanOptions {
   apiKey: string;
@@ -31,10 +39,38 @@ export interface GeneratePptVisualPlanResult {
   usage: PptTokenUsageV1;
 }
 
+export interface PptSlidePreview {
+  slideId: string;
+  dataUrl: string;
+}
+
+interface ReviewPptVisualPlanOptions {
+  apiKey: string;
+  apiHost?: string;
+  structure: PptStructureV1;
+  visualPlan: PptVisualPlanV1;
+  previews: readonly PptSlidePreview[];
+  visualPreference?: string;
+  signal?: AbortSignal;
+  onPhaseChange?: (phase: PptVisualReviewPhase) => void;
+}
+
+export interface ReviewPptVisualPlanResult {
+  review: PptVisualReviewV1;
+  usage: PptTokenUsageV1;
+}
+
 function createSystemPrompt(): string {
   return runtimePrompt.replace(
     "{{OUTPUT_SCHEMA}}",
     JSON.stringify(getPptVisualPlanJsonSchema(), null, 2),
+  );
+}
+
+function createVisualReviewSystemPrompt(): string {
+  return visualReviewPrompt.replace(
+    "{{OUTPUT_SCHEMA}}",
+    JSON.stringify(getPptVisualReviewJsonSchema(), null, 2),
   );
 }
 
@@ -98,6 +134,118 @@ function createRepairPrompt(
     content.slice(0, 120_000),
     "</candidate_output>",
   ].join("\n");
+}
+
+function getPreviewIssues(
+  previews: readonly PptSlidePreview[],
+  structure: PptStructureV1,
+): string[] {
+  const issues: string[] = [];
+  if (previews.length !== structure.slides.length) {
+    issues.push("视觉评审预览页数必须与 PPT 文本结构一致");
+  }
+  previews.forEach((preview, index) => {
+    const expectedSlideId = structure.slides[index]?.id;
+    if (preview.slideId !== expectedSlideId) {
+      issues.push(`视觉评审第 ${index + 1} 张预览必须对应 ${expectedSlideId ?? "存在的页面"}`);
+    }
+    if (!/^data:image\/(?:png|jpeg|webp);base64,/i.test(preview.dataUrl)) {
+      issues.push(`视觉评审 ${preview.slideId} 的预览不是受支持的图片 Data URL`);
+    }
+  });
+  return issues;
+}
+
+function createVisualReviewUserContent(
+  structure: PptStructureV1,
+  visualPlan: PptVisualPlanV1,
+  previews: readonly PptSlidePreview[],
+  visualPreference: string,
+  repair?: { content: string; issues: readonly string[] },
+): Exclude<BailianMessageContent, string> {
+  const instruction = [
+    repair
+      ? "修复候选视觉评审，使其严格满足 JSON Schema、图片观察和 VisualPlan 修订约束。"
+      : "评审下面这套已经渲染的 PPT，并在必要时修订 VisualPlan。",
+    "图片按照 PPT 文本结构中的页面顺序提供。",
+    "",
+    "<visual_preference>",
+    visualPreference.trim() || "未指定，以清晰、统一、有节奏的专业演示为基线。",
+    "</visual_preference>",
+    "",
+    "<ppt_structure>",
+    JSON.stringify(structure, null, 2),
+    "</ppt_structure>",
+    "",
+    "<current_visual_plan>",
+    JSON.stringify(visualPlan, null, 2),
+    "</current_visual_plan>",
+    ...(repair
+      ? [
+          "",
+          "<validation_issues>",
+          repair.issues.slice(0, 30).join("\n"),
+          "</validation_issues>",
+          "",
+          "<candidate_review>",
+          repair.content.slice(0, 120_000),
+          "</candidate_review>",
+        ]
+      : []),
+    "",
+    "<slide_previews>",
+    "以下每个页面标签后紧跟对应的渲染图片。",
+    "</slide_previews>",
+  ].join("\n");
+
+  return [
+    { type: "text", text: instruction },
+    ...previews.flatMap((preview) => [
+      { type: "text" as const, text: `<slide_preview id="${preview.slideId}">` },
+      {
+        type: "image_url" as const,
+        image_url: { url: preview.dataUrl },
+        min_pixels: 65_536,
+        max_pixels: 524_288,
+      },
+    ]),
+  ];
+}
+
+function getVisualReviewCandidateIssues(
+  value: unknown,
+  sourcePlan: PptVisualPlanV1,
+  structure: PptStructureV1,
+): string[] {
+  const result = PptVisualReviewSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
+    );
+  }
+  return getPptVisualReviewStructureIssues(result.data, sourcePlan, structure);
+}
+
+function parseVisualReview(
+  content: string,
+  sourcePlan: PptVisualPlanV1,
+  structure: PptStructureV1,
+): PptVisualReviewV1 {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审格式无效。");
+  }
+
+  const result = PptVisualReviewSchema.safeParse(value);
+  if (
+    !result.success ||
+    getPptVisualReviewStructureIssues(result.data, sourcePlan, structure).length > 0
+  ) {
+    throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审未通过校验。");
+  }
+  return result.data;
 }
 
 export async function generatePptVisualPlan({
@@ -182,6 +330,112 @@ export async function generatePptVisualPlan({
       );
     }
     throw new PptGenerationError("network", "视觉方案生成失败，请检查网络后重试。");
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function reviewPptVisualPlan({
+  apiKey,
+  apiHost = DEFAULT_BAILIAN_API_HOST,
+  structure,
+  visualPlan,
+  previews,
+  visualPreference = "",
+  signal,
+  onPhaseChange,
+}: ReviewPptVisualPlanOptions): Promise<ReviewPptVisualPlanResult> {
+  const previewIssues = getPreviewIssues(previews, structure);
+  if (previewIssues.length > 0) {
+    throw new PptGenerationError("invalid-visual-review", previewIssues[0]);
+  }
+
+  const normalizedHost = normalizeBailianApiHost(apiHost);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 180_000);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  try {
+    const systemMessage: BailianChatMessage = {
+      role: "system",
+      content: createVisualReviewSystemPrompt(),
+    };
+    const firstUserContent = createVisualReviewUserContent(
+      structure,
+      visualPlan,
+      previews,
+      visualPreference,
+    );
+    onPhaseChange?.("reviewing-visuals");
+    const firstCompletion = await requestBailianCompletion(
+      normalizedHost,
+      apiKey,
+      [systemMessage, { role: "user", content: firstUserContent }],
+      controller.signal,
+      0.2,
+    );
+
+    try {
+      return {
+        review: parseVisualReview(firstCompletion.content, visualPlan, structure),
+        usage: firstCompletion.usage,
+      };
+    } catch {
+      let candidate: unknown = firstCompletion.content;
+      try {
+        candidate = JSON.parse(firstCompletion.content);
+      } catch {
+        // 保留原始文本，让修复请求处理格式问题。
+      }
+      const issues = getVisualReviewCandidateIssues(candidate, visualPlan, structure);
+      onPhaseChange?.("repairing-visual-review");
+      const repairedCompletion = await requestBailianCompletion(
+        normalizedHost,
+        apiKey,
+        [
+          systemMessage,
+          {
+            role: "user",
+            content: createVisualReviewUserContent(
+              structure,
+              visualPlan,
+              previews,
+              visualPreference,
+              { content: firstCompletion.content, issues },
+            ),
+          },
+        ],
+        controller.signal,
+        0.1,
+      );
+
+      try {
+        return {
+          review: parseVisualReview(repairedCompletion.content, visualPlan, structure),
+          usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
+        };
+      } catch {
+        throw new PptGenerationError(
+          "invalid-visual-review",
+          "模型两次返回的视觉评审都未通过校验，请调整视觉偏好后重试。",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof PptGenerationError) throw error;
+    if (controller.signal.aborted) {
+      throw new PptGenerationError(
+        timedOut ? "timeout" : "cancelled",
+        timedOut ? "视觉评审超时，请稍后重试。" : "已取消视觉评审。",
+      );
+    }
+    throw new PptGenerationError("network", "视觉评审失败，请检查网络后重试。");
   } finally {
     globalThis.clearTimeout(timeoutId);
     signal?.removeEventListener("abort", abortFromCaller);

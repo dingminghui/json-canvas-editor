@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import type { CanvasDocument } from "@/editor/types";
 import { isLocalBrowserHost, PptGenerationError } from "@/features/ai-ppt/api";
 import {
   createPptCanvasArtifact,
@@ -56,7 +57,14 @@ import {
   type PptStructureV1,
 } from "@/features/ai-ppt/schema";
 import { getPptProject, savePptProject } from "@/features/ai-ppt/storage";
-import { generatePptVisualPlan, type PptVisualGenerationPhase } from "@/features/ai-ppt/visual-api";
+import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
+import {
+  generatePptVisualPlan,
+  reviewPptVisualPlan,
+  type PptSlidePreview,
+  type PptVisualGenerationPhase,
+  type PptVisualReviewPhase,
+} from "@/features/ai-ppt/visual-api";
 import { cn } from "@/lib/utils";
 import {
   ArrowDown,
@@ -72,14 +80,52 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+
+const PptVisualReviewCapture = lazy(() =>
+  import("@/features/ai-ppt/PptVisualReviewCapture").then((module) => ({
+    default: module.PptVisualReviewCapture,
+  })),
+);
 
 type SaveState = "saved" | "saving" | "error";
 type CanvasGenerationState =
   | { status: "idle" }
-  | { status: "generating"; phase: PptVisualGenerationPhase | "rendering" }
+  | {
+      status: "generating";
+      phase:
+        | PptVisualGenerationPhase
+        | PptVisualReviewPhase
+        | "rendering"
+        | "capturing-previews"
+        | "rerendering";
+    }
   | { status: "error"; message: string };
+
+interface PreviewCaptureRequest {
+  document: CanvasDocument;
+  slideIds: string[];
+}
+
+interface PreviewCapturePending {
+  resolve: (previews: PptSlidePreview[]) => void;
+  reject: (error: Error) => void;
+  removeAbortListener: () => void;
+}
+
+const CANVAS_GENERATION_LABELS: Record<
+  Extract<CanvasGenerationState, { status: "generating" }>["phase"],
+  string
+> = {
+  "planning-visuals": "正在规划视觉方案",
+  "repairing-visuals": "正在修复视觉方案",
+  rendering: "正在生成初稿画布",
+  "capturing-previews": "正在渲染视觉预览",
+  "reviewing-visuals": "正在进行视觉评审",
+  "repairing-visual-review": "正在修复视觉评审",
+  rerendering: "正在应用视觉评审",
+};
 
 const ROLE_LABELS: Record<PptSlide["role"], string> = {
   cover: "封面",
@@ -556,7 +602,10 @@ function OutlineEditor({ projectId }: { projectId: string }) {
   const [canvasGeneration, setCanvasGeneration] = useState<CanvasGenerationState>({
     status: "idle",
   });
+  const [previewCaptureRequest, setPreviewCaptureRequest] =
+    useState<PreviewCaptureRequest | null>(null);
   const canvasAbortControllerRef = useRef<AbortController | null>(null);
+  const previewCapturePendingRef = useRef<PreviewCapturePending | null>(null);
   const materialFactById = useMemo(
     () => new Map(project?.materialPlan?.facts.map((fact) => [fact.id, fact] as const) ?? []),
     [project?.materialPlan],
@@ -576,6 +625,71 @@ function OutlineEditor({ projectId }: { projectId: string }) {
     },
     [],
   );
+
+  const captureSlidePreviews = useCallback(
+    (
+      document: CanvasDocument,
+      slideIds: string[],
+      signal: AbortSignal,
+    ): Promise<PptSlidePreview[]> =>
+      new Promise((resolve, reject) => {
+        if (previewCapturePendingRef.current) {
+          reject(new Error("已有视觉评审预览正在生成"));
+          return;
+        }
+        if (signal.aborted) {
+          reject(new PptGenerationError("cancelled", "已取消生成视觉评审预览。"));
+          return;
+        }
+
+        const handleAbort = () => {
+          const pending = previewCapturePendingRef.current;
+          previewCapturePendingRef.current = null;
+          setPreviewCaptureRequest(null);
+          pending?.removeAbortListener();
+          pending?.reject(new PptGenerationError("cancelled", "已取消生成视觉评审预览。"));
+        };
+        signal.addEventListener("abort", handleAbort, { once: true });
+        previewCapturePendingRef.current = {
+          reject,
+          resolve,
+          removeAbortListener: () => signal.removeEventListener("abort", handleAbort),
+        };
+        void import("@/features/ai-ppt/PptVisualReviewCapture").then(
+          () => {
+            if (signal.aborted || !previewCapturePendingRef.current) return;
+            setPreviewCaptureRequest({ document, slideIds });
+          },
+          (error: unknown) => {
+            const pending = previewCapturePendingRef.current;
+            previewCapturePendingRef.current = null;
+            pending?.removeAbortListener();
+            pending?.reject(
+              error instanceof Error ? error : new Error("无法加载视觉评审预览组件"),
+            );
+          },
+        );
+      }),
+    [],
+  );
+
+  const handlePreviewsCaptured = useCallback((previews: PptSlidePreview[]) => {
+    const pending = previewCapturePendingRef.current;
+    if (!pending) return;
+    previewCapturePendingRef.current = null;
+    setPreviewCaptureRequest(null);
+    pending.removeAbortListener();
+    pending.resolve(previews);
+  }, []);
+
+  const handlePreviewCaptureError = useCallback((error: Error) => {
+    const pending = previewCapturePendingRef.current;
+    if (!pending) return;
+    previewCapturePendingRef.current = null;
+    setPreviewCaptureRequest(null);
+    pending.removeAbortListener();
+    pending.reject(error);
+  }, []);
 
   if (!project) {
     return (
@@ -666,7 +780,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
     canvasAbortControllerRef.current = controller;
     setCanvasGeneration({ status: "generating", phase: "planning-visuals" });
     try {
-      const { usage, visualPlan } = await generatePptVisualPlan({
+      const { usage: visualPlanUsage, visualPlan } = await generatePptVisualPlan({
         apiHost,
         apiKey: apiKey.trim(),
         onPhaseChange: (phase) => setCanvasGeneration({ status: "generating", phase }),
@@ -674,19 +788,49 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         structure,
         visualPreference,
       });
-      const projectWithUsage = recordPptProjectUsage(currentProject, usage);
       setCanvasGeneration({ status: "generating", phase: "rendering" });
-      const document = renderPptStructureToCanvas(
+      const initialDocument = renderPptStructureToCanvas(
         structure,
         visualPlan,
         `ai-ppt-canvas-${currentProject.id}`,
+      );
+      setCanvasGeneration({ status: "generating", phase: "capturing-previews" });
+      const previews = await captureSlidePreviews(
+        initialDocument,
+        structure.slides.map((slide) => slide.id),
+        controller.signal,
+      );
+      const { review, usage: visualReviewUsage } = await reviewPptVisualPlan({
+        apiHost,
+        apiKey: apiKey.trim(),
+        onPhaseChange: (phase) => setCanvasGeneration({ status: "generating", phase }),
+        previews,
+        signal: controller.signal,
+        structure,
+        visualPlan,
+        visualPreference,
+      });
+      const reviewedVisualPlan = review.revisedVisualPlan;
+      let document = initialDocument;
+      if (review.verdict === "revised") {
+        setCanvasGeneration({ status: "generating", phase: "rerendering" });
+        document = renderPptStructureToCanvas(
+          structure,
+          reviewedVisualPlan,
+          `ai-ppt-canvas-${currentProject.id}`,
+        );
+      }
+      const projectWithUsage = recordPptProjectUsage(
+        currentProject,
+        mergePptTokenUsage(visualPlanUsage, visualReviewUsage),
       );
       const artifact = createPptCanvasArtifact(
         currentProject.id,
         projectWithUsage.updatedAt,
         visualPreference.trim(),
-        visualPlan,
+        reviewedVisualPlan,
         document,
+        review,
       );
       if (!savePptProject(projectWithUsage)) {
         setCanvasGeneration({
@@ -1172,9 +1316,27 @@ function OutlineEditor({ projectId }: { projectId: string }) {
                   {canvasArtifact
                     ? artifactIsStale
                       ? "文本结构已更新，需要重新生成画布才能同步。"
-                      : "视觉方案和可编辑画布已保存在当前浏览器。"
+                      : "视觉方案、看图评审和可编辑画布已保存在当前浏览器。"
                     : "当前产物是文本语义结构，下一步可生成视觉方案和可编辑画布。"}
                 </FieldDescription>
+                {canvasArtifact?.visualReview && !artifactIsStale ? (
+                  <div className="mt-4 rounded-md border bg-muted/35 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">Qwen 看图评审</Badge>
+                      <Badge variant="outline">
+                        {canvasArtifact.visualReview.verdict === "approved"
+                          ? "初稿通过"
+                          : `修订 ${canvasArtifact.visualReview.revisedSlideIds.length} 页`}
+                      </Badge>
+                      {canvasArtifact.visualReview.themeChanged ? (
+                        <Badge variant="outline">主题已调整</Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      {canvasArtifact.visualReview.summary}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-5 flex flex-col gap-2">
                   {canvasArtifact ? (
                     <Button asChild size="sm">
@@ -1248,7 +1410,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
               {canvasArtifact ? "重新生成视觉方案和画布" : "生成视觉方案和画布"}
             </DialogTitle>
             <DialogDescription className="mt-2 leading-5">
-              百炼负责选择主题、颜色、版式和表格风格，本地渲染器负责生成稳定的画布坐标。
+              百炼先规划视觉方案，本地生成每页预览后再由百炼看图评审，并按评审结果生成最终可编辑画布。
               {canvasArtifact ? "重新生成会覆盖当前已编辑的画布。" : ""}
             </DialogDescription>
           </DialogHeader>
@@ -1344,11 +1506,7 @@ function OutlineEditor({ projectId }: { projectId: string }) {
                   <Sparkles data-icon="inline-start" />
                 )}
                 {canvasGeneration.status === "generating"
-                  ? canvasGeneration.phase === "planning-visuals"
-                    ? "正在规划视觉方案"
-                    : canvasGeneration.phase === "repairing-visuals"
-                      ? "正在修复视觉方案"
-                      : "正在生成画布"
+                  ? CANVAS_GENERATION_LABELS[canvasGeneration.phase]
                   : canvasArtifact
                     ? "重新生成并覆盖"
                     : "生成可编辑幻灯片"}
@@ -1357,6 +1515,16 @@ function OutlineEditor({ projectId }: { projectId: string }) {
           </form>
         </DialogContent>
       </Dialog>
+      {previewCaptureRequest ? (
+        <Suspense fallback={null}>
+          <PptVisualReviewCapture
+            document={previewCaptureRequest.document}
+            slideIds={previewCaptureRequest.slideIds}
+            onCaptured={handlePreviewsCaptured}
+            onError={handlePreviewCaptureError}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

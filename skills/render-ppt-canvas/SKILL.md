@@ -13,6 +13,7 @@ Turn a validated `ppt-structure/v1` document into a stable, editable canvas deck
 2. Read [canvas-contract.md](references/canvas-contract.md) before generating `CanvasDocument`.
 3. Read [rendering-rules.md](references/rendering-rules.md) before selecting layout variants or mapping content blocks.
 4. Read [runtime-prompt.md](references/runtime-prompt.md) when calling an external language model.
+5. Read [visual-review-prompt.md](references/visual-review-prompt.md) before reviewing rendered slide images.
 
 ## Workflow
 
@@ -24,8 +25,10 @@ Turn a validated `ppt-structure/v1` document into a stable, editable canvas deck
 6. Select a deterministic slide renderer for every role and content-block combination, including native charts and diagrams.
 7. Generate one top-level group and one full-page background per slide.
 8. Validate element IDs, finite geometry, page bounds, group structure, and supported element types.
-9. Persist the visual plan and `CanvasDocument` separately from the semantic structure.
-10. Open the result in the existing editor and preserve manual edits.
+9. Render low-resolution previews for every slide and ask the same multimodal model for one constrained visual review.
+10. Validate the review, apply only the declared VisualPlan revisions, and render the reviewed plan once.
+11. Persist the reviewed visual plan, review ledger, and `CanvasDocument` separately from the semantic structure.
+12. Open the result in the existing editor and preserve manual edits.
 
 ## Hard rules
 
@@ -37,6 +40,9 @@ Turn a validated `ppt-structure/v1` document into a stable, editable canvas deck
 - Keep every leaf element inside the `1600 × 900` page.
 - Include a locked full-size background rectangle on every slide.
 - Consume every declared layout, rhythm, primary-visual, composition, emphasis, and table-style decision in deterministic rendering.
+- Treat slide previews as ephemeral review inputs; never persist API keys or base64 preview images.
+- Keep visual review revisions inside `PptVisualPlanV1`; do not let review alter source facts or Canvas coordinates.
+- Limit visual review to one model-guided revision pass so generation cannot enter an unbounded loop.
 - Prefer typography, native charts, native tables, shapes, and connectors over repeated card grids.
 - Preserve the source structure and mark existing canvas artifacts stale instead of silently overwriting manual edits.
 - Keep API keys in transient memory only.

@@ -6,10 +6,13 @@ import {
   getPptStructureMaterialIssues,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
+  getPptVisualReviewJsonSchema,
+  getPptVisualReviewStructureIssues,
   PptMaterialPlanSchema,
   PptProjectSchema,
   PptStructureSchema,
   PptVisualPlanSchema,
+  PptVisualReviewSchema,
 } from "@/features/ai-ppt/schema";
 import {
   createTestPptInput,
@@ -17,6 +20,7 @@ import {
   createTestPptProject,
   createTestPptStructure,
   createTestPptVisualPlan,
+  createTestPptVisualReview,
 } from "@/features/ai-ppt/test-fixtures";
 
 describe("PptStructureSchema", () => {
@@ -173,6 +177,52 @@ describe("PptStructureSchema", () => {
     expect(getPptVisualPlanStructureIssues(referencePlan, createTestPptStructure())).toContain(
       "视觉方案 P03 的强调内容块编号不存在",
     );
+  });
+
+  it("校验视觉评审声明与实际 VisualPlan 修订一致", () => {
+    const sourcePlan = createTestPptVisualPlan();
+    const revisedPlan = structuredClone(sourcePlan);
+    revisedPlan.slides[2] = {
+      ...revisedPlan.slides[2],
+      layoutVariant: "content-rail",
+    };
+    const review = {
+      ...createTestPptVisualReview(revisedPlan),
+      verdict: "revised" as const,
+      summary: "第三页的信息层级需要更明确。",
+      issues: [
+        {
+          slideId: "P03",
+          category: "hierarchy" as const,
+          severity: "important" as const,
+          observation: "第三页的主次信息竞争。",
+          recommendation: "改为带解释栏的内容构图。",
+        },
+      ],
+      revisedSlideIds: ["P03"],
+    };
+
+    expect(PptVisualReviewSchema.parse(review)).toEqual(review);
+    expect(getPptVisualReviewJsonSchema()).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+    });
+    expect(
+      getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
+    ).toEqual([]);
+
+    review.revisedSlideIds = [];
+    expect(
+      getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
+    ).toContain("视觉评审声明的修订页面与实际 VisualPlan 变化不一致");
+
+    review.revisedVisualPlan.slides[2] = {
+      ...review.revisedVisualPlan.slides[2],
+      visualFocus: "评审阶段改写的可见文案",
+    };
+    expect(
+      getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
+    ).toContain("视觉评审不得修改 P03 的观众可见视觉焦点文案");
   });
 });
 

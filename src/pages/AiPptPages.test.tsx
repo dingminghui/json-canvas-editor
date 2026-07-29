@@ -8,6 +8,7 @@ import {
   createTestPptStructure,
   createTestPptTokenUsage,
   createTestPptVisualPlan,
+  createTestPptVisualReview,
 } from "@/features/ai-ppt/test-fixtures";
 import * as visualApi from "@/features/ai-ppt/visual-api";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -19,6 +20,34 @@ vi.mock("@/editor/JsonCanvasEditor", () => ({
     <div data-testid="画布编辑器">{value[0]?.name}</div>
   ),
 }));
+
+vi.mock("@/features/ai-ppt/PptVisualReviewCapture", async () => {
+  const { useEffect } = await import("react");
+  return {
+    PptVisualReviewCapture: ({
+      slideIds,
+      onCaptured,
+    }: {
+      slideIds: readonly string[];
+      onCaptured: (
+        previews: Array<{
+          slideId: string;
+          dataUrl: string;
+        }>,
+      ) => void;
+    }) => {
+      useEffect(() => {
+        onCaptured(
+          slideIds.map((slideId) => ({
+            slideId,
+            dataUrl: "data:image/png;base64,dGVzdA==",
+          })),
+        );
+      }, [onCaptured, slideIds]);
+      return null;
+    },
+  };
+});
 
 function renderApp(initialEntry: string) {
   return render(
@@ -241,6 +270,10 @@ describe("AI 生成 PPT 文本结构页面", () => {
       visualPlan: createTestPptVisualPlan(),
       usage: createTestPptTokenUsage(),
     });
+    vi.spyOn(visualApi, "reviewPptVisualPlan").mockResolvedValue({
+      review: createTestPptVisualReview(),
+      usage: createTestPptTokenUsage(),
+    });
     renderApp(`/ai-ppt/${project.id}`);
 
     await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
@@ -255,9 +288,10 @@ describe("AI 生成 PPT 文本结构页面", () => {
     const artifact = getPptCanvasArtifact(project.id);
     expect(artifact?.document.documentType).toBe("pptx");
     expect(artifact?.document.elements).toHaveLength(4);
+    expect(artifact?.visualReview?.verdict).toBe("approved");
     const persisted = globalThis.localStorage.getItem("json-canvas-editor:ppt-canvas-artifacts:v1");
     expect(persisted).not.toContain("sk-canvas-not-persisted");
-    expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(20_220);
+    expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(30_330);
   });
 
   it("缺少画布时提示返回文本大纲", () => {

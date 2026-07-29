@@ -13,6 +13,7 @@ import {
   createTestPptProject,
   createTestPptStructure,
   createTestPptVisualPlan,
+  createTestPptVisualReview,
 } from "@/features/ai-ppt/test-fixtures";
 
 function createArtifact() {
@@ -23,7 +24,14 @@ function createArtifact() {
     visualPlan,
     `ai-ppt-canvas-${project.id}`,
   );
-  return createPptCanvasArtifact(project.id, project.updatedAt, "克制、专业", visualPlan, document);
+  return createPptCanvasArtifact(
+    project.id,
+    project.updatedAt,
+    "克制、专业",
+    visualPlan,
+    document,
+    createTestPptVisualReview(visualPlan),
+  );
 }
 
 describe("PPT 画布产物存储", () => {

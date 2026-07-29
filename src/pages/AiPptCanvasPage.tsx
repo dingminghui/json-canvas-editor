@@ -61,6 +61,13 @@ function CanvasEditorPage({ projectId }: { projectId: string }) {
           </AppBackLink>
           <span className="min-w-0 truncate text-sm font-medium">{artifact.document.name}</span>
           {stale ? <Badge variant="secondary">文本结构已更新</Badge> : null}
+          {!stale && artifact.visualReview ? (
+            <Badge variant="outline">
+              {artifact.visualReview.verdict === "approved"
+                ? "视觉评审已通过"
+                : `视觉评审已修订 ${artifact.visualReview.revisedSlideIds.length} 页`}
+            </Badge>
+          ) : null}
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs leading-none text-muted-foreground">
           {saveState === "saved" ? (

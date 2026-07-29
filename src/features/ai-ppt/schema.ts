@@ -8,7 +8,9 @@ export const PPT_MATERIAL_PLAN_SCHEMA_VERSION = "ppt-material-plan/v1" as const;
 export const DEFAULT_PPT_SOURCE_TREATMENT =
   "以已有材料为内容边界；允许围绕演示目标重组、提炼和调整顺序，但不得新增材料外的事实、数字或结论。" as const;
 export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v1" as const;
-export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v2" as const;
+export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v3" as const;
+export const PPT_VISUAL_REVIEW_SCHEMA_VERSION = "ppt-visual-review/v1" as const;
+export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v1" as const;
 export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v2" as const;
 export const DEFAULT_BAILIAN_API_HOST =
   "https://dashscope.aliyuncs.com/compatible-mode/v1" as const;
@@ -113,6 +115,20 @@ export const PPT_CANVAS_LAYOUT_VARIANTS = [
 ] as const;
 
 export const PPT_TABLE_STYLE_VARIANTS = ["minimal", "contrast", "soft"] as const;
+export const PPT_VISUAL_REVIEW_VERDICTS = ["approved", "revised"] as const;
+export const PPT_VISUAL_REVIEW_SEVERITIES = ["suggestion", "important", "critical"] as const;
+export const PPT_VISUAL_REVIEW_CATEGORIES = [
+  "hierarchy",
+  "density",
+  "rhythm",
+  "repetition",
+  "typography",
+  "color",
+  "chart",
+  "table",
+  "diagram",
+  "content-fit",
+] as const;
 
 const NonEmptyText = z.string().trim().min(1);
 const ShortItem = NonEmptyText.max(300);
@@ -609,6 +625,31 @@ export const PptVisualPlanSchema = z
     });
   });
 
+export const PptVisualReviewSchema = z
+  .object({
+    schemaVersion: z.literal(PPT_VISUAL_REVIEW_SCHEMA_VERSION),
+    verdict: z.enum(PPT_VISUAL_REVIEW_VERDICTS),
+    summary: NonEmptyText.max(600),
+    strengths: z.array(NonEmptyText.max(240)).max(5),
+    issues: z
+      .array(
+        z
+          .object({
+            slideId: z.string().regex(/^P\d{2,}$/).nullable(),
+            category: z.enum(PPT_VISUAL_REVIEW_CATEGORIES),
+            severity: z.enum(PPT_VISUAL_REVIEW_SEVERITIES),
+            observation: NonEmptyText.max(360),
+            recommendation: NonEmptyText.max(360),
+          })
+          .strict(),
+      )
+      .max(30),
+    themeChanged: z.boolean(),
+    revisedSlideIds: z.array(z.string().regex(/^P\d{2,}$/)).max(20),
+    revisedVisualPlan: PptVisualPlanSchema,
+  })
+  .strict();
+
 export const CreatePptStructureInputSchema = z
   .object({
     topic: NonEmptyText.max(100),
@@ -672,6 +713,7 @@ export type PptSlide = z.infer<typeof PptSlideSchema>;
 export type PptStructureV1 = z.infer<typeof PptStructureSchema>;
 export type PptMaterialPlanV1 = z.infer<typeof PptMaterialPlanSchema>;
 export type PptVisualPlanV1 = z.infer<typeof PptVisualPlanSchema>;
+export type PptVisualReviewV1 = z.infer<typeof PptVisualReviewSchema>;
 export type CreatePptStructureInput = z.infer<typeof CreatePptStructureInputSchema>;
 export type PptTokenUsageV1 = z.infer<typeof PptTokenUsageSchema>;
 export type PptProjectV1 = z.infer<typeof PptProjectSchema>;
@@ -686,6 +728,10 @@ export function getPptMaterialPlanJsonSchema() {
 
 export function getPptVisualPlanJsonSchema() {
   return z.toJSONSchema(PptVisualPlanSchema, { target: "draft-07" });
+}
+
+export function getPptVisualReviewJsonSchema() {
+  return z.toJSONSchema(PptVisualReviewSchema, { target: "draft-07" });
 }
 
 export function getPptStructureMaterialIssues(
@@ -797,5 +843,59 @@ export function getPptVisualPlanStructureIssues(
       issues.push(`视觉方案 ${beforePrevious.slideId} 至 ${slide.slideId} 连续重复同一构图`);
     }
   });
+  return issues;
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function getPptVisualReviewStructureIssues(
+  review: PptVisualReviewV1,
+  sourcePlan: PptVisualPlanV1,
+  structure: PptStructureV1,
+): string[] {
+  const issues = getPptVisualPlanStructureIssues(review.revisedVisualPlan, structure);
+  const expectedSlideIds = structure.slides.map((slide) => slide.id);
+  const expectedSlideIdSet = new Set(expectedSlideIds);
+
+  review.issues.forEach((issue, index) => {
+    if (issue.slideId !== null && !expectedSlideIdSet.has(issue.slideId)) {
+      issues.push(`视觉评审第 ${index + 1} 条问题引用了不存在的页面 ${issue.slideId}`);
+    }
+  });
+
+  const revisedPlanBySlideId = new Map(
+    review.revisedVisualPlan.slides.map((slide) => [slide.slideId, slide]),
+  );
+  sourcePlan.slides.forEach((slide) => {
+    const revisedSlide = revisedPlanBySlideId.get(slide.slideId);
+    if (revisedSlide && revisedSlide.visualFocus !== slide.visualFocus) {
+      issues.push(`视觉评审不得修改 ${slide.slideId} 的观众可见视觉焦点文案`);
+    }
+  });
+  const changedSlideIds = sourcePlan.slides
+    .filter((slide) => !valuesEqual(slide, revisedPlanBySlideId.get(slide.slideId)))
+    .map((slide) => slide.slideId);
+  const themeChanged = !valuesEqual(sourcePlan.theme, review.revisedVisualPlan.theme);
+
+  if (review.themeChanged !== themeChanged) {
+    issues.push("视觉评审对主题是否变化的声明与实际修订不一致");
+  }
+  if (!valuesEqual(review.revisedSlideIds, changedSlideIds)) {
+    issues.push("视觉评审声明的修订页面与实际 VisualPlan 变化不一致");
+  }
+
+  const hasRevision = themeChanged || changedSlideIds.length > 0;
+  if (review.verdict === "approved" && hasRevision) {
+    issues.push("视觉评审结论为通过时不得修改 VisualPlan");
+  }
+  if (review.verdict === "revised" && !hasRevision) {
+    issues.push("视觉评审结论为修订时必须至少修改主题或一页视觉方案");
+  }
+  if (review.verdict === "revised" && review.issues.length === 0) {
+    issues.push("视觉评审执行修订时必须说明至少一个视觉问题");
+  }
+
   return issues;
 }

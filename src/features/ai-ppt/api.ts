@@ -30,7 +30,8 @@ export type PptGenerationErrorCode =
   | "cancelled"
   | "invalid-material-plan"
   | "invalid-structure"
-  | "invalid-visual-plan";
+  | "invalid-visual-plan"
+  | "invalid-visual-review";
 
 export class PptGenerationError extends Error {
   constructor(
@@ -71,6 +72,23 @@ interface ChatCompletionResponse {
 export interface BailianCompletionResult {
   content: string;
   usage: PptTokenUsageV1;
+}
+
+export type BailianMessageContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | {
+          type: "image_url";
+          image_url: { url: string };
+          min_pixels?: number;
+          max_pixels?: number;
+        }
+    >;
+
+export interface BailianChatMessage {
+  role: "system" | "user";
+  content: BailianMessageContent;
 }
 
 export interface GeneratePptStructureResult {
@@ -289,7 +307,7 @@ function mapHttpError(status: number): PptGenerationError {
 export async function requestBailianCompletion(
   apiHost: string,
   apiKey: string,
-  messages: Array<{ role: "system" | "user"; content: string }>,
+  messages: BailianChatMessage[],
   signal: AbortSignal,
   temperature = 0.3,
 ): Promise<BailianCompletionResult> {
