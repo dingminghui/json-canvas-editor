@@ -1,0 +1,25 @@
+# Content rules
+
+- Make the deck title specific to the communication objective.
+- Make each slide title informative rather than a generic topic label.
+- Keep one governing assertion in `coreMessage`; supporting content must prove or explain it.
+- Describe the audience's state change in concrete terms.
+- Choose blocks by relationship:
+  - explanation → `paragraph`
+  - parallel points → `bullet-list`
+  - ordered actions → `numbered-list` or `process`
+  - two-sided contrast → `comparison`
+  - headline values → `metrics`
+  - numeric category comparison, trend, or part-to-whole relationship → `chart`
+  - explicit process, hierarchy, cycle, system, or cause-effect topology → `diagram`
+  - verbatim statement → `quote`
+  - row/column facts → `table`
+- Avoid repeating the same conclusion on adjacent slides.
+- Avoid repeating the same page grammar on more than two adjacent slides. Vary the semantic relationship, not decorative wording.
+- Preserve exact numeric values in `chart.series`; never derive unsupported numbers.
+- Give every `chart` one takeaway that interprets the data without overstating it.
+- Give every `diagram` stable node IDs and only connect existing, distinct nodes.
+- Use the supplied material as the factual boundary. General framing is allowed; unsupported precise numbers, quotations, or claims are not.
+- Respect required and excluded content literally.
+- In presentation reading mode, keep on-slide copy sparse and move explanation into notes.
+- In text reading mode, keep enough visible explanation for independent reading.

@@ -674,21 +674,19 @@ export const EditorWorkspace = memo(function EditorWorkspace({
       className="relative h-full min-h-0 min-w-0 overflow-hidden bg-[color-mix(in_oklch,var(--background)_94%,var(--muted))]"
       ref={workspaceRef}
     >
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex h-12 items-center justify-between border-b border-[color-mix(in_oklch,var(--border)_65%,transparent)] bg-[color-mix(in_oklch,var(--background)_86%,transparent)] px-2.5 backdrop-blur-[10px]">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex h-12 items-center gap-2 border-b border-[color-mix(in_oklch,var(--border)_65%,transparent)] bg-[color-mix(in_oklch,var(--background)_86%,transparent)] px-2.5 backdrop-blur-[10px]">
         <div
           aria-label="当前页面信息"
-          className="flex min-w-0 max-w-[min(420px,calc(100%-20px))] items-center gap-[7px] px-2"
+          className="flex min-w-0 flex-1 items-center gap-[7px] overflow-hidden px-2"
           role="group"
         >
-          <span className="overflow-hidden text-xs text-ellipsis whitespace-nowrap">
-            {document.name}
-          </span>
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="min-w-0 truncate text-xs">{document.name}</span>
+          <span className="shrink-0 whitespace-nowrap font-mono text-xs leading-none tabular-nums text-muted-foreground">
             {document.width} × {document.height}
           </span>
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-1">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1">
           {exportDocument.documentType === "pptx" && onOpenOverview ? (
             <Button
               aria-label="幻灯片总览"
@@ -698,7 +696,7 @@ export const EditorWorkspace = memo(function EditorWorkspace({
               variant="ghost"
               onClick={onOpenOverview}
             >
-              <LayoutGrid aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+              <LayoutGrid aria-hidden="true" data-icon="inline-start" />
               <span>总览</span>
             </Button>
           ) : null}
@@ -711,9 +709,9 @@ export const EditorWorkspace = memo(function EditorWorkspace({
             onClick={() => void handleExport()}
           >
             {exporting ? (
-              <Loader2 aria-hidden="true" className="size-3.5 animate-spin" strokeWidth={1.75} />
+              <Loader2 aria-hidden="true" className="animate-spin" data-icon="inline-start" />
             ) : (
-              <Download aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+              <Download aria-hidden="true" data-icon="inline-start" />
             )}
             <span>{exporting ? "导出中" : exportLabel}</span>
           </Button>

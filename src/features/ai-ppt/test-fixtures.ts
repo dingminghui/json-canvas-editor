@@ -1,0 +1,202 @@
+import type {
+  CreatePptStructureInput,
+  PptProjectV1,
+  PptStructureV1,
+  PptTokenUsageV1,
+  PptVisualPlanV1,
+} from "@/features/ai-ppt/schema";
+
+export function createTestPptTokenUsage(overrides: Partial<PptTokenUsageV1> = {}): PptTokenUsageV1 {
+  return {
+    total_tokens: 10_110,
+    completion_tokens: 4_194,
+    prompt_tokens: 5_916,
+    completion_tokens_details: {
+      reasoning_tokens: 3_120,
+      text_tokens: 4_194,
+    },
+    prompt_tokens_details: {
+      cached_tokens: 0,
+      text_tokens: 5_916,
+    },
+    ...overrides,
+  };
+}
+
+export function createTestPptInput(): CreatePptStructureInput {
+  return {
+    topic: "AI 产品战略",
+    audience: "公司管理层",
+    objective: "获得下一阶段研发预算批准",
+    sourceMarkdown: "# 背景\n当前产品进入规模化阶段。",
+    slideCount: 4,
+    deliveryContext: "内部评审",
+    durationMinutes: 20,
+    tone: "专业简洁",
+    mustInclude: ["资源需求"],
+    exclude: ["未经支持的数据"],
+    language: "zh-CN",
+  };
+}
+
+export function createTestPptStructure(): PptStructureV1 {
+  return {
+    schemaVersion: "ppt-structure/v1",
+    deck: {
+      title: "AI 产品战略",
+      subtitle: "从能力建设到商业价值",
+      language: "zh-CN",
+      audience: "公司管理层",
+      purpose: "获得下一阶段研发预算批准",
+      coreMessage: "聚焦高价值场景能让 AI 投入形成可衡量回报。",
+      deliveryContext: "20 分钟内部评审",
+      readingMode: "balanced",
+      narrativeMode: "pyramid",
+      pageCount: 4,
+    },
+    sections: [
+      {
+        id: "main",
+        title: "战略主线",
+        objective: "从结论推进到行动",
+        slideIds: ["P01", "P02", "P03", "P04"],
+      },
+    ],
+    slides: [
+      {
+        id: "P01",
+        index: 1,
+        sectionId: "main",
+        role: "cover",
+        title: "AI 产品战略",
+        coreMessage: "聚焦高价值场景，建立可持续的 AI 产品能力。",
+        audienceMove: { before: "等待了解主题", after: "明确本次汇报的决策焦点" },
+        layoutIntent: "cover",
+        contentBlocks: [{ type: "paragraph", text: "2026 年内部战略评审" }],
+        speakerNotes: "说明汇报目标。",
+      },
+      {
+        id: "P02",
+        index: 2,
+        sectionId: "main",
+        role: "agenda",
+        title: "今天需要回答三个问题",
+        coreMessage: "机会、方案和投入共同构成决策闭环。",
+        audienceMove: { before: "尚不清楚结构", after: "理解讨论路径" },
+        layoutIntent: "title-bullets",
+        contentBlocks: [
+          { type: "bullet-list", items: ["为什么现在做", "优先做什么", "需要什么投入"] },
+        ],
+      },
+      {
+        id: "P03",
+        index: 3,
+        sectionId: "main",
+        role: "content",
+        title: "高价值场景应成为第一优先级",
+        coreMessage: "先验证业务收益，再扩大技术覆盖面。",
+        audienceMove: { before: "关注能力数量", after: "关注价值验证顺序" },
+        layoutIntent: "title-body",
+        contentBlocks: [
+          { type: "paragraph", text: "优先选择需求稳定、数据可得、收益可量化的场景。" },
+        ],
+      },
+      {
+        id: "P04",
+        index: 4,
+        sectionId: "main",
+        role: "summary",
+        title: "下一步：用一个季度验证投入产出",
+        coreMessage: "批准试点资源即可启动价值验证。",
+        audienceMove: { before: "理解方案", after: "愿意做出资源决策" },
+        layoutIntent: "summary",
+        contentBlocks: [
+          { type: "bullet-list", items: ["确认试点范围", "配置核心团队", "设定季度指标"] },
+        ],
+      },
+    ],
+  };
+}
+
+export function createTestPptProject(
+  overrides: Partial<Pick<PptProjectV1, "id" | "createdAt" | "updatedAt">> = {},
+): PptProjectV1 {
+  return {
+    schemaVersion: 1,
+    id: overrides.id ?? "11111111-1111-4111-8111-111111111111",
+    input: createTestPptInput(),
+    structure: createTestPptStructure(),
+    generator: {
+      model: "qwen3.7-plus",
+      promptVersion: "ppt-structure/v1",
+      usage: createTestPptTokenUsage(),
+    },
+    createdAt: overrides.createdAt ?? "2026-07-29T00:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-07-29T00:00:00.000Z",
+  };
+}
+
+export function createTestPptVisualPlan(): PptVisualPlanV1 {
+  return {
+    schemaVersion: "ppt-visual-plan/v1",
+    theme: {
+      style: "editorial",
+      primaryColor: "#4F46E5",
+      accentColor: "#F59E0B",
+      backgroundColor: "#F8FAFC",
+      foregroundColor: "#111827",
+      surfaceColor: "#FFFFFF",
+      mutedColor: "#64748B",
+      borderColor: "#CBD5E1",
+      headingFont: "noto-sans-sc",
+      bodyFont: "noto-sans-sc",
+      cornerStyle: "soft",
+    },
+    slides: [
+      {
+        slideId: "P01",
+        layoutVariant: "cover-editorial",
+        density: "spacious",
+        visualFocus: "聚焦高价值场景",
+        accentBlockIndex: 0,
+        tableStyle: "minimal",
+        rhythm: "breathing",
+        primaryVisual: "typography",
+        composition: "centered-statement",
+      },
+      {
+        slideId: "P02",
+        layoutVariant: "agenda-list",
+        density: "standard",
+        visualFocus: "三个决策问题",
+        accentBlockIndex: null,
+        tableStyle: "minimal",
+        rhythm: "anchor",
+        primaryVisual: "typography",
+        composition: "modular-grid",
+      },
+      {
+        slideId: "P03",
+        layoutVariant: "content-editorial",
+        density: "standard",
+        visualFocus: "价值验证顺序",
+        accentBlockIndex: 0,
+        tableStyle: "soft",
+        rhythm: "anchor",
+        primaryVisual: "mixed",
+        composition: "asymmetric-split",
+      },
+      {
+        slideId: "P04",
+        layoutVariant: "summary-list",
+        density: "spacious",
+        visualFocus: "下一季度行动",
+        accentBlockIndex: 0,
+        tableStyle: "contrast",
+        rhythm: "breathing",
+        primaryVisual: "typography",
+        composition: "action-close",
+      },
+    ],
+  };
+}

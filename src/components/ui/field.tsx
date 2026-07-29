@@ -42,4 +42,28 @@ function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>)
   );
 }
 
-export { Field, FieldGroup, FieldLabel };
+function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      data-slot="field-description"
+      className={cn(
+        "text-xs leading-relaxed text-muted-foreground group-data-[invalid=true]/field:text-destructive",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function FieldError({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      role="alert"
+      data-slot="field-error"
+      className={cn("text-xs leading-relaxed text-destructive", className)}
+      {...props}
+    />
+  );
+}
+
+export { Field, FieldDescription, FieldError, FieldGroup, FieldLabel };
