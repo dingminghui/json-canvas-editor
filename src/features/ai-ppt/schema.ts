@@ -10,7 +10,8 @@ export const DEFAULT_PPT_SOURCE_TREATMENT =
 export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v1" as const;
 export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v3" as const;
 export const PPT_VISUAL_REVIEW_SCHEMA_VERSION = "ppt-visual-review/v1" as const;
-export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v1" as const;
+export const PPT_VISUAL_REVIEW_DECISION_SCHEMA_VERSION = "ppt-visual-review-decision/v1" as const;
+export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v2" as const;
 export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v2" as const;
 export const DEFAULT_BAILIAN_API_HOST =
   "https://dashscope.aliyuncs.com/compatible-mode/v1" as const;
@@ -573,42 +574,41 @@ export const PptMaterialPlanSchema = z
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+const PptVisualThemeSchema = z
+  .object({
+    style: z.enum(PPT_VISUAL_STYLES),
+    primaryColor: HexColorSchema,
+    accentColor: HexColorSchema,
+    backgroundColor: HexColorSchema,
+    foregroundColor: HexColorSchema,
+    surfaceColor: HexColorSchema,
+    mutedColor: HexColorSchema,
+    borderColor: HexColorSchema,
+    headingFont: z.enum(["noto-sans-sc", "noto-serif-sc"]),
+    bodyFont: z.enum(["noto-sans-sc", "noto-serif-sc"]),
+    cornerStyle: z.enum(["square", "soft", "rounded"]),
+  })
+  .strict();
+
+const PptVisualSlideSchema = z
+  .object({
+    slideId: z.string().regex(/^P\d{2,}$/),
+    layoutVariant: z.enum(PPT_CANVAS_LAYOUT_VARIANTS),
+    density: z.enum(PPT_VISUAL_DENSITIES),
+    visualFocus: NonEmptyText.max(200),
+    accentBlockIndex: z.number().int().min(0).max(7).nullable(),
+    tableStyle: z.enum(PPT_TABLE_STYLE_VARIANTS),
+    rhythm: z.enum(PPT_PAGE_RHYTHMS).default("anchor"),
+    primaryVisual: z.enum(PPT_PRIMARY_VISUALS).default("typography"),
+    composition: z.enum(PPT_COMPOSITIONS).default("editorial-flow"),
+  })
+  .strict();
+
 export const PptVisualPlanSchema = z
   .object({
     schemaVersion: z.literal(PPT_VISUAL_PLAN_SCHEMA_VERSION),
-    theme: z
-      .object({
-        style: z.enum(PPT_VISUAL_STYLES),
-        primaryColor: HexColorSchema,
-        accentColor: HexColorSchema,
-        backgroundColor: HexColorSchema,
-        foregroundColor: HexColorSchema,
-        surfaceColor: HexColorSchema,
-        mutedColor: HexColorSchema,
-        borderColor: HexColorSchema,
-        headingFont: z.enum(["noto-sans-sc", "noto-serif-sc"]),
-        bodyFont: z.enum(["noto-sans-sc", "noto-serif-sc"]),
-        cornerStyle: z.enum(["square", "soft", "rounded"]),
-      })
-      .strict(),
-    slides: z
-      .array(
-        z
-          .object({
-            slideId: z.string().regex(/^P\d{2,}$/),
-            layoutVariant: z.enum(PPT_CANVAS_LAYOUT_VARIANTS),
-            density: z.enum(PPT_VISUAL_DENSITIES),
-            visualFocus: NonEmptyText.max(200),
-            accentBlockIndex: z.number().int().min(0).max(7).nullable(),
-            tableStyle: z.enum(PPT_TABLE_STYLE_VARIANTS),
-            rhythm: z.enum(PPT_PAGE_RHYTHMS).default("anchor"),
-            primaryVisual: z.enum(PPT_PRIMARY_VISUALS).default("typography"),
-            composition: z.enum(PPT_COMPOSITIONS).default("editorial-flow"),
-          })
-          .strict(),
-      )
-      .min(4)
-      .max(20),
+    theme: PptVisualThemeSchema,
+    slides: z.array(PptVisualSlideSchema).min(4).max(20),
   })
   .strict()
   .superRefine((plan, context) => {
@@ -625,25 +625,53 @@ export const PptVisualPlanSchema = z
     });
   });
 
+const PptVisualReviewIssueSchema = z
+  .object({
+    slideId: z
+      .string()
+      .regex(/^P\d{2,}$/)
+      .nullable(),
+    category: z.enum(PPT_VISUAL_REVIEW_CATEGORIES),
+    severity: z.enum(PPT_VISUAL_REVIEW_SEVERITIES),
+    observation: NonEmptyText.max(360),
+    recommendation: NonEmptyText.max(360),
+  })
+  .strict();
+
+const PptVisualReviewSlideChangesSchema = PptVisualSlideSchema.omit({
+  slideId: true,
+  visualFocus: true,
+})
+  .partial()
+  .strict();
+
+export const PptVisualReviewDecisionSchema = z
+  .object({
+    schemaVersion: z.literal(PPT_VISUAL_REVIEW_DECISION_SCHEMA_VERSION),
+    summary: NonEmptyText.max(600),
+    strengths: z.array(NonEmptyText.max(240)).max(5),
+    issues: z.array(PptVisualReviewIssueSchema).max(30),
+    themePatch: PptVisualThemeSchema.partial().strict(),
+    slidePatches: z
+      .array(
+        z
+          .object({
+            slideId: z.string().regex(/^P\d{2,}$/),
+            changes: PptVisualReviewSlideChangesSchema,
+          })
+          .strict(),
+      )
+      .max(20),
+  })
+  .strict();
+
 export const PptVisualReviewSchema = z
   .object({
     schemaVersion: z.literal(PPT_VISUAL_REVIEW_SCHEMA_VERSION),
     verdict: z.enum(PPT_VISUAL_REVIEW_VERDICTS),
     summary: NonEmptyText.max(600),
     strengths: z.array(NonEmptyText.max(240)).max(5),
-    issues: z
-      .array(
-        z
-          .object({
-            slideId: z.string().regex(/^P\d{2,}$/).nullable(),
-            category: z.enum(PPT_VISUAL_REVIEW_CATEGORIES),
-            severity: z.enum(PPT_VISUAL_REVIEW_SEVERITIES),
-            observation: NonEmptyText.max(360),
-            recommendation: NonEmptyText.max(360),
-          })
-          .strict(),
-      )
-      .max(30),
+    issues: z.array(PptVisualReviewIssueSchema).max(30),
     themeChanged: z.boolean(),
     revisedSlideIds: z.array(z.string().regex(/^P\d{2,}$/)).max(20),
     revisedVisualPlan: PptVisualPlanSchema,
@@ -713,6 +741,7 @@ export type PptSlide = z.infer<typeof PptSlideSchema>;
 export type PptStructureV1 = z.infer<typeof PptStructureSchema>;
 export type PptMaterialPlanV1 = z.infer<typeof PptMaterialPlanSchema>;
 export type PptVisualPlanV1 = z.infer<typeof PptVisualPlanSchema>;
+export type PptVisualReviewDecisionV1 = z.infer<typeof PptVisualReviewDecisionSchema>;
 export type PptVisualReviewV1 = z.infer<typeof PptVisualReviewSchema>;
 export type CreatePptStructureInput = z.infer<typeof CreatePptStructureInputSchema>;
 export type PptTokenUsageV1 = z.infer<typeof PptTokenUsageSchema>;
@@ -732,6 +761,10 @@ export function getPptVisualPlanJsonSchema() {
 
 export function getPptVisualReviewJsonSchema() {
   return z.toJSONSchema(PptVisualReviewSchema, { target: "draft-07" });
+}
+
+export function getPptVisualReviewDecisionJsonSchema() {
+  return z.toJSONSchema(PptVisualReviewDecisionSchema, { target: "draft-07" });
 }
 
 export function getPptStructureMaterialIssues(
@@ -847,7 +880,31 @@ export function getPptVisualPlanStructureIssues(
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => valuesEqual(value, right[index]))
+    );
+  }
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+    return false;
+  }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+        valuesEqual(leftRecord[key], rightRecord[key]),
+    )
+  );
 }
 
 export function getPptVisualReviewStructureIssues(

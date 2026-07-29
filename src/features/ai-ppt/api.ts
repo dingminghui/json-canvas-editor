@@ -1,4 +1,8 @@
 import {
+  createMaterialEvidenceText,
+  normalizeMaterialEvidenceText,
+} from "@/features/ai-ppt/material-evidence";
+import {
   DEFAULT_BAILIAN_API_HOST,
   getPptMaterialPlanJsonSchema,
   getPptStructureJsonSchema,
@@ -154,15 +158,17 @@ function escapeSourceMaterial(source: string): string {
 
 function createMaterialUserPrompt(input: CreatePptStructureInput): string {
   const { sourceMarkdown = "", ...brief } = input;
+  const sourceEvidenceText = createMaterialEvidenceText(sourceMarkdown);
   return [
     "分析以下材料，并为这次演示提出一个有材料依据的推荐方向。",
+    "source_material 是从原始 Markdown 生成的纯文本证据视图。",
     "",
     "<presentation_brief>",
     JSON.stringify(brief, null, 2),
     "</presentation_brief>",
     "",
     "<source_material>",
-    escapeSourceMaterial(sourceMarkdown),
+    escapeSourceMaterial(sourceEvidenceText),
     "</source_material>",
   ].join("\n");
 }
@@ -206,9 +212,12 @@ function createMaterialRepairPrompt(
   issues: string[],
   sourceMarkdown: string,
 ): string {
+  const sourceEvidenceText = createMaterialEvidenceText(sourceMarkdown);
   return [
     "修复下面的材料分析，使其严格满足系统消息中的 JSON Schema 和材料事实约束。",
     "sourceExcerpt 必须从 source_material 中复制一个连续的原文片段，不得拼接、改写、补充标点或添加说明。",
+    "禁止用 ...、… 或其他省略标记代替中间原文，除非该符号本身就在 source_material 中。",
+    "如果一个 statement 依赖多个不连续片段，必须拆成多个原子事实，重新顺序编号，并同步更新 direction.sections 中的全部 factIds。",
     "只返回修复后的 JSON 对象。",
     "",
     "<validation_issues>",
@@ -220,7 +229,7 @@ function createMaterialRepairPrompt(
     "</candidate_output>",
     "",
     "<source_material>",
-    escapeSourceMaterial(sourceMarkdown),
+    escapeSourceMaterial(sourceEvidenceText),
     "</source_material>",
   ].join("\n");
 }
@@ -236,18 +245,22 @@ function getValidationIssues(error: unknown, materialPlan: PptMaterialPlanV1): s
   return getPptStructureMaterialIssues(result.data, materialPlan);
 }
 
-function normalizeSourceText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function getMaterialSourceIssues(
   materialPlan: PptMaterialPlanV1,
   sourceMarkdown: string,
 ): string[] {
-  const normalizedSource = normalizeSourceText(sourceMarkdown);
-  return materialPlan.facts
-    .filter((fact) => !normalizedSource.includes(normalizeSourceText(fact.sourceExcerpt)))
-    .map((fact) => `${fact.id} 的 sourceExcerpt 必须逐字来自已有材料`);
+  const normalizedSource = normalizeMaterialEvidenceText(sourceMarkdown);
+  return materialPlan.facts.flatMap((fact) => {
+    if (normalizedSource.includes(normalizeMaterialEvidenceText(fact.sourceExcerpt))) {
+      return [];
+    }
+    if (/\.{3,}|…/.test(fact.sourceExcerpt)) {
+      return [
+        `${fact.id} 的 sourceExcerpt 包含材料中不存在的省略标记；请复制完整连续原文，或把依赖不连续材料的 statement 拆成多个原子事实`,
+      ];
+    }
+    return [`${fact.id} 的 sourceExcerpt 必须逐字来自已有材料的纯文本证据视图`];
+  });
 }
 
 function getMaterialValidationIssues(error: unknown, sourceMarkdown: string): string[] {
@@ -259,6 +272,15 @@ function getMaterialValidationIssues(error: unknown, sourceMarkdown: string): st
     );
   }
   return getMaterialSourceIssues(result.data, sourceMarkdown);
+}
+
+function formatMaterialValidationFailure(issues: string[]): string {
+  const displayedIssues = issues.slice(0, 3);
+  const remainingCount = issues.length - displayedIssues.length;
+  const suffix = remainingCount > 0 ? `；另有 ${remainingCount} 项` : "";
+  return `模型修复后的材料分析仍有 ${issues.length} 项未通过校验：${displayedIssues.join(
+    "；",
+  )}${suffix}`;
 }
 
 function parsePptStructure(content: string, materialPlan: PptMaterialPlanV1): PptStructureV1 {
@@ -431,9 +453,16 @@ export async function analyzePptMaterial({
           usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
         };
       } catch {
+        let repairedCandidate: unknown = repairedCompletion.content;
+        try {
+          repairedCandidate = JSON.parse(repairedCompletion.content);
+        } catch {
+          // 保留原始文本，用于生成结构化校验原因。
+        }
+        const repairedIssues = getMaterialValidationIssues(repairedCandidate, sourceMarkdown);
         throw new PptGenerationError(
           "invalid-material-plan",
-          "模型两次返回的材料分析都未通过校验，请整理材料后重试。",
+          formatMaterialValidationFailure(repairedIssues),
         );
       }
     }

@@ -5,6 +5,7 @@ import type {
   PptStructureV1,
   PptTokenUsageV1,
   PptVisualPlanV1,
+  PptVisualReviewDecisionV1,
   PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
 
@@ -263,5 +264,16 @@ export function createTestPptVisualReview(
     themeChanged: false,
     revisedSlideIds: [],
     revisedVisualPlan: visualPlan,
+  };
+}
+
+export function createTestPptVisualReviewDecision(): PptVisualReviewDecisionV1 {
+  return {
+    schemaVersion: "ppt-visual-review-decision/v1",
+    summary: "整套页面层级清楚，疏密节奏和构图变化达到专业演示基线。",
+    strengths: ["封面与内容页层级明确", "相邻页面轮廓具有变化"],
+    issues: [],
+    themePatch: {},
+    slidePatches: [],
   };
 }

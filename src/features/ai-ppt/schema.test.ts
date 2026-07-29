@@ -6,12 +6,14 @@ import {
   getPptStructureMaterialIssues,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
+  getPptVisualReviewDecisionJsonSchema,
   getPptVisualReviewJsonSchema,
   getPptVisualReviewStructureIssues,
   PptMaterialPlanSchema,
   PptProjectSchema,
   PptStructureSchema,
   PptVisualPlanSchema,
+  PptVisualReviewDecisionSchema,
   PptVisualReviewSchema,
 } from "@/features/ai-ppt/schema";
 import {
@@ -21,6 +23,7 @@ import {
   createTestPptStructure,
   createTestPptVisualPlan,
   createTestPptVisualReview,
+  createTestPptVisualReviewDecision,
 } from "@/features/ai-ppt/test-fixtures";
 
 describe("PptStructureSchema", () => {
@@ -207,9 +210,9 @@ describe("PptStructureSchema", () => {
       type: "object",
       additionalProperties: false,
     });
-    expect(
-      getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
-    ).toEqual([]);
+    expect(getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure())).toEqual(
+      [],
+    );
 
     review.revisedSlideIds = [];
     expect(
@@ -223,6 +226,35 @@ describe("PptStructureSchema", () => {
     expect(
       getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
     ).toContain("视觉评审不得修改 P03 的观众可见视觉焦点文案");
+  });
+
+  it("导出模型专用视觉评审补丁契约", () => {
+    const decision = createTestPptVisualReviewDecision();
+
+    expect(PptVisualReviewDecisionSchema.parse(decision)).toEqual(decision);
+    expect(getPptVisualReviewDecisionJsonSchema()).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+    });
+  });
+
+  it("视觉评审比较忽略对象字段顺序", () => {
+    const sourcePlan = createTestPptVisualPlan();
+    const reorderedPlan = {
+      schemaVersion: sourcePlan.schemaVersion,
+      theme: Object.fromEntries(
+        Object.entries(sourcePlan.theme).reverse(),
+      ) as typeof sourcePlan.theme,
+      slides: sourcePlan.slides.map(
+        (slide) =>
+          Object.fromEntries(Object.entries(slide).reverse()) as (typeof sourcePlan.slides)[number],
+      ),
+    };
+    const review = createTestPptVisualReview(reorderedPlan);
+
+    expect(getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure())).toEqual(
+      [],
+    );
   });
 });
 

@@ -9,13 +9,14 @@ import {
   DEFAULT_BAILIAN_API_HOST,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
-  getPptVisualReviewJsonSchema,
+  getPptVisualReviewDecisionJsonSchema,
   getPptVisualReviewStructureIssues,
   PptVisualPlanSchema,
-  PptVisualReviewSchema,
+  PptVisualReviewDecisionSchema,
   type PptStructureV1,
   type PptTokenUsageV1,
   type PptVisualPlanV1,
+  type PptVisualReviewDecisionV1,
   type PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
 import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
@@ -70,7 +71,7 @@ function createSystemPrompt(): string {
 function createVisualReviewSystemPrompt(): string {
   return visualReviewPrompt.replace(
     "{{OUTPUT_SCHEMA}}",
-    JSON.stringify(getPptVisualReviewJsonSchema(), null, 2),
+    JSON.stringify(getPptVisualReviewDecisionJsonSchema(), null, 2),
   );
 }
 
@@ -165,8 +166,8 @@ function createVisualReviewUserContent(
 ): Exclude<BailianMessageContent, string> {
   const instruction = [
     repair
-      ? "修复候选视觉评审，使其严格满足 JSON Schema、图片观察和 VisualPlan 修订约束。"
-      : "评审下面这套已经渲染的 PPT，并在必要时修订 VisualPlan。",
+      ? "修复候选视觉评审决策，使其严格满足 JSON Schema、图片观察和最小补丁约束。"
+      : "评审下面这套已经渲染的 PPT，并在必要时只返回最小 VisualPlan 补丁。",
     "图片按照 PPT 文本结构中的页面顺序提供。",
     "",
     "<visual_preference>",
@@ -217,16 +218,86 @@ function getVisualReviewCandidateIssues(
   sourcePlan: PptVisualPlanV1,
   structure: PptStructureV1,
 ): string[] {
-  const result = PptVisualReviewSchema.safeParse(value);
+  const result = PptVisualReviewDecisionSchema.safeParse(value);
   if (!result.success) {
     return result.error.issues.map(
       (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
     );
   }
-  return getPptVisualReviewStructureIssues(result.data, sourcePlan, structure);
+  return buildVisualReview(result.data, sourcePlan, structure).issues;
 }
 
-function parseVisualReview(
+function flatValuesDiffer(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].some((key) => !Object.is(left[key], right[key]));
+}
+
+function buildVisualReview(
+  decision: PptVisualReviewDecisionV1,
+  sourcePlan: PptVisualPlanV1,
+  structure: PptStructureV1,
+): { review?: PptVisualReviewV1; issues: string[] } {
+  const issues: string[] = [];
+  const revisedPlan = structuredClone(sourcePlan);
+  Object.assign(revisedPlan.theme, decision.themePatch);
+
+  const revisedSlidesById = new Map(revisedPlan.slides.map((slide) => [slide.slideId, slide]));
+  const patchedSlideIds = new Set<string>();
+  decision.slidePatches.forEach((patch, index) => {
+    if (patchedSlideIds.has(patch.slideId)) {
+      issues.push(`slidePatches.${index}.slideId: 同一页面只能修订一次`);
+      return;
+    }
+    patchedSlideIds.add(patch.slideId);
+
+    const slide = revisedSlidesById.get(patch.slideId);
+    if (!slide) {
+      issues.push(`slidePatches.${index}.slideId: 引用了不存在的页面 ${patch.slideId}`);
+      return;
+    }
+    Object.assign(slide, patch.changes);
+  });
+  if (issues.length > 0) return { issues };
+
+  const revisedPlanResult = PptVisualPlanSchema.safeParse(revisedPlan);
+  if (!revisedPlanResult.success) {
+    return {
+      issues: revisedPlanResult.error.issues.map(
+        (issue) => `revisedVisualPlan.${issue.path.join(".") || "root"}: ${issue.message}`,
+      ),
+    };
+  }
+  const validatedPlan = revisedPlanResult.data;
+  const planIssues = getPptVisualPlanStructureIssues(validatedPlan, structure);
+  if (planIssues.length > 0) return { issues: planIssues };
+
+  const themeChanged = flatValuesDiffer(
+    sourcePlan.theme as Record<string, unknown>,
+    validatedPlan.theme as Record<string, unknown>,
+  );
+  const revisedSlideIds = sourcePlan.slides
+    .filter((sourceSlide, index) =>
+      flatValuesDiffer(
+        sourceSlide as Record<string, unknown>,
+        validatedPlan.slides[index] as Record<string, unknown>,
+      ),
+    )
+    .map((slide) => slide.slideId);
+  const review: PptVisualReviewV1 = {
+    schemaVersion: "ppt-visual-review/v1",
+    verdict: themeChanged || revisedSlideIds.length > 0 ? "revised" : "approved",
+    summary: decision.summary,
+    strengths: decision.strengths,
+    issues: decision.issues,
+    themeChanged,
+    revisedSlideIds,
+    revisedVisualPlan: validatedPlan,
+  };
+  const reviewIssues = getPptVisualReviewStructureIssues(review, sourcePlan, structure);
+  return reviewIssues.length > 0 ? { issues: reviewIssues } : { review, issues: [] };
+}
+
+function parseVisualReviewDecision(
   content: string,
   sourcePlan: PptVisualPlanV1,
   structure: PptStructureV1,
@@ -238,14 +309,24 @@ function parseVisualReview(
     throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审格式无效。");
   }
 
-  const result = PptVisualReviewSchema.safeParse(value);
-  if (
-    !result.success ||
-    getPptVisualReviewStructureIssues(result.data, sourcePlan, structure).length > 0
-  ) {
+  const result = PptVisualReviewDecisionSchema.safeParse(value);
+  if (!result.success) {
     throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审未通过校验。");
   }
-  return result.data;
+  const builtReview = buildVisualReview(result.data, sourcePlan, structure);
+  if (!builtReview.review) {
+    throw new PptGenerationError("invalid-visual-review", "模型返回的视觉评审未通过校验。");
+  }
+  return builtReview.review;
+}
+
+function formatVisualReviewValidationFailure(issues: readonly string[]): string {
+  const displayedIssues = issues.slice(0, 3);
+  const remainingCount = issues.length - displayedIssues.length;
+  const suffix = remainingCount > 0 ? `；另有 ${remainingCount} 项` : "";
+  return `模型修复后的视觉评审仍有 ${issues.length} 项未通过校验：${displayedIssues.join(
+    "；",
+  )}${suffix}`;
 }
 
 export async function generatePptVisualPlan({
@@ -383,7 +464,7 @@ export async function reviewPptVisualPlan({
 
     try {
       return {
-        review: parseVisualReview(firstCompletion.content, visualPlan, structure),
+        review: parseVisualReviewDecision(firstCompletion.content, visualPlan, structure),
         usage: firstCompletion.usage,
       };
     } catch {
@@ -417,13 +498,24 @@ export async function reviewPptVisualPlan({
 
       try {
         return {
-          review: parseVisualReview(repairedCompletion.content, visualPlan, structure),
+          review: parseVisualReviewDecision(repairedCompletion.content, visualPlan, structure),
           usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
         };
       } catch {
+        let repairedCandidate: unknown = repairedCompletion.content;
+        try {
+          repairedCandidate = JSON.parse(repairedCompletion.content);
+        } catch {
+          // 保留原始文本，用于生成结构化校验原因。
+        }
+        const repairedIssues = getVisualReviewCandidateIssues(
+          repairedCandidate,
+          visualPlan,
+          structure,
+        );
         throw new PptGenerationError(
           "invalid-visual-review",
-          "模型两次返回的视觉评审都未通过校验，请调整视觉偏好后重试。",
+          formatVisualReviewValidationFailure(repairedIssues),
         );
       }
     }

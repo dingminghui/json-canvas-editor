@@ -100,6 +100,70 @@ describe("百炼文本结构客户端", () => {
     expect(repairBody.messages[1]?.content).toContain("<source_material>");
     expect(repairBody.messages[1]?.content).toContain("当前产品进入规模化阶段。");
     expect(repairBody.messages[1]?.content).toContain("不得拼接、改写、补充标点或添加说明");
+    expect(repairBody.messages[1]?.content).toContain("必须拆成多个原子事实");
+  });
+
+  it("使用纯文本证据视图接受只省略 Markdown 样式的连续摘录", async () => {
+    const input = createTestPptInput();
+    input.sourceMarkdown = "# 病例\n**患者：** 57岁男性\n**临床诊断：** 肝硬化";
+    const materialPlan = createTestPptMaterialPlan();
+    materialPlan.facts = [
+      {
+        id: "F001",
+        kind: "fact",
+        priority: "required",
+        statement: "患者为57岁男性，临床诊断为肝硬化。",
+        sourceExcerpt: "患者： 57岁男性\n临床诊断： 肝硬化",
+      },
+    ];
+    materialPlan.direction.sections[0].factIds = ["F001"];
+    const fetchMock = vi.fn().mockResolvedValue(completionResponse(JSON.stringify(materialPlan)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      analyzePptMaterial({
+        apiKey: "sk-test-secret",
+        input,
+      }),
+    ).resolves.toMatchObject({ materialPlan });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      messages: Array<{ content: string }>;
+    };
+    expect(body.messages[1]?.content).toContain("患者： 57岁男性");
+    expect(body.messages[1]?.content).not.toContain("**患者：**");
+  });
+
+  it("明确报告修复结果中仍然存在的非连续省略摘录", async () => {
+    const input = createTestPptInput();
+    input.sourceMarkdown = [
+      "# 既往史",
+      "6年前确诊酒精性肝硬化。",
+      "",
+      "# 个人史",
+      "长期饮酒史。",
+    ].join("\n");
+    const invalidPlan = createTestPptMaterialPlan();
+    invalidPlan.facts[0].sourceExcerpt = "6年前确诊酒精性肝硬化。\n...\n长期饮酒史。";
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(completionResponse(JSON.stringify(invalidPlan)))
+        .mockResolvedValueOnce(completionResponse(JSON.stringify(invalidPlan))),
+    );
+
+    const error = await analyzePptMaterial({
+      apiKey: "sk-test-secret",
+      input,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      code: "invalid-material-plan",
+    });
+    expect((error as Error).message).toContain("F001");
+    expect((error as Error).message).toContain("省略标记");
   });
 
   it("使用固定模型和结构化输出参数发起请求", async () => {
@@ -144,10 +208,7 @@ describe("百炼文本结构客户端", () => {
       content: string,
     ): Promise<Response> =>
       new Promise<Response>((resolve, reject) => {
-        const timerId = globalThis.setTimeout(
-          () => resolve(completionResponse(content)),
-          delay,
-        );
+        const timerId = globalThis.setTimeout(() => resolve(completionResponse(content)), delay);
         request.signal?.addEventListener(
           "abort",
           () => {
