@@ -54,6 +54,38 @@ function fitFontSize(value: string, preferred: number, minimum: number, budget: 
   return Math.max(minimum, Math.round(preferred * Math.sqrt(budget / value.length)));
 }
 
+function estimateTextHeight(
+  value: string,
+  width: number,
+  fontSize: number,
+  lineHeight: number,
+): number {
+  const lineCapacity = Math.max(1, width / Math.max(fontSize, 1));
+  const lineCount = value.split("\n").reduce((total, line) => {
+    const visualUnits = Array.from(line).reduce(
+      (sum, character) => sum + (/[\u2e80-\u9fff]/u.test(character) ? 1 : 0.56),
+      0,
+    );
+    return total + Math.max(1, Math.ceil(visualUnits / lineCapacity));
+  }, 0);
+  return lineCount * fontSize * lineHeight;
+}
+
+function fitFontSizeToFrame(
+  value: string,
+  frame: Frame,
+  preferred: number,
+  minimum: number,
+  lineHeight: number,
+): number {
+  for (let fontSize = preferred; fontSize >= minimum; fontSize -= 1) {
+    if (estimateTextHeight(value, frame.width, fontSize, lineHeight) <= frame.height) {
+      return fontSize;
+    }
+  }
+  return minimum;
+}
+
 function getTypeScale(theme: ResolvedCanvasTheme): number {
   return {
     compact: 0.9,
@@ -665,6 +697,8 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
   if (mediaAsset) return renderMediaSlide(slide, context, mediaAsset);
   const prefix = getSlidePrefix(context, slide);
   const { colors, fonts } = context.theme;
+  const splitFocusFrame = { x: 1120, y: 540, width: 360, height: 170 };
+  const editorialFocusFrame = { x: 1040, y: 682, width: 360, height: 92 };
   const isSplit =
     context.plan.layoutVariant === "cover-split" || context.plan.composition === "asymmetric-split";
   const children = renderBackground(prefix, context.theme);
@@ -678,19 +712,13 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
         colors.primary,
         { locked: true },
       ),
-      createCanvasText(
-        `${prefix}-focus`,
-        "视觉重点",
-        context.plan.visualFocus,
-        { x: 1120, y: 540, width: 360, height: 170 },
-        {
-          fill: colors.primaryForeground,
-          fontFamily: fonts.heading,
-          fontSize: 38,
-          fontWeight: "700",
-          lineHeight: 1.3,
-        },
-      ),
+      createCanvasText(`${prefix}-focus`, "视觉重点", context.plan.visualFocus, splitFocusFrame, {
+        fill: colors.primaryForeground,
+        fontFamily: fonts.heading,
+        fontSize: fitFontSizeToFrame(context.plan.visualFocus, splitFocusFrame, 38, 22, 1.3),
+        fontWeight: "700",
+        lineHeight: 1.3,
+      }),
     );
   } else {
     children.push(
@@ -763,12 +791,12 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
         `${prefix}-focus`,
         "封面视觉钩子",
         context.plan.visualFocus,
-        { x: 1040, y: 682, width: 360, height: 92 },
+        editorialFocusFrame,
         {
           align: "right",
           fill: colors.accent,
           fontFamily: fonts.heading,
-          fontSize: 24,
+          fontSize: fitFontSizeToFrame(context.plan.visualFocus, editorialFocusFrame, 24, 16, 1.2),
           fontWeight: "800",
           lineHeight: 1.2,
         },
@@ -1445,6 +1473,13 @@ function renderMetricsSlide(slide: PptSlide, context: RenderContext): GroupEleme
 
   if (featureFirstMetric) {
     const [hero, ...supporting] = metrics.items;
+    const heroContext = hero.context ?? context.plan.visualFocus;
+    const heroContextFrame = {
+      x: 144,
+      y: 670,
+      width: supporting.length > 0 ? 600 : 1308,
+      height: 68,
+    };
     const children = [
       ...renderBackground(prefix, context.theme),
       ...renderContentHeader(slide, context, prefix),
@@ -1490,13 +1525,13 @@ function renderMetricsSlide(slide: PptSlide, context: RenderContext): GroupEleme
       createCanvasText(
         `${prefix}-metric-hero-context`,
         "主指标说明",
-        hero.context ?? context.plan.visualFocus,
-        { x: 144, y: 670, width: supporting.length > 0 ? 600 : 1308, height: 68 },
+        heroContext,
+        heroContextFrame,
         {
           align: supporting.length > 0 ? "left" : "center",
           fill: colors.primaryForeground,
           fontFamily: fonts.body,
-          fontSize: 22,
+          fontSize: fitFontSizeToFrame(heroContext, heroContextFrame, 22, 16, 1.35),
           lineHeight: 1.35,
           opacity: 0.82,
         },
@@ -1854,17 +1889,18 @@ function renderGenericSlide(slide: PptSlide, context: RenderContext): GroupEleme
     context.plan.rhythm === "dense";
 
   if (centered) {
+    const focusFrame = { x: 220, y: 328, width: 1160, height: 152 };
     children.push(
       createCanvasText(
         `${prefix}-statement-focus`,
         "页面视觉钩子",
         context.plan.visualFocus,
-        { x: 220, y: 328, width: 1160, height: 152 },
+        focusFrame,
         {
           align: "center",
           fill: colors.accent,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(context.plan.visualFocus, 64, 42, 30),
+          fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 64, 32, 1.15),
           fontWeight: "800",
           lineHeight: 1.15,
         },
@@ -1885,6 +1921,7 @@ function renderGenericSlide(slide: PptSlide, context: RenderContext): GroupEleme
     );
   } else if (asymmetric) {
     const [primaryBlock, ...secondaryBlocks] = slide.contentBlocks;
+    const focusFrame = { x: 1080, y: 354, width: 380, height: 108 };
     children.push(
       createCanvasRect(
         `${prefix}-asymmetric-rail`,
@@ -1901,11 +1938,11 @@ function renderGenericSlide(slide: PptSlide, context: RenderContext): GroupEleme
         `${prefix}-asymmetric-focus`,
         "非对称布局视觉钩子",
         context.plan.visualFocus,
-        { x: 1080, y: 354, width: 380, height: 108 },
+        focusFrame,
         {
           fill: colors.primary,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(context.plan.visualFocus, 38, 28, 32),
+          fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 38, 24, 1.25),
           fontWeight: "800",
           lineHeight: 1.25,
         },
@@ -2009,6 +2046,7 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
   const prefix = getSlidePrefix(context, slide);
   const { colors, fonts } = context.theme;
   const content = slide.contentBlocks.map(blockToText).join("\n");
+  const focusFrame = { x: 1210, y: 700, width: 280, height: 70 };
   const children = [
     ...renderBackground(prefix, context.theme, colors.primary),
     createCanvasRect(
@@ -2057,21 +2095,135 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
         lineHeight: 1.5,
       },
     ),
+    createCanvasText(`${prefix}-focus`, "结束页视觉钩子", context.plan.visualFocus, focusFrame, {
+      align: "right",
+      fill: colors.accent,
+      fontFamily: fonts.heading,
+      fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 22, 16, 1.2),
+      fontWeight: "800",
+      lineHeight: 1.2,
+    }),
+  ];
+  return createCanvasGroup(
+    prefix,
+    `${String(slide.index).padStart(2, "0")} ${slide.title}`,
+    children,
+  );
+}
+
+interface SummaryItem {
+  blockIndex: number;
+  text: string;
+}
+
+function getSummaryItems(slide: PptSlide): SummaryItem[] {
+  return slide.contentBlocks.flatMap((block, blockIndex) =>
+    blockToText(block)
+      .split("\n")
+      .map((text) => text.trim().replace(/^(?:•\s+|\d+\.\s+)/u, ""))
+      .filter(Boolean)
+      .map((text) => ({ blockIndex, text })),
+  );
+}
+
+function renderSummarySlide(slide: PptSlide, context: RenderContext): GroupElement {
+  const prefix = getSlidePrefix(context, slide);
+  const { colors, fonts, cornerRadius } = context.theme;
+  const items = getSummaryItems(slide);
+  const columns = items.length > 4 ? 2 : 1;
+  const rows = Math.ceil(items.length / columns);
+  const gap = 18;
+  const contentFrame = { x: 96, y: 320, width: 1404, height: 470 };
+  const itemWidth = (contentFrame.width - gap * (columns - 1)) / columns;
+  const itemHeight = (contentFrame.height - gap * Math.max(0, rows - 1)) / rows;
+  const children = [
+    ...renderBackground(prefix, context.theme),
+    ...renderContentHeader(slide, context, prefix),
+  ];
+
+  items.forEach((item, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const frame = {
+      x: contentFrame.x + column * (itemWidth + gap),
+      y: contentFrame.y + row * (itemHeight + gap),
+      width: itemWidth,
+      height: itemHeight,
+    };
+    const textFrame = {
+      x: frame.x + 76,
+      y: frame.y + 20,
+      width: frame.width - 104,
+      height: frame.height - 40,
+    };
+    const accented = item.blockIndex === context.plan.accentBlockIndex;
+    const fontSize = fitFontSizeToFrame(
+      item.text,
+      textFrame,
+      context.plan.density === "compact" ? 22 : 25,
+      18,
+      1.35,
+    );
+
+    children.push(
+      createCanvasRect(
+        `${prefix}-summary-${index}-surface`,
+        `总结项 ${index + 1} 底板`,
+        frame,
+        colors.surface,
+        {
+          cornerRadius,
+          stroke: accented ? colors.accent : colors.border,
+          strokeWidth: accented ? 2 : 1,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-summary-${index}-index`,
+        `总结项 ${index + 1} 编号`,
+        String(index + 1).padStart(2, "0"),
+        { x: frame.x + 24, y: frame.y + 22, width: 40, height: 32 },
+        {
+          fill: accented ? colors.accent : colors.primary,
+          fontFamily: "inter",
+          fontSize: 21,
+          fontWeight: "800",
+          lineHeight: 1,
+        },
+      ),
+      createCanvasText(
+        `${prefix}-summary-${index}-content`,
+        `总结项 ${index + 1}`,
+        item.text,
+        textFrame,
+        {
+          fill: colors.foreground,
+          fontFamily: fonts.body,
+          fontSize,
+          fontWeight: accented ? "700" : "500",
+          lineHeight: 1.35,
+        },
+      ),
+    );
+  });
+
+  const focusFrame = { x: 1000, y: 818, width: 500, height: 32 };
+  children.push(
     createCanvasText(
-      `${prefix}-focus`,
-      "结束页视觉钩子",
+      `${prefix}-summary-focus`,
+      "总结页视觉钩子",
       context.plan.visualFocus,
-      { x: 1210, y: 700, width: 280, height: 70 },
+      focusFrame,
       {
         align: "right",
         fill: colors.accent,
         fontFamily: fonts.heading,
-        fontSize: 22,
+        fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 20, 16, 1.2),
         fontWeight: "800",
         lineHeight: 1.2,
       },
     ),
-  ];
+  );
+
   return createCanvasGroup(
     prefix,
     `${String(slide.index).padStart(2, "0")} ${slide.title}`,
@@ -2085,9 +2237,8 @@ function renderSlide(slide: PptSlide, context: RenderContext): GroupElement {
   if (slide.role === "cover") return renderCoverSlide(slide, context);
   if (slide.role === "section") return renderSectionSlide(slide, context);
   if (slide.role === "agenda") return renderAgendaSlide(slide, context);
-  if (slide.role === "closing" || slide.role === "summary") {
-    return renderClosingSlide(slide, context);
-  }
+  if (slide.role === "closing") return renderClosingSlide(slide, context);
+  if (slide.role === "summary") return renderSummarySlide(slide, context);
   if (slide.contentBlocks.some((block) => block.type === "chart")) {
     return renderChartSlide(slide, context);
   }
@@ -2128,18 +2279,6 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
     issues.push("画布尺寸必须是 1600 × 900");
   }
   const ids = new Set<string>();
-
-  function estimateTextHeight(element: Extract<CanvasLeafElement, { type: "text" }>): number {
-    const lineCapacity = Math.max(1, element.width / Math.max(element.fontSize, 1));
-    const lineCount = element.text.split("\n").reduce((total, line) => {
-      const visualUnits = Array.from(line).reduce(
-        (sum, character) => sum + (/[\u2e80-\u9fff]/u.test(character) ? 1 : 0.56),
-        0,
-      );
-      return total + Math.max(1, Math.ceil(visualUnits / lineCapacity));
-    }, 0);
-    return lineCount * element.fontSize * element.lineHeight;
-  }
 
   function getOverlapArea(left: CanvasLeafElement, right: CanvasLeafElement): number {
     const width = Math.max(
@@ -2183,7 +2322,12 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
     }
     if (element.type === "text") {
       if (element.fontSize < 16) issues.push(`文本 ${element.id} 的字号小于 16`);
-      const estimatedHeight = estimateTextHeight(element);
+      const estimatedHeight = estimateTextHeight(
+        element.text,
+        element.width,
+        element.fontSize,
+        element.lineHeight,
+      );
       if (estimatedHeight > element.height + element.fontSize * 0.75) {
         issues.push(`文本 ${element.id} 可能发生溢出`);
       }

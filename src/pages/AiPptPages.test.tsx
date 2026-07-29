@@ -4,6 +4,7 @@ import {
   getPptCanvasArtifact,
   PPT_CANVAS_ARTIFACT_STORAGE_KEY,
 } from "@/features/ai-ppt/canvas-storage";
+import * as canvasRenderer from "@/features/ai-ppt/render/render-ppt-structure";
 import { getPptProject, savePptProject } from "@/features/ai-ppt/storage";
 import {
   createTestPptMaterialPlan,
@@ -308,6 +309,28 @@ describe("AI 生成 PPT 文本结构页面", () => {
     const persisted = globalThis.localStorage.getItem(PPT_CANVAS_ARTIFACT_STORAGE_KEY);
     expect(persisted).not.toContain("sk-canvas-not-persisted");
     expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(30_330);
+  });
+
+  it("画布渲染校验失败时显示具体原因", async () => {
+    const user = userEvent.setup();
+    const project = createTestPptProject();
+    savePptProject(project);
+    vi.spyOn(visualApi, "generatePptVisualPlan").mockResolvedValue({
+      visualPlan: createTestPptVisualPlan(),
+      usage: createTestPptTokenUsage(),
+    });
+    vi.spyOn(canvasRenderer, "renderPptStructureToCanvas").mockImplementation(() => {
+      throw new canvasRenderer.CanvasRenderError(["P11 的总结文字可能发生溢出"]);
+    });
+    renderApp(`/ai-ppt/${project.id}`);
+
+    await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
+    await user.type(screen.getByLabelText("百炼接口密钥"), "sk-render-error");
+    await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "画布渲染未通过校验：P11 的总结文字可能发生溢出",
+    );
   });
 
   it("缺少画布时提示返回文本大纲", () => {

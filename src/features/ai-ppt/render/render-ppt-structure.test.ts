@@ -1,6 +1,6 @@
 import { getDocumentPages } from "@/editor/document-pages";
 import { createCanvasDocumentPresentation } from "@/editor/pptx-export";
-import type { ChartElement, ImageElement, TableElement } from "@/editor/types";
+import type { ChartElement, ImageElement, TableElement, TextElement } from "@/editor/types";
 import {
   CanvasRenderError,
   getCanvasDocumentIssues,
@@ -171,6 +171,42 @@ describe("PPT 画布渲染器", () => {
     expect(getCanvasDocumentIssues(document)).toEqual([]);
   });
 
+  it("用专属总结布局容纳五条较长结论", () => {
+    const structure = createTestPptStructure();
+    structure.slides[3] = {
+      ...structure.slides[3],
+      title: "核心困境：治疗手段受限与肿瘤进展",
+      coreMessage: "肿瘤进展与治疗耐受性下降同时限制后续选择。",
+      contentBlocks: [
+        {
+          type: "bullet-list",
+          items: [
+            "肿瘤进展：AFP飙升至3000+，肝内多发复发及新发灶。",
+            "免疫耐药：经历两线免疫治疗后仍然出现疾病进展。",
+            "肝功能失代偿：低蛋白、高胆红素、凝血异常。",
+            "骨髓抑制：血小板极低，限制介入及系统治疗。",
+            "最终诊断：肝恶性肿瘤多发、酒精性肝硬化失代偿期及脾功能亢进。",
+          ],
+        },
+      ],
+    };
+    const visualPlan = createTestPptVisualPlan();
+    visualPlan.slides[3] = {
+      ...visualPlan.slides[3],
+      layoutVariant: "summary-list",
+      density: "compact",
+      rhythm: "dense",
+      visualFocus: "五大核心困境",
+    };
+
+    const document = renderPptStructureToCanvas(structure, visualPlan, "long-summary");
+    const elements = getDocumentPages(document)[3].elements;
+
+    expect(elements.filter((element) => /^总结项 \d+$/.test(element.name))).toHaveLength(5);
+    expect(elements.some((element) => element.name === "结束页行动项")).toBe(false);
+    expect(getCanvasDocumentIssues(document)).toEqual([]);
+  });
+
   it("把语义数据和结构关系渲染为可编辑图表与形状连接", () => {
     const structure = createTestPptStructure();
     structure.slides[1] = {
@@ -247,6 +283,27 @@ describe("PPT 画布渲染器", () => {
 
     expect(elements.some((element) => element.name === "Swiss 顶部粗线")).toBe(true);
     expect(elements.some((element) => element.name === "页面视觉钩子")).toBe(true);
+    expect(getCanvasDocumentIssues(document)).toEqual([]);
+  });
+
+  it("根据非对称栏宽高自动收敛视觉钩子字号", () => {
+    const structure = createTestPptStructure();
+    const visualPlan = createTestPptVisualPlan();
+    visualPlan.slides[2] = {
+      ...visualPlan.slides[2],
+      layoutVariant: "two-column",
+      composition: "asymmetric-split",
+      primaryVisual: "typography",
+      visualFocus: "左侧文字描述TIPS及脾栓塞史，右侧留白或辅助图形",
+    };
+
+    const document = renderPptStructureToCanvas(structure, visualPlan, "asymmetric-focus");
+    const focus = getDocumentPages(document)[2].elements.find(
+      (element): element is TextElement =>
+        element.type === "text" && element.name === "非对称布局视觉钩子",
+    );
+
+    expect(focus?.fontSize).toBe(33);
     expect(getCanvasDocumentIssues(document)).toEqual([]);
   });
 

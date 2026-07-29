@@ -45,7 +45,10 @@ import {
   touchPptProject,
   updateSection,
 } from "@/features/ai-ppt/model";
-import { renderPptStructureToCanvas } from "@/features/ai-ppt/render/render-ppt-structure";
+import {
+  CanvasRenderError,
+  renderPptStructureToCanvas,
+} from "@/features/ai-ppt/render/render-ppt-structure";
 import {
   DEFAULT_BAILIAN_API_HOST,
   getPptMaterialCoverage,
@@ -939,7 +942,9 @@ function OutlineEditor({ projectId }: { projectId: string }) {
         message:
           error instanceof PptGenerationError
             ? error.message
-            : "画布生成失败，请调整视觉偏好后重试。",
+            : error instanceof CanvasRenderError
+              ? `画布渲染未通过校验：${error.message}`
+              : "画布生成失败，请稍后重试。",
       });
     } finally {
       canvasAbortControllerRef.current = null;
