@@ -31,6 +31,7 @@ import {
   type TableCellStyle,
   type TableElement,
 } from "@/editor/types";
+import { resolveAssetObjectUrl } from "@/features/content-studio/asset-resolver";
 import Konva from "konva";
 import {
   memo,
@@ -364,7 +365,21 @@ function CanvasImage({
     onElementPreview: (elementId: string, patch: Partial<CanvasTransformPatch> | null) => void;
     setNodeRef: (elementId: string, node: Konva.Node | null) => void;
   }) {
-  const [image] = useImage(element.src);
+  const [resolvedSource, setResolvedSource] = useState(element.src);
+  useEffect(() => {
+    let active = true;
+    void resolveAssetObjectUrl(element.src)
+      .then((source) => {
+        if (active) setResolvedSource(source);
+      })
+      .catch(() => {
+        if (active) setResolvedSource("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [element.src]);
+  const [image] = useImage(resolvedSource);
   const imageGeometry = getImageRenderGeometry(image, element);
 
   return (
@@ -832,6 +847,11 @@ const RenderElement = memo(function RenderElement({
           {...commonProps}
           cornerRadius={element.cornerRadius}
           fill={element.fill}
+          shadowBlur={element.shadow?.blur}
+          shadowColor={element.shadow?.color}
+          shadowOffsetX={element.shadow?.offsetX}
+          shadowOffsetY={element.shadow?.offsetY}
+          shadowOpacity={element.shadow?.opacity}
           stroke={element.stroke}
           strokeWidth={element.strokeWidth}
         />

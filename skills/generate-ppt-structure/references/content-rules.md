@@ -16,6 +16,9 @@
   - row/column facts → `table`
 - Avoid repeating the same conclusion on adjacent slides.
 - Avoid repeating the same page grammar on more than two adjacent slides. Vary the semantic relationship, not decorative wording.
+- Do not stretch limited material across too many thin pages. When page count is automatic, merge weak pages and prefer fewer complete pages.
+- A normal content page needs at least two substantive list items or one complete explanatory statement. A summary needs at least two conclusions unless it is intentionally written as one complete action statement.
+- Sparse cover, section, quote, metric, chart, diagram, and closing pages are valid only when their single dominant hook can carry the page at presentation scale.
 - Preserve exact numeric values in `chart.series`; never derive unsupported numbers.
 - Give every `chart` one takeaway that interprets the data without overstating it.
 - Give every `diagram` stable node IDs and only connect existing, distinct nodes.

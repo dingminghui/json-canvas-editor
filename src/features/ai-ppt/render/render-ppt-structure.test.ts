@@ -42,6 +42,56 @@ describe("PPT 画布渲染器", () => {
     }
   });
 
+  it("拒绝小于演示阅读下限的正文和标题字号", () => {
+    const document = renderPptStructureToCanvas(
+      createTestPptStructure(),
+      createTestPptVisualPlan(),
+      "font-size-guard",
+    );
+    const page = getDocumentPages(document)[2];
+    const body = page.elements.find(
+      (element): element is TextElement =>
+        element.type === "text" && !/页码|章节名称|标签$|编号$/u.test(element.name),
+    );
+
+    expect(body).toBeDefined();
+    if (!body) return;
+    body.fontSize = 12;
+    expect(getCanvasDocumentIssues(document)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(new RegExp(`文本 ${body.id} 的字号小于 \\d+`)),
+      ]),
+    );
+  });
+
+  it("拒绝有效内容占比过低、存在大面积无意义留白的页面", () => {
+    const document = renderPptStructureToCanvas(
+      createTestPptStructure(),
+      createTestPptVisualPlan(),
+      "occupancy-guard",
+    );
+    const page = getDocumentPages(document)[2];
+    page.elements.forEach((element) => {
+      if (element.type === "group") return;
+      const isBackground =
+        element.type === "rect" &&
+        element.x === 0 &&
+        element.y === 0 &&
+        element.width === 1600 &&
+        element.height === 900;
+      if (!isBackground) {
+        element.width = 1;
+        element.height = 1;
+      }
+    });
+
+    expect(getCanvasDocumentIssues(document)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/页面 .* 的有效视觉占比仅为 .*%，存在过度留白/u),
+      ]),
+    );
+  });
+
   it("拒绝与文本结构页码不一致的视觉方案", () => {
     const visualPlan = createTestPptVisualPlan();
     visualPlan.slides[1] = { ...visualPlan.slides[1], slideId: "P09" };
@@ -392,5 +442,6 @@ describe("PPT 画布渲染器", () => {
     ).toBe(true);
     const firstSlide = await archive.file("ppt/slides/slide1.xml")?.async("string");
     expect(firstSlide).toContain(structure.slides[0].title);
+    expect(firstSlide).not.toContain("<a:normAutofit");
   });
 });

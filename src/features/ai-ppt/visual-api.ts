@@ -7,12 +7,19 @@ import {
 } from "@/features/ai-ppt/api";
 import {
   DEFAULT_BAILIAN_API_HOST,
+  getPptAssetSearchPlanJsonSchema,
+  getPptAssetSearchPlanStructureIssues,
+  getPptAssetSelectionJsonSchema,
   getPptVisualPlanJsonSchema,
   getPptVisualPlanStructureIssues,
   getPptVisualReviewDecisionJsonSchema,
   getPptVisualReviewStructureIssues,
+  PptAssetSearchPlanSchema,
+  PptAssetSelectionSchema,
   PptVisualPlanSchema,
   PptVisualReviewDecisionSchema,
+  type PptAssetSearchPlanV1,
+  type PptAssetSelectionV1,
   type PptStructureV1,
   type PptTokenUsageV1,
   type PptVisualAsset,
@@ -21,11 +28,44 @@ import {
   type PptVisualReviewV1,
 } from "@/features/ai-ppt/schema";
 import { mergePptTokenUsage } from "@/features/ai-ppt/token-usage";
+import type { PexelsPhotoCandidate } from "@/features/content-studio/pexels";
+import assetSearchPrompt from "../../../skills/render-ppt-canvas/references/asset-search-prompt.md?raw";
+import assetSelectionPrompt from "../../../skills/render-ppt-canvas/references/asset-selection-prompt.md?raw";
 import runtimePrompt from "../../../skills/render-ppt-canvas/references/runtime-prompt.md?raw";
 import visualReviewPrompt from "../../../skills/render-ppt-canvas/references/visual-review-prompt.md?raw";
 
 export type PptVisualGenerationPhase = "planning-visuals" | "repairing-visuals";
 export type PptVisualReviewPhase = "reviewing-visuals" | "repairing-visual-review";
+export type PptAssetPlanningPhase = "planning-assets" | "repairing-assets";
+export type PptAssetSelectionPhase = "selecting-assets" | "repairing-asset-selection";
+
+interface GeneratePptAssetSearchPlanOptions {
+  apiKey: string;
+  apiHost?: string;
+  structure: PptStructureV1;
+  visualPreference?: string;
+  signal?: AbortSignal;
+  onPhaseChange?: (phase: PptAssetPlanningPhase) => void;
+}
+
+export interface GeneratePptAssetSearchPlanResult {
+  assetSearchPlan: PptAssetSearchPlanV1;
+  usage: PptTokenUsageV1;
+}
+
+interface SelectPptAssetCandidateOptions {
+  apiKey: string;
+  apiHost?: string;
+  request: PptAssetSearchPlanV1["requests"][number];
+  candidates: readonly PexelsPhotoCandidate[];
+  signal?: AbortSignal;
+  onPhaseChange?: (phase: PptAssetSelectionPhase) => void;
+}
+
+export interface SelectPptAssetCandidateResult {
+  selection: PptAssetSelectionV1;
+  usage: PptTokenUsageV1;
+}
 
 interface GeneratePptVisualPlanOptions {
   apiKey: string;
@@ -68,6 +108,20 @@ function createSystemPrompt(): string {
   return runtimePrompt.replace(
     "{{OUTPUT_SCHEMA}}",
     JSON.stringify(getPptVisualPlanJsonSchema(), null, 2),
+  );
+}
+
+function createAssetSearchSystemPrompt(): string {
+  return assetSearchPrompt.replace(
+    "{{OUTPUT_SCHEMA}}",
+    JSON.stringify(getPptAssetSearchPlanJsonSchema(), null, 2),
+  );
+}
+
+function createAssetSelectionSystemPrompt(): string {
+  return assetSelectionPrompt.replace(
+    "{{OUTPUT_SCHEMA}}",
+    JSON.stringify(getPptAssetSelectionJsonSchema(), null, 2),
   );
 }
 
@@ -115,7 +169,13 @@ function createUserContent(
     "",
     "<available_assets>",
     JSON.stringify(
-      assets.map(({ alt, credit, id, name }) => ({ alt, credit, id, name })),
+      assets.map(({ alt, credit, id, name, targetSlideId }) => ({
+        alt,
+        credit,
+        id,
+        name,
+        targetSlideId,
+      })),
       null,
       2,
     ),
@@ -135,6 +195,148 @@ function createUserContent(
       },
     ]),
   ];
+}
+
+function getAssetSearchPlanIssues(value: unknown, structure: PptStructureV1): string[] {
+  const result = PptAssetSearchPlanSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
+    );
+  }
+  return getPptAssetSearchPlanStructureIssues(result.data, structure);
+}
+
+function parseAssetSearchPlan(content: string, structure: PptStructureV1): PptAssetSearchPlanV1 {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new PptGenerationError("invalid-visual-plan", "模型返回的图片需求格式无效。");
+  }
+  const result = PptAssetSearchPlanSchema.safeParse(value);
+  if (!result.success || getPptAssetSearchPlanStructureIssues(result.data, structure).length > 0) {
+    throw new PptGenerationError("invalid-visual-plan", "模型返回的图片需求未通过校验。");
+  }
+  return result.data;
+}
+
+function createAssetSearchRepairPrompt(
+  content: string,
+  issues: readonly string[],
+  structure: PptStructureV1,
+): string {
+  return [
+    "修复下面的图片检索计划，使其满足 JSON Schema 和页面语义约束。",
+    "只返回修复后的 JSON 对象。",
+    "",
+    "<validation_issues>",
+    issues.slice(0, 30).join("\n"),
+    "</validation_issues>",
+    "",
+    "<available_slide_ids>",
+    structure.slides.map((slide) => slide.id).join(", "),
+    "</available_slide_ids>",
+    "",
+    "<candidate_output>",
+    content.slice(0, 60_000),
+    "</candidate_output>",
+  ].join("\n");
+}
+
+function createAssetSelectionUserContent(
+  request: PptAssetSearchPlanV1["requests"][number],
+  candidates: readonly PexelsPhotoCandidate[],
+  repair?: { content: string; issues: readonly string[] },
+): Exclude<BailianMessageContent, string> {
+  const instruction = [
+    repair
+      ? "修复候选选图结果，必须从当前 Pexels 第一页候选中选择一张。"
+      : "从当前 Pexels 第一页候选中选择最适合这页演示的一张图片。",
+    "",
+    "<image_request>",
+    JSON.stringify(request, null, 2),
+    "</image_request>",
+    "",
+    "<candidates>",
+    JSON.stringify(
+      candidates.map(({ alt, averageColor, height, id, photographer, width }) => ({
+        id,
+        alt,
+        averageColor,
+        height,
+        photographer,
+        width,
+      })),
+      null,
+      2,
+    ),
+    "</candidates>",
+    ...(repair
+      ? [
+          "",
+          "<validation_issues>",
+          repair.issues.slice(0, 20).join("\n"),
+          "</validation_issues>",
+          "",
+          "<candidate_output>",
+          repair.content.slice(0, 30_000),
+          "</candidate_output>",
+        ]
+      : []),
+  ].join("\n");
+
+  return [
+    { type: "text", text: instruction },
+    ...candidates.flatMap((candidate) => [
+      { type: "text" as const, text: `<candidate_image id="${candidate.id}">` },
+      {
+        type: "image_url" as const,
+        image_url: { url: candidate.previewUrl },
+        min_pixels: 65_536,
+        max_pixels: 262_144,
+      },
+    ]),
+  ];
+}
+
+function getAssetSelectionIssues(
+  value: unknown,
+  request: PptAssetSearchPlanV1["requests"][number],
+  candidates: readonly PexelsPhotoCandidate[],
+): string[] {
+  const result = PptAssetSelectionSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
+    );
+  }
+  const issues: string[] = [];
+  if (result.data.requestId !== request.id) {
+    issues.push(`requestId 必须为 ${request.id}`);
+  }
+  if (!candidates.some((candidate) => candidate.id === result.data.selectedPhotoId)) {
+    issues.push(`selectedPhotoId 必须来自当前第一页候选`);
+  }
+  return issues;
+}
+
+function parseAssetSelection(
+  content: string,
+  request: PptAssetSearchPlanV1["requests"][number],
+  candidates: readonly PexelsPhotoCandidate[],
+): PptAssetSelectionV1 {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new PptGenerationError("invalid-visual-plan", "模型返回的选图结果格式无效。");
+  }
+  const result = PptAssetSelectionSchema.safeParse(value);
+  if (!result.success || getAssetSelectionIssues(result.data, request, candidates).length > 0) {
+    throw new PptGenerationError("invalid-visual-plan", "模型返回的选图结果未通过校验。");
+  }
+  return result.data;
 }
 
 function getCandidateIssues(
@@ -401,6 +603,189 @@ function formatVisualReviewValidationFailure(issues: readonly string[]): string 
   return `模型修复后的视觉评审仍有 ${issues.length} 项未通过校验：${displayedIssues.join(
     "；",
   )}${suffix}`;
+}
+
+export async function generatePptAssetSearchPlan({
+  apiKey,
+  apiHost = DEFAULT_BAILIAN_API_HOST,
+  structure,
+  visualPreference = "",
+  signal,
+  onPhaseChange,
+}: GeneratePptAssetSearchPlanOptions): Promise<GeneratePptAssetSearchPlanResult> {
+  const normalizedHost = normalizeBailianApiHost(apiHost);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 180_000);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (signal?.aborted) abortFromCaller();
+
+  try {
+    const systemMessage = { role: "system" as const, content: createAssetSearchSystemPrompt() };
+    const userMessage = {
+      role: "user" as const,
+      content: [
+        "判断以下演示中哪些页面真正需要 Pexels 照片。",
+        "",
+        "<visual_preference>",
+        visualPreference.trim() || "未指定，由你按证据价值和叙事需要判断。",
+        "</visual_preference>",
+        "",
+        "<ppt_structure>",
+        JSON.stringify(structure, null, 2),
+        "</ppt_structure>",
+      ].join("\n"),
+    };
+    onPhaseChange?.("planning-assets");
+    const firstCompletion = await requestBailianCompletion(
+      normalizedHost,
+      apiKey,
+      [systemMessage, userMessage],
+      controller.signal,
+      0.2,
+    );
+
+    try {
+      return {
+        assetSearchPlan: parseAssetSearchPlan(firstCompletion.content, structure),
+        usage: firstCompletion.usage,
+      };
+    } catch {
+      let candidate: unknown = firstCompletion.content;
+      try {
+        candidate = JSON.parse(firstCompletion.content);
+      } catch {
+        // 保留原始文本供修复请求使用。
+      }
+      const issues = getAssetSearchPlanIssues(candidate, structure);
+      onPhaseChange?.("repairing-assets");
+      const repairedCompletion = await requestBailianCompletion(
+        normalizedHost,
+        apiKey,
+        [
+          systemMessage,
+          {
+            role: "user",
+            content: createAssetSearchRepairPrompt(firstCompletion.content, issues, structure),
+          },
+        ],
+        controller.signal,
+        0.1,
+      );
+      return {
+        assetSearchPlan: parseAssetSearchPlan(repairedCompletion.content, structure),
+        usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
+      };
+    }
+  } catch (error) {
+    if (error instanceof PptGenerationError) throw error;
+    if (controller.signal.aborted) {
+      throw new PptGenerationError(
+        timedOut ? "timeout" : "cancelled",
+        timedOut ? "图片需求规划超时，请稍后重试。" : "已取消图片需求规划。",
+      );
+    }
+    throw new PptGenerationError("network", "图片需求规划失败，请检查网络后重试。");
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function selectPptAssetCandidate({
+  apiKey,
+  apiHost = DEFAULT_BAILIAN_API_HOST,
+  request,
+  candidates,
+  signal,
+  onPhaseChange,
+}: SelectPptAssetCandidateOptions): Promise<SelectPptAssetCandidateResult> {
+  if (candidates.length === 0) {
+    throw new PptGenerationError("invalid-visual-plan", `${request.id} 没有可供选择的图片。`);
+  }
+  const normalizedHost = normalizeBailianApiHost(apiHost);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 180_000);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (signal?.aborted) abortFromCaller();
+
+  try {
+    const systemMessage: BailianChatMessage = {
+      role: "system",
+      content: createAssetSelectionSystemPrompt(),
+    };
+    onPhaseChange?.("selecting-assets");
+    const firstCompletion = await requestBailianCompletion(
+      normalizedHost,
+      apiKey,
+      [
+        systemMessage,
+        {
+          role: "user",
+          content: createAssetSelectionUserContent(request, candidates),
+        },
+      ],
+      controller.signal,
+      0.2,
+    );
+
+    try {
+      return {
+        selection: parseAssetSelection(firstCompletion.content, request, candidates),
+        usage: firstCompletion.usage,
+      };
+    } catch {
+      let candidate: unknown = firstCompletion.content;
+      try {
+        candidate = JSON.parse(firstCompletion.content);
+      } catch {
+        // 保留原始文本供修复请求使用。
+      }
+      const issues = getAssetSelectionIssues(candidate, request, candidates);
+      onPhaseChange?.("repairing-asset-selection");
+      const repairedCompletion = await requestBailianCompletion(
+        normalizedHost,
+        apiKey,
+        [
+          systemMessage,
+          {
+            role: "user",
+            content: createAssetSelectionUserContent(request, candidates, {
+              content: firstCompletion.content,
+              issues,
+            }),
+          },
+        ],
+        controller.signal,
+        0.1,
+      );
+      return {
+        selection: parseAssetSelection(repairedCompletion.content, request, candidates),
+        usage: mergePptTokenUsage(firstCompletion.usage, repairedCompletion.usage),
+      };
+    }
+  } catch (error) {
+    if (error instanceof PptGenerationError) throw error;
+    if (controller.signal.aborted) {
+      throw new PptGenerationError(
+        timedOut ? "timeout" : "cancelled",
+        timedOut ? `${request.id} 自动选图超时。` : "已取消自动选图。",
+      );
+    }
+    throw new PptGenerationError("network", `${request.id} 自动选图失败。`);
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 export async function generatePptVisualPlan({

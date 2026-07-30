@@ -23,6 +23,7 @@ import {
   type TableCellStyle,
   type TableElement,
 } from "@/editor/types";
+import { resolveAssetDataUrl } from "@/features/content-studio/asset-resolver";
 import pptxgen from "pptxgenjs";
 
 const WIDE_LAYOUT = {
@@ -201,7 +202,7 @@ function addTextElement(
     align: element.align,
     bold: Number(element.fontWeight) >= 600,
     color: normalizeHexColor(element.fill) ?? "000000",
-    fit: "shrink",
+    fit: "none",
     fontFace: PPTX_FONT_FACES[element.fontFamily],
     fontSize,
     isTextBox: true,
@@ -267,7 +268,8 @@ async function loadImageElement(src: string): Promise<HTMLImageElement> {
 
 async function createPngImageSource(element: ImageElement): Promise<PptxImageSource> {
   try {
-    const image = await loadImageElement(element.src);
+    const resolvedSource = await resolveAssetDataUrl(element.src);
+    const image = await loadImageElement(resolvedSource);
     const crop =
       element.fit === "cover"
         ? getCoverImageCrop(
@@ -284,7 +286,10 @@ async function createPngImageSource(element: ImageElement): Promise<PptxImageSou
     canvas.width = Math.max(1, Math.round(crop?.width ?? (image.naturalWidth || image.width)));
     canvas.height = Math.max(1, Math.round(crop?.height ?? (image.naturalHeight || image.height)));
     const context = canvas.getContext("2d");
-    if (!context) return { path: element.src };
+    if (!context)
+      return resolvedSource.startsWith("data:")
+        ? { data: resolvedSource }
+        : { path: resolvedSource };
 
     if (crop) {
       context.drawImage(
@@ -502,6 +507,23 @@ async function addShapeElement(
         line:
           "stroke" in element
             ? getLine(element.stroke, element.strokeWidth, element.opacity, coordinates.scale)
+            : undefined,
+        shadow:
+          "shadow" in element && element.shadow && element.shadow.opacity > 0
+            ? {
+                type: "outer",
+                color: normalizeHexColor(element.shadow.color) ?? "000000",
+                opacity: element.shadow.opacity,
+                blur: element.shadow.blur * coordinates.scale * 72,
+                angle:
+                  ((Math.atan2(element.shadow.offsetY, element.shadow.offsetX) * 180) / Math.PI +
+                    360) %
+                  360,
+                offset:
+                  Math.hypot(element.shadow.offsetX, element.shadow.offsetY) *
+                  coordinates.scale *
+                  72,
+              }
             : undefined,
         objectName: element.name,
         rectRadius:

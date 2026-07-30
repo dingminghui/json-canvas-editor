@@ -3,16 +3,18 @@ import { z } from "zod";
 export const PPT_STRUCTURE_SCHEMA_VERSION = "ppt-structure/v1" as const;
 export const PPT_PROJECT_SCHEMA_VERSION = 1 as const;
 export const PPT_MODEL = "qwen3.7-plus" as const;
-export const PPT_PROMPT_VERSION = "ppt-structure/v3" as const;
+export const PPT_PROMPT_VERSION = "ppt-structure/v4" as const;
 export const PPT_MATERIAL_PLAN_SCHEMA_VERSION = "ppt-material-plan/v1" as const;
 export const DEFAULT_PPT_SOURCE_TREATMENT =
   "以已有材料为内容边界；允许围绕演示目标重组、提炼和调整顺序，但不得新增材料外的事实、数字或结论。" as const;
 export const PPT_VISUAL_PLAN_SCHEMA_VERSION = "ppt-visual-plan/v2" as const;
-export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v4" as const;
+export const PPT_VISUAL_PROMPT_VERSION = "ppt-visual-plan/v5" as const;
+export const PPT_ASSET_SEARCH_PLAN_SCHEMA_VERSION = "ppt-asset-search-plan/v1" as const;
+export const PPT_ASSET_SELECTION_SCHEMA_VERSION = "ppt-asset-selection/v1" as const;
 export const PPT_VISUAL_REVIEW_SCHEMA_VERSION = "ppt-visual-review/v1" as const;
 export const PPT_VISUAL_REVIEW_DECISION_SCHEMA_VERSION = "ppt-visual-review-decision/v1" as const;
-export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v3" as const;
-export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v3" as const;
+export const PPT_VISUAL_REVIEW_PROMPT_VERSION = "ppt-visual-review/v4" as const;
+export const PPT_CANVAS_RENDERER_VERSION = "canvas-render/v4" as const;
 export const DEFAULT_BAILIAN_API_HOST =
   "https://dashscope.aliyuncs.com/compatible-mode/v1" as const;
 
@@ -128,6 +130,7 @@ export const PPT_MEDIA_LAYOUTS = [
   "inset",
 ] as const;
 export const PPT_IMAGE_TREATMENTS = ["natural", "muted", "darkened"] as const;
+export const PPT_ASSET_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 export const PPT_VISUAL_REVIEW_VERDICTS = ["approved", "revised"] as const;
 export const PPT_VISUAL_REVIEW_SEVERITIES = ["suggestion", "important", "critical"] as const;
 export const PPT_VISUAL_REVIEW_CATEGORIES = [
@@ -593,7 +596,64 @@ export const PptVisualAssetSchema = z
     name: NonEmptyText.max(160),
     alt: NonEmptyText.max(300),
     credit: z.string().trim().max(300).optional(),
+    targetSlideId: z
+      .string()
+      .regex(/^P\d{2,}$/)
+      .optional(),
+    sourceUrl: z.string().url().max(1000).optional(),
+    photographerUrl: z.string().url().max(1000).optional(),
     src: z.string().min(1).max(3_000_000),
+  })
+  .strict();
+
+export const PptAssetSearchPlanSchema = z
+  .object({
+    schemaVersion: z.literal(PPT_ASSET_SEARCH_PLAN_SCHEMA_VERSION),
+    requests: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^Q\d{2,}$/),
+            slideId: z.string().regex(/^P\d{2,}$/),
+            purpose: NonEmptyText.max(240),
+            query: z.string().trim().min(2).max(120),
+            orientation: z.enum(PPT_ASSET_ORIENTATIONS),
+            required: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(6),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    const requestIds = new Set<string>();
+    const slideIds = new Set<string>();
+    plan.requests.forEach((request, index) => {
+      if (requestIds.has(request.id)) {
+        context.addIssue({
+          code: "custom",
+          message: "图片检索需求 ID 必须唯一",
+          path: ["requests", index, "id"],
+        });
+      }
+      if (slideIds.has(request.slideId)) {
+        context.addIssue({
+          code: "custom",
+          message: "每页最多只能提出一个图片检索需求",
+          path: ["requests", index, "slideId"],
+        });
+      }
+      requestIds.add(request.id);
+      slideIds.add(request.slideId);
+    });
+  });
+
+export const PptAssetSelectionSchema = z
+  .object({
+    schemaVersion: z.literal(PPT_ASSET_SELECTION_SCHEMA_VERSION),
+    requestId: z.string().regex(/^Q\d{2,}$/),
+    selectedPhotoId: z.number().int().positive(),
+    rationale: NonEmptyText.max(300),
   })
   .strict();
 
@@ -767,7 +827,12 @@ export const PptProjectSchema = z
     generator: z
       .object({
         model: z.literal(PPT_MODEL),
-        promptVersion: z.enum(["ppt-structure/v1", "ppt-structure/v2", PPT_PROMPT_VERSION]),
+        promptVersion: z.enum([
+          "ppt-structure/v1",
+          "ppt-structure/v2",
+          "ppt-structure/v3",
+          PPT_PROMPT_VERSION,
+        ]),
         usage: PptTokenUsageSchema,
       })
       .strict(),
@@ -781,6 +846,8 @@ export type PptSlide = z.infer<typeof PptSlideSchema>;
 export type PptStructureV1 = z.infer<typeof PptStructureSchema>;
 export type PptMaterialPlanV1 = z.infer<typeof PptMaterialPlanSchema>;
 export type PptVisualAsset = z.infer<typeof PptVisualAssetSchema>;
+export type PptAssetSearchPlanV1 = z.infer<typeof PptAssetSearchPlanSchema>;
+export type PptAssetSelectionV1 = z.infer<typeof PptAssetSelectionSchema>;
 export type PptVisualPlanV2 = z.infer<typeof PptVisualPlanSchema>;
 export type PptVisualReviewDecisionV1 = z.infer<typeof PptVisualReviewDecisionSchema>;
 export type PptVisualReviewV1 = z.infer<typeof PptVisualReviewSchema>;
@@ -798,6 +865,14 @@ export function getPptMaterialPlanJsonSchema() {
 
 export function getPptVisualPlanJsonSchema() {
   return z.toJSONSchema(PptVisualPlanSchema, { target: "draft-07" });
+}
+
+export function getPptAssetSearchPlanJsonSchema() {
+  return z.toJSONSchema(PptAssetSearchPlanSchema, { target: "draft-07" });
+}
+
+export function getPptAssetSelectionJsonSchema() {
+  return z.toJSONSchema(PptAssetSelectionSchema, { target: "draft-07" });
 }
 
 export function getPptVisualReviewJsonSchema() {
@@ -831,6 +906,95 @@ export function getPptStructureMaterialIssues(
   });
 
   return issues;
+}
+
+function getBlockVisibleText(block: PptContentBlock): string {
+  switch (block.type) {
+    case "paragraph":
+      return block.text;
+    case "bullet-list":
+    case "numbered-list":
+      return block.items.join("");
+    case "comparison":
+      return `${block.left.heading}${block.left.items.join("")}${block.right.heading}${block.right.items.join("")}`;
+    case "process":
+      return block.steps.map((step) => `${step.title}${step.description ?? ""}`).join("");
+    case "metrics":
+      return block.items.map((item) => `${item.value}${item.label}${item.context ?? ""}`).join("");
+    case "quote":
+      return `${block.quote}${block.attribution ?? ""}`;
+    case "table":
+      return `${block.columns.join("")}${block.rows.flat().join("")}`;
+    case "chart":
+      return `${block.takeaway}${block.categories.join("")}${block.series.map((series) => series.name).join("")}`;
+    case "diagram":
+      return block.nodes.map((node) => `${node.label}${node.description ?? ""}`).join("");
+    default: {
+      const exhaustiveBlock: never = block;
+      return exhaustiveBlock;
+    }
+  }
+}
+
+export function getPptStructureContentIssues(structure: PptStructureV1): string[] {
+  const issues: string[] = [];
+  structure.slides.forEach((slide) => {
+    if (["cover", "section", "closing"].includes(slide.role)) return;
+    const hasPurposeBuiltVisual = slide.contentBlocks.some((block) =>
+      ["chart", "diagram", "table", "metrics", "quote", "comparison", "process"].includes(
+        block.type,
+      ),
+    );
+    if (hasPurposeBuiltVisual) return;
+
+    const listItemCount = slide.contentBlocks.reduce(
+      (count, block) =>
+        count +
+        (block.type === "bullet-list" || block.type === "numbered-list" ? block.items.length : 0),
+      0,
+    );
+    const visibleLength = slide.contentBlocks
+      .map(getBlockVisibleText)
+      .join("")
+      .replace(/\s+/gu, "").length;
+
+    if (slide.role === "summary") {
+      if (listItemCount < 2 && visibleLength < 40) {
+        issues.push(`${slide.id} 总结页需要至少两条结论，或一条完整的行动陈述`);
+      }
+      return;
+    }
+    if (slide.role === "agenda") {
+      if (listItemCount < 2) issues.push(`${slide.id} 议程页至少需要两个议题`);
+      return;
+    }
+    if (listItemCount < 2 && visibleLength < 24) {
+      issues.push(`${slide.id} 的可见内容不足以支撑一张普通内容页`);
+    }
+  });
+  return issues;
+}
+
+export function canPptSlideUseImage(slide: PptSlide): boolean {
+  if (!["cover", "section", "content", "closing"].includes(slide.role)) return false;
+  return !slide.contentBlocks.some((block) =>
+    ["chart", "diagram", "table", "comparison", "process", "metrics"].includes(block.type),
+  );
+}
+
+export function getPptAssetSearchPlanStructureIssues(
+  plan: PptAssetSearchPlanV1,
+  structure: PptStructureV1,
+): string[] {
+  const slidesById = new Map(structure.slides.map((slide) => [slide.id, slide]));
+  return plan.requests.flatMap((request) => {
+    const slide = slidesById.get(request.slideId);
+    if (!slide) return [`图片检索需求 ${request.id} 引用了不存在的页面 ${request.slideId}`];
+    if (!canPptSlideUseImage(slide)) {
+      return [`图片检索需求 ${request.id} 引用了不适合配图的页面 ${request.slideId}`];
+    }
+    return [];
+  });
 }
 
 export function getPptMaterialCoverage(structure: PptStructureV1, materialPlan: PptMaterialPlanV1) {
@@ -892,6 +1056,16 @@ export function getPptVisualPlanStructureIssues(
     }
     if (slide.assetId !== null && !assetIds.has(slide.assetId)) {
       issues.push(`视觉方案 ${slide.slideId} 引用了不存在的图片素材 ${slide.assetId}`);
+    }
+    const asset =
+      slide.assetId === null ? undefined : assets.find((item) => item.id === slide.assetId);
+    if (asset?.targetSlideId && asset.targetSlideId !== slide.slideId) {
+      issues.push(
+        `视觉方案 ${slide.slideId} 使用了为 ${asset.targetSlideId} 检索的图片素材 ${asset.id}`,
+      );
+    }
+    if (slide.assetId !== null && !canPptSlideUseImage(sourceSlide)) {
+      issues.push(`视觉方案 ${slide.slideId} 的页面语义不允许使用图片`);
     }
     if (slide.assetId !== null && usedAssetIds.has(slide.assetId)) {
       issues.push(`视觉方案重复使用了图片素材 ${slide.assetId}`);
@@ -1021,12 +1195,23 @@ export function getPptVisualReviewStructureIssues(
   if (review.verdict === "approved" && hasRevision) {
     issues.push("视觉评审结论为通过时不得修改 VisualPlan");
   }
+  if (
+    review.verdict === "approved" &&
+    review.issues.some((issue) => issue.severity === "critical")
+  ) {
+    issues.push("视觉评审存在 critical 问题时不得直接通过");
+  }
   if (review.verdict === "revised" && !hasRevision) {
     issues.push("视觉评审结论为修订时必须至少修改主题、设计系统或一页视觉方案");
   }
   if (review.verdict === "revised" && review.issues.length === 0) {
     issues.push("视觉评审执行修订时必须说明至少一个视觉问题");
   }
+  changedSlideIds.forEach((slideId) => {
+    if (!review.issues.some((issue) => issue.slideId === null || issue.slideId === slideId)) {
+      issues.push(`视觉评审修改 ${slideId} 时必须提供对应的视觉问题`);
+    }
+  });
 
   return issues;
 }

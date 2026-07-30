@@ -653,7 +653,11 @@ export const EditorWorkspace = memo(function EditorWorkspace({
         const { exportCanvasDocumentToPptx } = await import("@/editor/pptx-export");
         await exportCanvasDocumentToPptx(exportDocument);
       } else {
-        const dataUrl = canvasStageRef.current?.exportImage({ pixelRatio: 2 });
+        const pixelRatio =
+          document.documentType === "longform"
+            ? Math.max(0.25, Math.min(2, 16_384 / Math.max(document.width, document.height)))
+            : 2;
+        const dataUrl = canvasStageRef.current?.exportImage({ pixelRatio });
         if (!dataUrl) throw new Error("image-export-failed");
         downloadDataUrl(dataUrl, getExportFileName(document));
       }

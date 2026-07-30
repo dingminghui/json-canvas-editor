@@ -29,6 +29,9 @@ import {
 
 export const AI_PPT_SLIDE_WIDTH = 1600;
 export const AI_PPT_SLIDE_HEIGHT = 900;
+export const AI_PPT_BODY_FONT_MIN = 27;
+export const AI_PPT_SLIDE_TITLE_FONT_MIN = 58;
+export const AI_PPT_COVER_TITLE_FONT_MIN = 84;
 
 interface RenderContext {
   documentId: string;
@@ -365,14 +368,14 @@ function renderContentHeader(
       `${prefix}-title`,
       "页面标题",
       slide.title,
-      { x: 96, y: 105, width: 1404, height: 108 },
+      { x: 96, y: 105, width: 1404, height: 132 },
       {
         fill: colors.foreground,
         fontFamily: fonts.heading,
         fontSize: fitFontSize(
           slide.title,
-          scaledFontSize(context.theme, breathing ? 66 : dense ? 50 : 58),
-          dense ? 34 : 38,
+          scaledFontSize(context.theme, breathing ? 72 : dense ? 60 : 64),
+          AI_PPT_SLIDE_TITLE_FONT_MIN,
           34,
         ),
         fontWeight: "800",
@@ -383,14 +386,14 @@ function renderContentHeader(
       `${prefix}-message`,
       "核心信息",
       slide.coreMessage,
-      { x: 100, y: 218, width: 1320, height: 64 },
+      { x: 100, y: 246, width: 1320, height: 64 },
       {
         fill: colors.muted,
         fontFamily: fonts.body,
         fontSize: fitFontSize(
           slide.coreMessage,
-          scaledFontSize(context.theme, breathing ? 30 : dense ? 23 : 27),
-          dense ? 19 : 21,
+          scaledFontSize(context.theme, breathing ? 34 : dense ? 30 : 32),
+          AI_PPT_BODY_FONT_MIN,
           80,
         ),
         fontWeight: "400",
@@ -488,7 +491,7 @@ function renderMediaSlide(
           fontSize: fitFontSize(
             slide.title,
             scaledFontSize(context.theme, slide.role === "cover" ? 86 : 68),
-            slide.role === "cover" ? 54 : 42,
+            slide.role === "cover" ? AI_PPT_COVER_TITLE_FONT_MIN : AI_PPT_SLIDE_TITLE_FONT_MIN,
             30,
           ),
           fontWeight: "800",
@@ -505,8 +508,8 @@ function renderMediaSlide(
           fontFamily: fonts.body,
           fontSize: fitFontSize(
             slide.coreMessage,
-            scaledFontSize(context.theme, slide.role === "cover" ? 32 : 28),
-            22,
+            scaledFontSize(context.theme, slide.role === "cover" ? 36 : 32),
+            slide.role === "cover" ? 30 : AI_PPT_BODY_FONT_MIN,
             70,
           ),
           fontWeight: "500",
@@ -525,7 +528,7 @@ function renderMediaSlide(
           {
             fill: colors.primaryForeground,
             fontFamily: fonts.body,
-            fontSize: fitFontSize(content, 22, 17, 90),
+            fontSize: fitFontSize(content, 30, AI_PPT_BODY_FONT_MIN, 90),
             lineHeight: 1.42,
             opacity: 0.82,
           },
@@ -572,8 +575,8 @@ function renderMediaSlide(
           fontFamily: fonts.heading,
           fontSize: fitFontSize(
             slide.title,
-            scaledFontSize(context.theme, slide.role === "cover" ? 66 : 54),
-            38,
+            scaledFontSize(context.theme, slide.role === "cover" ? 86 : 64),
+            slide.role === "cover" ? AI_PPT_COVER_TITLE_FONT_MIN : AI_PPT_SLIDE_TITLE_FONT_MIN,
             22,
           ),
           fontWeight: "800",
@@ -588,7 +591,7 @@ function renderMediaSlide(
         {
           fill: colors.muted,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(slide.coreMessage, 26, 20, 50),
+          fontSize: fitFontSize(slide.coreMessage, 32, AI_PPT_BODY_FONT_MIN, 50),
           lineHeight: 1.42,
         },
       ),
@@ -600,7 +603,7 @@ function renderMediaSlide(
         {
           fill: colors.foreground,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(content, 21, 16, 75),
+          fontSize: fitFontSize(content, 30, AI_PPT_BODY_FONT_MIN, 75),
           lineHeight: 1.45,
         },
       ),
@@ -630,7 +633,12 @@ function renderMediaSlide(
         {
           fill: colors.foreground,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 56), 38, 24),
+          fontSize: fitFontSize(
+            slide.title,
+            scaledFontSize(context.theme, 64),
+            AI_PPT_SLIDE_TITLE_FONT_MIN,
+            24,
+          ),
           fontWeight: "800",
           lineHeight: 1.14,
         },
@@ -643,7 +651,7 @@ function renderMediaSlide(
         {
           fill: colors.muted,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(slide.coreMessage, 26, 20, 55),
+          fontSize: fitFontSize(slide.coreMessage, 32, AI_PPT_BODY_FONT_MIN, 55),
           lineHeight: 1.42,
         },
       ),
@@ -655,7 +663,7 @@ function renderMediaSlide(
         {
           fill: colors.foreground,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(content, 21, 16, 75),
+          fontSize: fitFontSize(content, 30, AI_PPT_BODY_FONT_MIN, 75),
           lineHeight: 1.45,
         },
       ),
@@ -715,7 +723,7 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       createCanvasText(`${prefix}-focus`, "视觉重点", context.plan.visualFocus, splitFocusFrame, {
         fill: colors.primaryForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSizeToFrame(context.plan.visualFocus, splitFocusFrame, 38, 22, 1.3),
+        fontSize: fitFontSizeToFrame(context.plan.visualFocus, splitFocusFrame, 42, 32, 1.3),
         fontWeight: "700",
         lineHeight: 1.3,
       }),
@@ -754,7 +762,12 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.foreground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 82), 54, 28),
+        fontSize: fitFontSize(
+          slide.title,
+          scaledFontSize(context.theme, 92),
+          AI_PPT_COVER_TITLE_FONT_MIN,
+          28,
+        ),
         fontWeight: "800",
         lineHeight: 1.14,
       },
@@ -767,7 +780,7 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.muted,
         fontFamily: fonts.body,
-        fontSize: fitFontSize(slide.coreMessage, scaledFontSize(context.theme, 32), 24, 60),
+        fontSize: fitFontSize(slide.coreMessage, scaledFontSize(context.theme, 36), 30, 60),
         lineHeight: 1.45,
       },
     ),
@@ -779,7 +792,7 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.foreground,
         fontFamily: fonts.body,
-        fontSize: 22,
+        fontSize: 30,
         fontWeight: "500",
         lineHeight: 1.35,
       },
@@ -796,7 +809,13 @@ function renderCoverSlide(slide: PptSlide, context: RenderContext): GroupElement
           align: "right",
           fill: colors.accent,
           fontFamily: fonts.heading,
-          fontSize: fitFontSizeToFrame(context.plan.visualFocus, editorialFocusFrame, 24, 16, 1.2),
+          fontSize: fitFontSizeToFrame(
+            context.plan.visualFocus,
+            editorialFocusFrame,
+            30,
+            AI_PPT_BODY_FONT_MIN,
+            1.2,
+          ),
           fontWeight: "800",
           lineHeight: 1.2,
         },
@@ -836,7 +855,12 @@ function renderSectionSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 78), 52, 30),
+        fontSize: fitFontSize(
+          slide.title,
+          scaledFontSize(context.theme, 84),
+          AI_PPT_COVER_TITLE_FONT_MIN,
+          30,
+        ),
         fontWeight: "800",
         lineHeight: 1.16,
       },
@@ -849,7 +873,7 @@ function renderSectionSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.body,
-        fontSize: 31,
+        fontSize: 34,
         lineHeight: 1.45,
         opacity: 0.82,
       },
@@ -932,7 +956,7 @@ function renderAgendaSlide(slide: PptSlide, context: RenderContext): GroupElemen
         {
           fill: usePanels ? colors.surfaceForeground : colors.foreground,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(item, 30, 22, 35),
+          fontSize: fitFontSize(item, 32, AI_PPT_BODY_FONT_MIN, 35),
           fontWeight: "700",
           lineHeight: 1.25,
         },
@@ -992,7 +1016,7 @@ function renderComparisonSlide(slide: PptSlide, context: RenderContext): GroupEl
         {
           fill: panelForeground,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(side.items.join(""), 27, 21, 125),
+          fontSize: fitFontSize(side.items.join(""), 30, AI_PPT_BODY_FONT_MIN, 125),
           lineHeight: 1.55,
         },
       ),
@@ -1088,7 +1112,7 @@ function renderProcessSlide(slide: PptSlide, context: RenderContext): GroupEleme
         {
           fill: colors.surfaceForeground,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(step.title, 29, 21, 24),
+          fontSize: fitFontSize(step.title, 32, AI_PPT_BODY_FONT_MIN, 24),
           fontWeight: "700",
           lineHeight: 1.2,
         },
@@ -1106,7 +1130,7 @@ function renderProcessSlide(slide: PptSlide, context: RenderContext): GroupEleme
         {
           fill: colors.muted,
           fontFamily: fonts.body,
-          fontSize: 20,
+          fontSize: AI_PPT_BODY_FONT_MIN,
           lineHeight: 1.4,
         },
       ),
@@ -1198,7 +1222,7 @@ function renderChartSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.surfaceForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(chart.takeaway, 34, 24, 55),
+        fontSize: fitFontSize(chart.takeaway, 36, 30, 55),
         fontWeight: "800",
         lineHeight: 1.35,
       },
@@ -1420,7 +1444,7 @@ function renderDiagramSlide(slide: PptSlide, context: RenderContext): GroupEleme
           align: diagram.relationship === "cycle" ? "center" : "left",
           fill: central ? colors.primaryForeground : colors.surfaceForeground,
           fontFamily: fonts.heading,
-          fontSize: fitFontSize(node.label, central ? 30 : 25, 19, 20),
+          fontSize: fitFontSize(node.label, central ? 34 : 30, AI_PPT_BODY_FONT_MIN, 20),
           fontWeight: "800",
           lineHeight: 1.18,
         },
@@ -1441,7 +1465,7 @@ function renderDiagramSlide(slide: PptSlide, context: RenderContext): GroupEleme
           {
             fill: central ? colors.primaryForeground : colors.muted,
             fontFamily: fonts.body,
-            fontSize: fitFontSize(node.description, 18, 16, 45),
+            fontSize: fitFontSize(node.description, AI_PPT_BODY_FONT_MIN, AI_PPT_BODY_FONT_MIN, 45),
             lineHeight: 1.35,
             opacity: central ? 0.84 : 1,
           },
@@ -1531,7 +1555,13 @@ function renderMetricsSlide(slide: PptSlide, context: RenderContext): GroupEleme
           align: supporting.length > 0 ? "left" : "center",
           fill: colors.primaryForeground,
           fontFamily: fonts.body,
-          fontSize: fitFontSizeToFrame(heroContext, heroContextFrame, 22, 16, 1.35),
+          fontSize: fitFontSizeToFrame(
+            heroContext,
+            heroContextFrame,
+            30,
+            AI_PPT_BODY_FONT_MIN,
+            1.35,
+          ),
           lineHeight: 1.35,
           opacity: 0.82,
         },
@@ -1581,7 +1611,7 @@ function renderMetricsSlide(slide: PptSlide, context: RenderContext): GroupEleme
           {
             fill: colors.surfaceForeground,
             fontFamily: fonts.heading,
-            fontSize: 22,
+            fontSize: AI_PPT_BODY_FONT_MIN,
             fontWeight: "700",
             lineHeight: 1.2,
           },
@@ -1663,7 +1693,7 @@ function renderMetricsSlide(slide: PptSlide, context: RenderContext): GroupEleme
         {
           fill: accented ? colors.primaryForeground : colors.muted,
           fontFamily: fonts.body,
-          fontSize: 20,
+          fontSize: AI_PPT_BODY_FONT_MIN,
           lineHeight: 1.35,
           opacity: accented ? 0.82 : 1,
         },
@@ -1722,7 +1752,7 @@ function renderQuoteSlide(slide: PptSlide, context: RenderContext): GroupElement
       {
         fill: colors.muted,
         fontFamily: fonts.body,
-        fontSize: 24,
+        fontSize: AI_PPT_BODY_FONT_MIN,
         fontWeight: "500",
         lineHeight: 1,
       },
@@ -1856,8 +1886,8 @@ function renderGenericBlock(
         fontFamily: block.type === "quote" ? fonts.heading : fonts.body,
         fontSize: fitFontSize(
           blockToText(block),
-          context.plan.density === "spacious" ? 30 : 26,
-          18,
+          context.plan.density === "spacious" ? 34 : 30,
+          AI_PPT_BODY_FONT_MIN,
           Math.max(80, Math.round((innerFrame.width * innerFrame.height) / 6_500)),
         ),
         fontWeight: block.type === "quote" ? "700" : "400",
@@ -1914,7 +1944,12 @@ function renderGenericSlide(slide: PptSlide, context: RenderContext): GroupEleme
           align: "center",
           fill: colors.foreground,
           fontFamily: fonts.body,
-          fontSize: fitFontSize(slide.contentBlocks.map(blockToText).join(""), 30, 22, 110),
+          fontSize: fitFontSize(
+            slide.contentBlocks.map(blockToText).join(""),
+            34,
+            AI_PPT_BODY_FONT_MIN,
+            110,
+          ),
           lineHeight: 1.5,
         },
       ),
@@ -1942,7 +1977,7 @@ function renderGenericSlide(slide: PptSlide, context: RenderContext): GroupEleme
         {
           fill: colors.primary,
           fontFamily: fonts.heading,
-          fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 38, 24, 1.25),
+          fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 42, 32, 1.25),
           fontWeight: "800",
           lineHeight: 1.25,
         },
@@ -2064,7 +2099,12 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.heading,
-        fontSize: fitFontSize(slide.title, scaledFontSize(context.theme, 76), 48, 32),
+        fontSize: fitFontSize(
+          slide.title,
+          scaledFontSize(context.theme, 82),
+          AI_PPT_COVER_TITLE_FONT_MIN,
+          32,
+        ),
         fontWeight: "800",
         lineHeight: 1.16,
       },
@@ -2077,7 +2117,7 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.body,
-        fontSize: 31,
+        fontSize: 34,
         lineHeight: 1.45,
         opacity: 0.84,
       },
@@ -2090,7 +2130,7 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
       {
         fill: colors.primaryForeground,
         fontFamily: fonts.body,
-        fontSize: 24,
+        fontSize: 30,
         fontWeight: "600",
         lineHeight: 1.5,
       },
@@ -2099,7 +2139,13 @@ function renderClosingSlide(slide: PptSlide, context: RenderContext): GroupEleme
       align: "right",
       fill: colors.accent,
       fontFamily: fonts.heading,
-      fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 22, 16, 1.2),
+      fontSize: fitFontSizeToFrame(
+        context.plan.visualFocus,
+        focusFrame,
+        30,
+        AI_PPT_BODY_FONT_MIN,
+        1.2,
+      ),
       fontWeight: "800",
       lineHeight: 1.2,
     }),
@@ -2160,8 +2206,8 @@ function renderSummarySlide(slide: PptSlide, context: RenderContext): GroupEleme
     const fontSize = fitFontSizeToFrame(
       item.text,
       textFrame,
-      context.plan.density === "compact" ? 22 : 25,
-      18,
+      context.plan.density === "compact" ? 28 : 32,
+      AI_PPT_BODY_FONT_MIN,
       1.35,
     );
 
@@ -2206,7 +2252,7 @@ function renderSummarySlide(slide: PptSlide, context: RenderContext): GroupEleme
     );
   });
 
-  const focusFrame = { x: 1000, y: 818, width: 500, height: 32 };
+  const focusFrame = { x: 1000, y: 806, width: 500, height: 48 };
   children.push(
     createCanvasText(
       `${prefix}-summary-focus`,
@@ -2217,7 +2263,13 @@ function renderSummarySlide(slide: PptSlide, context: RenderContext): GroupEleme
         align: "right",
         fill: colors.accent,
         fontFamily: fonts.heading,
-        fontSize: fitFontSizeToFrame(context.plan.visualFocus, focusFrame, 20, 16, 1.2),
+        fontSize: fitFontSizeToFrame(
+          context.plan.visualFocus,
+          focusFrame,
+          30,
+          AI_PPT_BODY_FONT_MIN,
+          1.2,
+        ),
         fontWeight: "800",
         lineHeight: 1.2,
       },
@@ -2292,6 +2344,44 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
     return width * height;
   }
 
+  function getMinimumTextFontSize(element: Extract<CanvasLeafElement, { type: "text" }>): number {
+    if (["封面标题", "章节标题", "结束页标题"].includes(element.name)) {
+      return AI_PPT_COVER_TITLE_FONT_MIN;
+    }
+    if (["页面标题", "媒体页标题", "分栏页标题", "嵌入式页标题"].includes(element.name)) {
+      return AI_PPT_SLIDE_TITLE_FONT_MIN;
+    }
+    if (/页码|章节名称|页眉题|标签$|编号$|图片来源/u.test(element.name)) {
+      return 16;
+    }
+    return AI_PPT_BODY_FONT_MIN;
+  }
+
+  function getMeaningfulArea(element: CanvasLeafElement): number {
+    if (!element.visible || element.opacity <= 0) return 0;
+    if (element.type === "text") {
+      if (!element.text.trim() || /页码|章节名称|图片来源/u.test(element.name)) return 0;
+      return (
+        element.width *
+        Math.min(
+          element.height,
+          estimateTextHeight(element.text, element.width, element.fontSize, element.lineHeight),
+        )
+      );
+    }
+    if (element.type === "image" || element.type === "chart" || element.type === "table") {
+      return element.width * element.height;
+    }
+    if (
+      element.type === "rect" &&
+      !/页面背景|风格|设计系统|内框|强调线|色带|角标/u.test(element.name) &&
+      element.width * element.height < document.width * document.height * 0.8
+    ) {
+      return element.width * element.height;
+    }
+    return 0;
+  }
+
   function inspectElement(element: CanvasElement, pageId: string, leaves: CanvasLeafElement[]) {
     if (ids.has(element.id)) issues.push(`画布元素编号重复：${element.id}`);
     ids.add(element.id);
@@ -2321,7 +2411,10 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
       issues.push(`元素 ${element.id} 超出页面边界`);
     }
     if (element.type === "text") {
-      if (element.fontSize < 16) issues.push(`文本 ${element.id} 的字号小于 16`);
+      const minimumFontSize = getMinimumTextFontSize(element);
+      if (element.fontSize < minimumFontSize) {
+        issues.push(`文本 ${element.id} 的字号小于 ${minimumFontSize}`);
+      }
       const estimatedHeight = estimateTextHeight(
         element.text,
         element.width,
@@ -2379,6 +2472,14 @@ export function getCanvasDocumentIssues(document: CanvasDocument): string[] {
         }
       });
     });
+    const occupiedArea = leaves.reduce((sum, leaf) => sum + getMeaningfulArea(leaf), 0);
+    const occupiedRatio = Math.min(1, occupiedArea / Math.max(1, document.width * document.height));
+    const minimumOccupiedRatio = leaves.some((leaf) => leaf.name.startsWith("议程 ")) ? 0.14 : 0.18;
+    if (occupiedRatio < minimumOccupiedRatio) {
+      issues.push(
+        `页面 ${element.id} 的有效视觉占比仅为 ${Math.round(occupiedRatio * 100)}%，存在过度留白`,
+      );
+    }
   });
   return issues;
 }

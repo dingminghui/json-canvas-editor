@@ -24,8 +24,17 @@ interface StrokedElement extends TransformableElement {
   strokeWidth: number;
 }
 
+export interface CanvasShadow {
+  color: string;
+  opacity: number;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 interface FilledStrokedElement extends StrokedElement {
   fill: string;
+  shadow?: CanvasShadow;
 }
 
 export interface TextElement extends TransformableElement {

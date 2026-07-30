@@ -46,12 +46,13 @@ Use visual-plan table tokens to choose header fill, cell fill, border weight, ty
 
 Apply these in order:
 
-1. reduce font size within a defined minimum;
-2. use a denser layout variant;
-3. increase the number of rows or columns;
-4. report a render issue.
+1. choose a layout whose capacity matches the content;
+2. expand the usable content region or increase the number of rows or columns;
+3. use a denser layout variant;
+4. reduce font size only within the semantic hard minimum;
+5. report a render issue.
 
-Never silently remove source content. Do not generate negative frames or place elements outside the page.
+Never silently remove source content. Do not generate negative frames or place elements outside the page. Use at least 58 Canvas px for normal slide titles, 84 Canvas px for cover/section/closing titles, and 27 Canvas px for audience-facing body text. Metadata such as page numbers and image credits is exempt.
 
 ## Validation
 

@@ -5,6 +5,7 @@ import {
 import {
   DEFAULT_BAILIAN_API_HOST,
   getPptMaterialPlanJsonSchema,
+  getPptStructureContentIssues,
   getPptStructureJsonSchema,
   getPptStructureMaterialIssues,
   PPT_MODEL,
@@ -242,7 +243,10 @@ function getValidationIssues(error: unknown, materialPlan: PptMaterialPlanV1): s
       (issue) => `${issue.path.join(".") || "root"}: ${issue.message}`,
     );
   }
-  return getPptStructureMaterialIssues(result.data, materialPlan);
+  return [
+    ...getPptStructureMaterialIssues(result.data, materialPlan),
+    ...getPptStructureContentIssues(result.data),
+  ];
 }
 
 function getMaterialSourceIssues(
@@ -292,7 +296,11 @@ function parsePptStructure(content: string, materialPlan: PptMaterialPlanV1): Pp
   }
 
   const result = PptStructureSchema.safeParse(value);
-  if (!result.success || getPptStructureMaterialIssues(result.data, materialPlan).length > 0) {
+  if (
+    !result.success ||
+    getPptStructureMaterialIssues(result.data, materialPlan).length > 0 ||
+    getPptStructureContentIssues(result.data).length > 0
+  ) {
     throw new PptGenerationError("invalid-structure", "模型返回的 PPT 结构未通过校验。");
   }
   return result.data;

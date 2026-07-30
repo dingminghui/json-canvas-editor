@@ -33,9 +33,10 @@ Prefer:
 - `RectElement` for backgrounds, panels, cards, and emphasis;
 - `ArrowElement` for process connections;
 - `ChartElement` for editable category comparisons, trends, and part-to-whole data;
-- `TableElement` for editable tabular content.
+- `TableElement` for editable tabular content;
+- `ImageElement` only for a registered asset selected before rendering.
 
-Do not introduce `ImageElement` in this rendering workflow.
+Never invent an image URL or let an image replace a chart, table, process, diagram, comparison, metric, agenda, or summary page's semantic renderer.
 
 ## Persistence
 

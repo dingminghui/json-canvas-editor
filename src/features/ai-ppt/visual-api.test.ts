@@ -5,7 +5,12 @@ import {
   createTestPptVisualPlan,
   createTestPptVisualReviewDecision,
 } from "@/features/ai-ppt/test-fixtures";
-import { generatePptVisualPlan, reviewPptVisualPlan } from "@/features/ai-ppt/visual-api";
+import {
+  generatePptAssetSearchPlan,
+  generatePptVisualPlan,
+  reviewPptVisualPlan,
+  selectPptAssetCandidate,
+} from "@/features/ai-ppt/visual-api";
 
 function completionResponse(content: string, status = 200): Response {
   return new Response(
@@ -23,6 +28,88 @@ function completionResponse(content: string, status = 200): Response {
 describe("百炼视觉方案客户端", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("先生成受约束的逐页图片检索需求", async () => {
+    const assetSearchPlan = {
+      schemaVersion: "ppt-asset-search-plan/v1",
+      requests: [
+        {
+          id: "Q01",
+          slideId: "P01",
+          purpose: "封面团队场景",
+          query: "creative team working landscape copy space",
+          orientation: "landscape",
+          required: false,
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(completionResponse(JSON.stringify(assetSearchPlan)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await generatePptAssetSearchPlan({
+      apiKey: "sk-assets",
+      structure: createTestPptStructure(),
+      visualPreference: "使用真实工作场景",
+    });
+
+    expect(result.assetSearchPlan.requests[0]).toMatchObject({
+      id: "Q01",
+      slideId: "P01",
+    });
+    expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).toContain(
+      "使用真实工作场景",
+    );
+  });
+
+  it("看完 Pexels 第一页候选后选择其中一张", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionResponse(
+        JSON.stringify({
+          schemaVersion: "ppt-asset-selection/v1",
+          requestId: "Q01",
+          selectedPhotoId: 42,
+          rationale: "主体位于右侧并留有文字空间。",
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await selectPptAssetCandidate({
+      apiKey: "sk-assets",
+      request: {
+        id: "Q01",
+        slideId: "P01",
+        purpose: "封面团队场景",
+        query: "creative team",
+        orientation: "landscape",
+        required: false,
+      },
+      candidates: [
+        {
+          id: 42,
+          width: 2400,
+          height: 1600,
+          averageColor: "#8899AA",
+          photographer: "Ada",
+          photographerUrl: "https://www.pexels.com/@ada",
+          sourceUrl: "https://www.pexels.com/photo/42",
+          alt: "Team",
+          previewUrl: "https://images.pexels.com/preview.jpg",
+          downloadUrl: "https://images.pexels.com/full.jpg",
+        },
+      ],
+    });
+
+    expect(result.selection.selectedPhotoId).toBe(42);
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as {
+      messages: Array<{ content: unknown }>;
+    };
+    expect(body.messages[1]?.content).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "image_url" })]),
+    );
   });
 
   it("使用结构化输出生成与文本结构对应的视觉方案", async () => {

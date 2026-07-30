@@ -27,6 +27,30 @@ const document: CanvasDocument = {
           y: 0,
         },
         {
+          cornerRadius: 16,
+          fill: "#FFFFFF",
+          height: 120,
+          id: "shadow-card",
+          locked: false,
+          name: "原生阴影卡片",
+          opacity: 1,
+          rotation: 0,
+          shadow: {
+            color: "#16355C",
+            opacity: 0.2,
+            blur: 18,
+            offsetX: 0,
+            offsetY: 8,
+          },
+          stroke: "#DCE5F0",
+          strokeWidth: 1,
+          type: "rect",
+          visible: true,
+          width: 300,
+          x: 1180,
+          y: 650,
+        },
+        {
           align: "left",
           fill: "#123456",
           fontFamily: "noto-sans-sc",
@@ -159,6 +183,8 @@ describe("PPTX export", () => {
     expect(slideXml).not.toContain('<a:spcPct val="12500000"/>');
     expect(slideXml).toContain('typeface="Microsoft YaHei"');
     expect(slideXml).toContain('name="页面标题"');
+    expect(slideXml).toContain("<a:outerShdw");
+    expect(slideXml).toContain('name="原生阴影卡片"');
   });
 
   it("fails early when no visible slide group can be exported", async () => {
