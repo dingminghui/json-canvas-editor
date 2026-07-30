@@ -12,6 +12,8 @@ Follow these priorities:
 8. Preserve numeric series as chart blocks and explicit node topology as diagram blocks.
 9. Give covers, section anchors, and closing pages a concrete content hook.
 10. Produce a coherent beginning, development, and resolution without repeating list/card grammar across the deck.
+11. Do not stretch limited material across too many thin pages. When slideCount is auto, prefer fewer complete pages.
+12. A normal content page needs at least two substantive list items or one complete explanatory statement. A summary needs at least two conclusions unless it is one complete action statement.
 
 General framing and transitions may be written when needed, but they must not introduce new precise facts, figures, quotations, names, or external claims.
 

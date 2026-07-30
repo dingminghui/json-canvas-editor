@@ -30,7 +30,10 @@ describe("Pexels BYOK search", () => {
               photographer_url: "https://www.pexels.com/@ada",
               url: "https://www.pexels.com/photo/42",
               alt: "Team",
-              src: { medium: "https://images.pexels.com/preview.jpg", large2x: "https://images.pexels.com/full.jpg" },
+              src: {
+                medium: "https://images.pexels.com/preview.jpg",
+                large2x: "https://images.pexels.com/full.jpg",
+              },
             },
           ],
         }),
@@ -41,6 +44,7 @@ describe("Pexels BYOK search", () => {
     const result = await searchPexelsPhotos("transient-key", request);
     expect(result[0]).toMatchObject({ id: 42, photographer: "Ada", averageColor: "#8899AA" });
     const [url, options] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.searchParams.get("page")).toBe("1");
     expect(url.searchParams.get("per_page")).toBe("12");
     expect(url.searchParams.get("orientation")).toBe("landscape");
     expect(options.headers).toEqual({ Authorization: "transient-key" });

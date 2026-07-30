@@ -1,4 +1,4 @@
-import type { AssetSearchPlanV1, VisualAssetRecord } from "./schema";
+import type { VisualAssetRecord } from "./schema";
 
 const PEXELS_API_ROOT = "https://api.pexels.com/v1";
 const MAX_IMAGE_EDGE = 2048;
@@ -15,6 +15,12 @@ export interface PexelsPhotoCandidate {
   alt: string;
   previewUrl: string;
   downloadUrl: string;
+}
+
+export interface PexelsSearchRequest {
+  query: string;
+  orientation: "landscape" | "portrait" | "square";
+  purpose: string;
 }
 
 interface PexelsSearchResponse {
@@ -47,12 +53,13 @@ export class PexelsApiError extends Error {
 
 export const searchPexelsPhotos = async (
   apiKey: string,
-  request: AssetSearchPlanV1["requests"][number],
+  request: PexelsSearchRequest,
   signal?: AbortSignal,
 ): Promise<PexelsPhotoCandidate[]> => {
   const url = new URL(`${PEXELS_API_ROOT}/search`);
   url.searchParams.set("query", request.query);
   url.searchParams.set("orientation", request.orientation);
+  url.searchParams.set("page", "1");
   url.searchParams.set("per_page", "12");
   const response = await fetch(url, {
     headers: { Authorization: apiKey.trim() },
@@ -109,7 +116,9 @@ const canvasToBlob = (canvas: HTMLCanvasElement, quality: number) =>
     );
   });
 
-export const compressImageBlob = async (source: Blob): Promise<{
+export const compressImageBlob = async (
+  source: Blob,
+): Promise<{
   blob: Blob;
   width: number;
   height: number;

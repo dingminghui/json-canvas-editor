@@ -146,7 +146,10 @@ export function createTestPptStructure(): PptStructureV1 {
         audienceMove: { before: "关注能力数量", after: "关注价值验证顺序" },
         layoutIntent: "title-body",
         contentBlocks: [
-          { type: "paragraph", text: "优先选择需求稳定、数据可得、收益可量化的场景。" },
+          {
+            type: "paragraph",
+            text: "优先选择需求稳定、数据可得、收益可量化的场景，并设置明确的验证周期。",
+          },
         ],
         evidenceRefs: ["F001"],
       },

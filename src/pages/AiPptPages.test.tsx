@@ -1,5 +1,6 @@
 import { App } from "@/App";
 import * as api from "@/features/ai-ppt/api";
+import * as autoAssets from "@/features/ai-ppt/auto-assets";
 import {
   getPptCanvasArtifact,
   PPT_CANVAS_ARTIFACT_STORAGE_KEY,
@@ -274,6 +275,21 @@ describe("AI 生成 PPT 文本结构页面", () => {
       visualPlan: createTestPptVisualPlan(),
       usage: createTestPptTokenUsage(),
     });
+    vi.spyOn(autoAssets, "resolvePptAutoAssets").mockResolvedValue({
+      assets: [
+        {
+          id: "A01",
+          name: "Pexels 42",
+          alt: "Team",
+          credit: "Photo: Ada / Pexels",
+          targetSlideId: "P01",
+          sourceUrl: "https://www.pexels.com/photo/42",
+          photographerUrl: "https://www.pexels.com/@ada",
+          src: "https://images.pexels.com/full.jpg",
+        },
+      ],
+      usage: createTestPptTokenUsage(),
+    });
     vi.spyOn(visualApi, "reviewPptVisualPlan").mockResolvedValue({
       review: createTestPptVisualReview(),
       usage: createTestPptTokenUsage(),
@@ -281,16 +297,21 @@ describe("AI 生成 PPT 文本结构页面", () => {
     renderApp(`/ai-ppt/${project.id}`);
 
     await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
+    expect(screen.queryByLabelText("图片素材")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /删除图片|移除图片/u })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("百炼接口密钥"), "sk-canvas-not-persisted");
+    await user.type(screen.getByLabelText(/Pexels API Key/), "pexels-not-persisted");
     await user.type(screen.getByLabelText(/视觉偏好/), "克制、专业，突出行动项");
-    await user.upload(
-      screen.getByLabelText(/图片素材/),
-      new File(["hero"], "hero.png", { type: "image/png" }),
-    );
-    await screen.findByLabelText("hero.png 的图片描述");
     await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
 
-    const backLink = await screen.findByRole("link", { name: "返回文本大纲" });
+    await waitFor(() => {
+      const generationError = screen.queryByRole("alert");
+      if (generationError) {
+        throw new Error(`生成流程返回错误：${generationError.textContent}`);
+      }
+      expect(screen.getByRole("link", { name: "返回文本大纲" })).toBeInTheDocument();
+    });
+    const backLink = screen.getByRole("link", { name: "返回文本大纲" });
     expect(backLink).toHaveAttribute("href", `/ai-ppt/${project.id}`);
     expect(backLink).toHaveAttribute("data-size", "icon-sm");
     expect(backLink.querySelector(".sr-only")).toHaveTextContent("返回文本大纲");
@@ -299,16 +320,78 @@ describe("AI 生成 PPT 文本结构页面", () => {
     expect(artifact?.document.elements).toHaveLength(4);
     expect(artifact?.visualReview?.verdict).toBe("approved");
     expect(artifact?.assets).toEqual([
-      expect.objectContaining({ id: "A01", name: "hero.png", alt: "hero" }),
+      expect.objectContaining({
+        id: "A01",
+        name: "Pexels 42",
+        alt: "Team",
+        targetSlideId: "P01",
+      }),
     ]);
     expect(generateVisualPlan).toHaveBeenCalledWith(
       expect.objectContaining({
-        assets: [expect.objectContaining({ id: "A01", name: "hero.png" })],
+        assets: [expect.objectContaining({ id: "A01", name: "Pexels 42" })],
       }),
     );
     const persisted = globalThis.localStorage.getItem(PPT_CANVAS_ARTIFACT_STORAGE_KEY);
     expect(persisted).not.toContain("sk-canvas-not-persisted");
-    expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(30_330);
+    expect(persisted).not.toContain("pexels-not-persisted");
+    expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(40_440);
+  });
+
+  it("首轮视觉评审修订后重新渲染并执行最终验证", async () => {
+    const user = userEvent.setup();
+    const project = createTestPptProject();
+    savePptProject(project);
+    const sourcePlan = createTestPptVisualPlan();
+    const revisedPlan = structuredClone(sourcePlan);
+    revisedPlan.slides[2] = {
+      ...revisedPlan.slides[2],
+      layoutVariant: "content-rail",
+    };
+    vi.spyOn(visualApi, "generatePptVisualPlan").mockResolvedValue({
+      visualPlan: sourcePlan,
+      usage: createTestPptTokenUsage(),
+    });
+    vi.spyOn(autoAssets, "resolvePptAutoAssets").mockResolvedValue({
+      assets: [],
+      usage: createTestPptTokenUsage(),
+    });
+    const reviewVisualPlan = vi
+      .spyOn(visualApi, "reviewPptVisualPlan")
+      .mockResolvedValueOnce({
+        review: {
+          ...createTestPptVisualReview(revisedPlan),
+          verdict: "revised",
+          summary: "第三页需要更清楚的层级。",
+          issues: [
+            {
+              slideId: "P03",
+              category: "hierarchy",
+              severity: "important",
+              observation: "第三页主次不清。",
+              recommendation: "改用内容导轨布局。",
+            },
+          ],
+          revisedSlideIds: ["P03"],
+        },
+        usage: createTestPptTokenUsage(),
+      })
+      .mockResolvedValueOnce({
+        review: createTestPptVisualReview(revisedPlan),
+        usage: createTestPptTokenUsage(),
+      });
+    renderApp(`/ai-ppt/${project.id}`);
+
+    await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
+    await user.type(screen.getByLabelText("百炼接口密钥"), "sk-review-not-persisted");
+    await user.click(screen.getByRole("button", { name: "生成可编辑幻灯片" }));
+
+    expect(await screen.findByRole("link", { name: "返回文本大纲" })).toBeInTheDocument();
+    expect(reviewVisualPlan).toHaveBeenCalledTimes(2);
+    expect(reviewVisualPlan.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ visualPlan: revisedPlan }),
+    );
+    expect(getPptProject(project.id)?.generator.usage.total_tokens).toBe(50_550);
   });
 
   it("画布渲染校验失败时显示具体原因", async () => {
@@ -317,6 +400,10 @@ describe("AI 生成 PPT 文本结构页面", () => {
     savePptProject(project);
     vi.spyOn(visualApi, "generatePptVisualPlan").mockResolvedValue({
       visualPlan: createTestPptVisualPlan(),
+      usage: createTestPptTokenUsage(),
+    });
+    vi.spyOn(autoAssets, "resolvePptAutoAssets").mockResolvedValue({
+      assets: [],
       usage: createTestPptTokenUsage(),
     });
     vi.spyOn(canvasRenderer, "renderPptStructureToCanvas").mockImplementation(() => {

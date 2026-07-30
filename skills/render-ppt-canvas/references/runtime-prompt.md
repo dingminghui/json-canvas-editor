@@ -20,6 +20,7 @@
 14. 图片只在能够提供真实证据、人物、场景、产品或强主视觉时使用；不要为了填空而使用图片，也不要重复使用同一图片。
 15. 使用图片时，根据画面主体和文字位置选择 full-bleed、split-left、split-right 或 inset，并设置合理焦点与遮罩处理。
 16. 含有大量现成文字、界面、图表或幻灯片画面的截图不得作为 full-bleed 背景；这类素材只能作为 inset 证据图，避免素材内文字与页面文案争夺层级。
-17. 只返回符合下方 JSON Schema 的 JSON 对象，不要添加 Markdown 代码块或解释。
+17. 图片素材如果带有 targetSlideId，只能用于该页面。agenda、summary、图表、表格、流程、关系图、对比和指标页面不得使用图片。
+18. 只返回符合下方 JSON Schema 的 JSON 对象，不要添加 Markdown 代码块或解释。
 
 <output_schema> {{OUTPUT_SCHEMA}} </output_schema>

@@ -1,7 +1,9 @@
 import {
   CreatePptStructureInputSchema,
+  getPptAssetSearchPlanStructureIssues,
   getPptMaterialCoverage,
   getPptMaterialPlanJsonSchema,
+  getPptStructureContentIssues,
   getPptStructureJsonSchema,
   getPptStructureMaterialIssues,
   getPptVisualPlanJsonSchema,
@@ -159,6 +161,64 @@ describe("PptStructureSchema", () => {
     );
   });
 
+  it("拒绝内容不足的普通页和总结页，但允许信息型专属布局", () => {
+    const thinContent = createTestPptStructure();
+    thinContent.slides[2].contentBlocks = [{ type: "paragraph", text: "内容太少" }];
+    expect(getPptStructureContentIssues(thinContent)).toContain(
+      "P03 的可见内容不足以支撑一张普通内容页",
+    );
+
+    const thinSummary = createTestPptStructure();
+    thinSummary.slides[3].contentBlocks = [{ type: "bullet-list", items: ["只有一条"] }];
+    expect(getPptStructureContentIssues(thinSummary)).toContain(
+      "P04 总结页需要至少两条结论，或一条完整的行动陈述",
+    );
+
+    const metricSlide = createTestPptStructure();
+    metricSlide.slides[2].layoutIntent = "metrics";
+    metricSlide.slides[2].contentBlocks = [
+      { type: "metrics", items: [{ value: "42%", label: "转化率" }] },
+    ];
+    expect(getPptStructureContentIssues(metricSlide)).toEqual([]);
+  });
+
+  it("只允许为适合配图的页面创建自动检索需求", () => {
+    const structure = createTestPptStructure();
+    const validPlan = {
+      schemaVersion: "ppt-asset-search-plan/v1" as const,
+      requests: [
+        {
+          id: "Q01",
+          slideId: "P01",
+          purpose: "建立战略主题氛围",
+          query: "artificial intelligence strategy",
+          orientation: "landscape" as const,
+          required: false,
+        },
+      ],
+    };
+    expect(getPptAssetSearchPlanStructureIssues(validPlan, structure)).toEqual([]);
+
+    validPlan.requests[0] = { ...validPlan.requests[0], slideId: "P02" };
+    expect(getPptAssetSearchPlanStructureIssues(validPlan, structure)).toContain(
+      "图片检索需求 Q01 引用了不适合配图的页面 P02",
+    );
+
+    structure.slides[2].contentBlocks = [
+      {
+        type: "chart",
+        relationship: "trend",
+        takeaway: "增长速度正在加快。",
+        categories: ["Q1", "Q2"],
+        series: [{ name: "收入", values: [10, 18] }],
+      },
+    ];
+    validPlan.requests[0] = { ...validPlan.requests[0], slideId: "P03" };
+    expect(getPptAssetSearchPlanStructureIssues(validPlan, structure)).toContain(
+      "图片检索需求 Q01 引用了不适合配图的页面 P03",
+    );
+  });
+
   it("校验视觉方案并导出相同的结构契约", () => {
     const plan = createTestPptVisualPlan();
     expect(PptVisualPlanSchema.parse(plan)).toEqual(plan);
@@ -189,6 +249,7 @@ describe("PptStructureSchema", () => {
         id: "A01",
         name: "building.png",
         alt: "现代建筑外景",
+        targetSlideId: "P01",
         src: "data:image/png;base64,dGVzdA==",
       },
     ];
@@ -205,6 +266,11 @@ describe("PptStructureSchema", () => {
     expect(getPptVisualPlanStructureIssues(plan, createTestPptStructure(), assets)).toEqual([]);
     expect(getPptVisualPlanStructureIssues(plan, createTestPptStructure())).toContain(
       "视觉方案 P01 引用了不存在的图片素材 A01",
+    );
+
+    assets[0].targetSlideId = "P03";
+    expect(getPptVisualPlanStructureIssues(plan, createTestPptStructure(), assets)).toContain(
+      "视觉方案 P01 使用了为 P03 检索的图片素材 A01",
     );
   });
 
@@ -262,6 +328,27 @@ describe("PptStructureSchema", () => {
       type: "object",
       additionalProperties: false,
     });
+  });
+
+  it("视觉评审有严重问题时不得通过", () => {
+    const sourcePlan = createTestPptVisualPlan();
+    const review = {
+      ...createTestPptVisualReview(sourcePlan),
+      verdict: "approved" as const,
+      issues: [
+        {
+          slideId: "P03",
+          category: "typography" as const,
+          severity: "critical" as const,
+          observation: "正文无法辨认。",
+          recommendation: "放大正文并重排。",
+        },
+      ],
+    };
+
+    expect(
+      getPptVisualReviewStructureIssues(review, sourcePlan, createTestPptStructure()),
+    ).toContain("视觉评审存在 critical 问题时不得直接通过");
   });
 
   it("视觉评审比较忽略对象字段顺序", () => {

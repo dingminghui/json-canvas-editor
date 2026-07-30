@@ -202,7 +202,7 @@ function addTextElement(
     align: element.align,
     bold: Number(element.fontWeight) >= 600,
     color: normalizeHexColor(element.fill) ?? "000000",
-    fit: "shrink",
+    fit: "none",
     fontFace: PPTX_FONT_FACES[element.fontFamily],
     fontSize,
     isTextBox: true,
@@ -286,9 +286,10 @@ async function createPngImageSource(element: ImageElement): Promise<PptxImageSou
     canvas.width = Math.max(1, Math.round(crop?.width ?? (image.naturalWidth || image.width)));
     canvas.height = Math.max(1, Math.round(crop?.height ?? (image.naturalHeight || image.height)));
     const context = canvas.getContext("2d");
-    if (!context) return resolvedSource.startsWith("data:")
-      ? { data: resolvedSource }
-      : { path: resolvedSource };
+    if (!context)
+      return resolvedSource.startsWith("data:")
+        ? { data: resolvedSource }
+        : { path: resolvedSource };
 
     if (crop) {
       context.drawImage(
@@ -515,8 +516,7 @@ async function addShapeElement(
                 opacity: element.shadow.opacity,
                 blur: element.shadow.blur * coordinates.scale * 72,
                 angle:
-                  ((Math.atan2(element.shadow.offsetY, element.shadow.offsetX) * 180) /
-                    Math.PI +
+                  ((Math.atan2(element.shadow.offsetY, element.shadow.offsetX) * 180) / Math.PI +
                     360) %
                   360,
                 offset:
