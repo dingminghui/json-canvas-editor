@@ -13,7 +13,10 @@ import type {
 type Frame = { x: number; y: number; width: number; height: number };
 
 type RectOptions = Partial<
-  Pick<RectElement, "cornerRadius" | "locked" | "opacity" | "stroke" | "strokeWidth">
+  Pick<
+    RectElement,
+    "cornerRadius" | "locked" | "opacity" | "shadow" | "stroke" | "strokeWidth"
+  >
 >;
 
 type TextOptions = Partial<
@@ -46,6 +49,7 @@ export function createCanvasRect(
     name,
     opacity: options.opacity ?? 1,
     rotation: 0,
+    ...(options.shadow ? { shadow: options.shadow } : {}),
     stroke: options.stroke ?? "transparent",
     strokeWidth: options.strokeWidth ?? 0,
     type: "rect",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "规划并渲染 Canvas 视觉"
+  short_description: "选择 StylePack、素材和 Recipe，渲染 PPT 或长图"
+  default_prompt: "使用 $plan-canvas-visual 为输出结构规划受控视觉方案并生成可编辑 Canvas。"

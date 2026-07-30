@@ -1,0 +1,4 @@
+interface:
+  display_name: "生成通用内容文档"
+  short_description: "从材料提取事实并生成可确认的 ContentDocument"
+  default_prompt: "使用 $generate-content-document 将材料整理为带证据引用和稳定块 ID 的通用 ContentDocument。"

@@ -127,16 +127,18 @@ function renderApp(initialEntry = "/test-longform") {
 }
 
 describe("Home", () => {
-  it("does not expose built-in content templates", () => {
+  it("does not expose built-in content templates", async () => {
     renderApp("/");
+    await screen.findByText("还没有内容项目");
 
     expect(screen.queryByText("已有内容模板")).not.toBeInTheDocument();
     expect(screen.queryByText("从模板开始")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /打开模板/ })).not.toBeInTheDocument();
   });
 
-  it("opens the JSON structure detail page from the home page in the current tab", () => {
+  it("opens the JSON structure detail page from the home page in the current tab", async () => {
     renderApp("/");
+    await screen.findByText("还没有内容项目");
 
     const structureLink = screen.getByRole("link", { name: "结构详情" });
     expect(structureLink).toHaveAttribute("href", "/json-structure");

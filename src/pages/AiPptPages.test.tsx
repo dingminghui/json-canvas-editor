@@ -71,14 +71,14 @@ describe("AI 生成 PPT 文本结构页面", () => {
     vi.unstubAllGlobals();
   });
 
-  it("首页显示创建入口和本地空状态", () => {
+  it("首页显示通用内容创建入口和 IndexedDB 空状态", async () => {
     renderApp("/");
 
-    expect(screen.getByRole("link", { name: "创建 PPT 结构" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "创建内容项目" })).toHaveAttribute(
       "href",
-      "/ai-ppt/new",
+      "/studio/new",
     );
-    expect(screen.getByText("还没有生成过 PPT 结构")).toBeInTheDocument();
+    expect(await screen.findByText("还没有内容项目")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "开始创建" })).not.toBeInTheDocument();
   });
 
@@ -345,27 +345,13 @@ describe("AI 生成 PPT 文本结构页面", () => {
     );
   });
 
-  it("首页按更新时间展示并可确认删除最近项目", async () => {
-    const user = userEvent.setup();
+  it("通用工作台不读取或主动清理旧 PPT localStorage 数据", async () => {
     const project = createTestPptProject();
     savePptProject(project);
     renderApp("/");
 
-    expect(
-      screen.getByRole("link", { name: `打开 AI PPT 项目 ${project.structure.deck.title}` }),
-    ).toHaveAttribute("href", `/ai-ppt/${project.id}`);
-    expect(screen.getByText("模型用量 10,110 词元")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "新建" })).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: `删除 AI PPT 项目 ${project.structure.deck.title}`,
-      }),
-    );
-    expect(screen.getByRole("dialog")).toHaveTextContent("删除这份 PPT 结构");
-    await user.click(screen.getByRole("button", { name: "删除" }));
-
-    expect(screen.getByText("还没有生成过 PPT 结构")).toBeInTheDocument();
-    expect(getPptProject(project.id)).toBeNull();
+    expect(await screen.findByText("还没有内容项目")).toBeInTheDocument();
+    expect(screen.queryByText(project.structure.deck.title)).not.toBeInTheDocument();
+    expect(getPptProject(project.id)).not.toBeNull();
   });
 });

@@ -13,168 +13,138 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { deletePptCanvasArtifact } from "@/features/ai-ppt/canvas-storage";
-import type { PptProjectV1 } from "@/features/ai-ppt/schema";
-import { deletePptProject, listPptProjects } from "@/features/ai-ppt/storage";
-import { Clock3, FileJson2, Plus, Presentation, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import type { ContentProjectV1, OutputType } from "@/features/content-studio/schema";
+import {
+  deleteContentProject,
+  duplicateContentProjectForOutput,
+  listContentProjects,
+} from "@/features/content-studio/storage";
+import { Clock3, Copy, FileJson2, Image, Plus, Presentation, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-const TOKEN_COUNT_FORMATTER = new Intl.NumberFormat("zh-CN");
-
-function formatUpdatedAt(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
+const formatUpdatedAt = (value: string) =>
+  new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
+
+const getProjectPath = (project: ContentProjectV1) => {
+  if (!project.contentConfirmedAt) return `/studio/${project.id}/content`;
+  if (!project.outputStructure) return `/studio/${project.id}/structure`;
+  return `/studio/${project.id}/visual`;
+};
 
 export function Home() {
-  const [projects, setProjects] = useState(listPptProjects);
-  const [pendingDelete, setPendingDelete] = useState<PptProjectV1 | null>(null);
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<ContentProjectV1[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<ContentProjectV1 | null>(null);
 
-  function handleDelete() {
-    if (!pendingDelete || !deletePptProject(pendingDelete.id)) return;
-    deletePptCanvasArtifact(pendingDelete.id);
+  useEffect(() => {
+    void listContentProjects().then(setProjects);
+  }, []);
+
+  const remove = async () => {
+    if (!pendingDelete) return;
+    await deleteContentProject(pendingDelete.id);
     setProjects((current) => current.filter((project) => project.id !== pendingDelete.id));
     setPendingDelete(null);
-  }
+  };
+
+  const duplicate = async (project: ContentProjectV1) => {
+    const outputType: OutputType = project.outputType === "longform" ? "pptx" : "longform";
+    const copy = await duplicateContentProjectForOutput(project, outputType);
+    setProjects((current) => [copy, ...current]);
+    navigate(`/studio/${copy.id}/structure`);
+  };
 
   return (
     <main className="h-dvh min-w-[1120px] overflow-y-auto bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1320px] items-center justify-between px-8">
-          <Link className="font-medium tracking-tight" to="/">
-            内容工作台
-          </Link>
+          <Link className="font-medium tracking-tight" to="/">内容工作台</Link>
           <Button asChild size="sm" variant="ghost">
-            <Link to="/json-structure">
-              <FileJson2 data-icon="inline-start" />
-              结构详情
-            </Link>
+            <Link to="/json-structure"><FileJson2 />结构详情</Link>
           </Button>
         </div>
       </header>
-
       <div className="mx-auto max-w-[1320px] px-8 pb-20">
-        <section className="grid grid-cols-[minmax(0,1fr)_300px] gap-16 py-16">
+        <section className="grid grid-cols-[minmax(0,1fr)_360px] gap-16 py-16">
           <div className="max-w-3xl">
-            <p className="text-sm font-medium text-primary">AI 生成 PPT 结构</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.08] tracking-[-0.045em] text-balance">
-              先整理观点，再开始设计幻灯片。
+            <p className="text-sm font-medium text-primary">通用内容 → PPT / 长图</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.05em] text-balance">
+              先确认内容，再让样式真正参与排版。
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
-              提供主题、听众、目标和已有材料，先确认有依据的演示方向，再生成可继续编辑的逐页内容结构。
+              ContentDocument 是唯一事实源。Markdown 负责人工确认，StylePack 与 LayoutRecipe 负责把同一份内容变成明显不同的视觉产物。
             </p>
             <Button asChild className="mt-8" size="lg">
-              <Link to="/ai-ppt/new">
-                <Plus data-icon="inline-start" />
-                创建 PPT 结构
-              </Link>
+              <Link to="/studio/new"><Plus />创建内容项目</Link>
             </Button>
           </div>
-
           <div className="flex flex-col justify-end gap-4">
-            {["提取材料事实", "确认演示方向", "生成逐页内容与来源"].map((item, index) => (
+            {["材料事实与 ContentDocument", "Markdown 校验并选择产物", "StylePack、素材与 Recipe", "看图评审、编辑与导出"].map((item, index) => (
               <div className="flex items-center gap-4 text-sm" key={item}>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  0{index + 1}
-                </span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">0{index + 1}</span>
                 <span>{item}</span>
               </div>
             ))}
           </div>
         </section>
-
-        <section className="py-14">
+        <section className="border-t py-12">
           <div className="mb-7">
-            <p className="text-sm text-muted-foreground">仅保存在当前浏览器</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight">最近生成</h2>
+            <p className="text-sm text-muted-foreground">IndexedDB 本地保存 · 不读取旧 localStorage</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight">最近项目</h2>
           </div>
-
           {projects.length === 0 ? (
-            <Empty className="min-h-48">
+            <Empty className="min-h-52 border">
               <EmptyHeader>
-                <EmptyMedia>
-                  <Presentation />
-                </EmptyMedia>
-                <EmptyTitle>还没有生成过 PPT 结构</EmptyTitle>
-                <EmptyDescription>第一份大纲会出现在这里，可以继续编辑或删除。</EmptyDescription>
+                <EmptyMedia><Presentation /></EmptyMedia>
+                <EmptyTitle>还没有内容项目</EmptyTitle>
+                <EmptyDescription>创建后会先进入独立的 Markdown 确认页。</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div>
+            <div className="grid grid-cols-2 gap-4">
               {projects.map((project) => (
-                <div key={project.id}>
-                  <article className="grid grid-cols-[1fr_auto] items-center gap-6 py-5">
-                    <Link
-                      aria-label={`打开 AI PPT 项目 ${project.structure.deck.title}`}
-                      className="group min-w-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      to={`/ai-ppt/${project.id}`}
-                    >
-                      <div className="flex items-center gap-3 whitespace-nowrap text-xs text-muted-foreground">
-                        <span className="tabular-nums">{project.structure.deck.pageCount} 页</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="inline-flex items-center gap-1 tabular-nums">
-                          <Clock3 className="size-3.5" data-icon="inline-start" />
-                          {formatUpdatedAt(project.updatedAt)}
-                        </span>
-                      </div>
-                      <h3 className="mt-2 truncate text-lg font-medium tracking-tight transition-colors group-hover:text-primary">
-                        {project.structure.deck.title}
-                      </h3>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
-                        {project.structure.deck.coreMessage}
-                      </p>
-                      <footer className="mt-3 text-xs tabular-nums text-muted-foreground">
-                        模型用量{" "}
-                        {TOKEN_COUNT_FORMATTER.format(project.generator.usage.total_tokens)} 词元
-                      </footer>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                      <Button asChild size="sm" variant="ghost">
-                        <Link to={`/ai-ppt/${project.id}`}>继续编辑</Link>
-                      </Button>
-                      <Button
-                        aria-label={`删除 AI PPT 项目 ${project.structure.deck.title}`}
-                        onClick={() => setPendingDelete(project)}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 data-icon="inline-start" />
-                      </Button>
+                <article className="rounded-xl border bg-card p-5" key={project.id}>
+                  <Link className="group block" to={getProjectPath(project)}>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {project.outputType === "pptx" ? <Presentation className="size-4" /> : project.outputType === "longform" ? <Image className="size-4" /> : <FileJson2 className="size-4" />}
+                      <span>{project.outputType === "pptx" ? "PPT" : project.outputType === "longform" ? "长图" : "未选择产物"}</span>
+                      <span>·</span>
+                      <Clock3 className="size-3.5" />
+                      <span>{formatUpdatedAt(project.updatedAt)}</span>
                     </div>
-                  </article>
-                </div>
+                    <h3 className="mt-3 truncate text-lg font-semibold group-hover:text-primary">{project.contentDocument.title}</h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{project.contentDocument.coreMessage}</p>
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      {project.contentDocument.sections.length} 章节 · {project.contentDocument.sections.reduce((sum, section) => sum + section.blocks.length, 0)} 内容块 · 修订 {project.contentRevision}
+                    </p>
+                  </Link>
+                  <div className="mt-5 flex justify-end gap-2 border-t pt-4">
+                    {project.outputType ? (
+                      <Button size="sm" variant="ghost" onClick={() => void duplicate(project)}><Copy />复制为{project.outputType === "pptx" ? "长图" : "PPT"}</Button>
+                    ) : null}
+                    <Button aria-label={`删除 ${project.contentDocument.title}`} size="icon-sm" variant="ghost" onClick={() => setPendingDelete(project)}><Trash2 /></Button>
+                  </div>
+                </article>
               ))}
             </div>
           )}
         </section>
       </div>
-
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) setPendingDelete(null);
-        }}
-        open={pendingDelete !== null}
-      >
-        <DialogContent className="w-[420px] p-6">
+      <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="w-[420px]">
           <DialogHeader>
-            <DialogTitle className="text-base">删除这份 PPT 结构？</DialogTitle>
-            <DialogDescription className="mt-2 text-sm leading-6">
-              “{pendingDelete?.structure.deck.title}”将从当前浏览器中永久删除。
-            </DialogDescription>
+            <DialogTitle>删除这个内容项目？</DialogTitle>
+            <DialogDescription>项目、图片 Blob 和 Canvas 产物会从 IndexedDB 级联删除，无法恢复。</DialogDescription>
           </DialogHeader>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button onClick={() => setPendingDelete(null)} type="button" variant="outline">
-              取消
-            </Button>
-            <Button onClick={handleDelete} type="button" variant="destructive">
-              删除
-            </Button>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>取消</Button>
+            <Button variant="destructive" onClick={() => void remove()}>删除</Button>
           </div>
         </DialogContent>
       </Dialog>

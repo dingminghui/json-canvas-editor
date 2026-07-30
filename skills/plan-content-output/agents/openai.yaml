@@ -1,0 +1,4 @@
+interface:
+  display_name: "规划单一产物结构"
+  short_description: "将 ContentDocument 规划为 PPT 或长图结构"
+  default_prompt: "使用 $plan-content-output 为已确认 ContentDocument 规划一个受约束的 PPT 或长图结构。"

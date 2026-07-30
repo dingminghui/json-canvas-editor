@@ -37,6 +37,16 @@ const StrokedElementSchema = TransformableElementSchema.extend({
 }).strict();
 const FilledStrokedElementSchema = StrokedElementSchema.extend({
   fill: z.string(),
+  shadow: z
+    .object({
+      color: z.string(),
+      opacity: z.number().finite().min(0).max(1),
+      blur: z.number().finite().nonnegative(),
+      offsetX: z.number().finite(),
+      offsetY: z.number().finite(),
+    })
+    .strict()
+    .optional(),
 }).strict();
 const TextElementSchema = TransformableElementSchema.extend({
   type: z.literal("text"),

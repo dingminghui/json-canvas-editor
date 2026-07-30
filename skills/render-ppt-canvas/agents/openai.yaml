@@ -1,4 +1,0 @@
-interface:
-  display_name: "渲染 PPT 画布"
-  short_description: "为演示结构规划视觉方案并生成现有编辑器可用的画布文档"
-  default_prompt: "使用 $render-ppt-canvas 为演示结构规划视觉方案并渲染为可编辑画布。"
