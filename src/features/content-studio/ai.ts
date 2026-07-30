@@ -61,6 +61,18 @@ const escapeXmlLikeContent = (value: string) =>
 const toIssues = (error: z.ZodError) =>
   error.issues.map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`);
 
+const describeJsonRoot = (value: unknown): string => {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "数组";
+  if (typeof value !== "object") return typeof value === "string" ? "字符串" : typeof value;
+
+  const keys = Object.keys(value);
+  if (keys.length === 0) return "空对象";
+  const displayedKeys = keys.slice(0, 8).join(", ");
+  const remainingCount = keys.length - 8;
+  return `对象（顶层字段：${displayedKeys}${remainingCount > 0 ? `；另有 ${remainingCount} 个` : ""}）`;
+};
+
 const withTimeoutSignal = (
   callerSignal: AbortSignal | undefined,
   timeoutMs = 180_000,
@@ -92,12 +104,14 @@ const generateValidated = async <T>({
   schema,
   system,
   user,
+  repairContext,
   businessIssues = () => [],
   normalize = (value) => value,
 }: AiOptions & {
   schema: z.ZodType<T>;
   system: string;
   user: BailianChatMessage["content"];
+  repairContext?: string;
   businessIssues?: (value: T) => string[];
   normalize?: (value: T) => T;
 }): Promise<GenerationResult<T>> => {
@@ -134,7 +148,7 @@ const generateValidated = async <T>({
         return { data: normalized, usage: first.usage };
       }
     } else {
-      issues = toIssues(parsed.error);
+      issues = [`候选 JSON 根值：${describeJsonRoot(value)}。`, ...toIssues(parsed.error)];
     }
 
     onPhaseChange?.("repairing");
@@ -146,6 +160,15 @@ const generateValidated = async <T>({
         {
           role: "user",
           content: [
+            ...(repairContext
+              ? [
+                  "以下是首次生成时使用的原始任务上下文，修复时必须继续以此为事实依据。",
+                  "<original_request_context>",
+                  repairContext,
+                  "</original_request_context>",
+                  "",
+                ]
+              : []),
             "修复候选输出。不得改变输入事实，只能修复 Schema、引用、数量或枚举错误。",
             "<validation_issues>",
             issues.slice(0, 30).join("\n"),
@@ -170,7 +193,7 @@ const generateValidated = async <T>({
     if (!repairedParsed.success) {
       throw new PptGenerationError(
         "request-failed",
-        `模型修复后仍未通过 Schema：${toIssues(repairedParsed.error).slice(0, 3).join("；")}`,
+        `模型修复后仍未通过 Schema（根值：${describeJsonRoot(repairedValue)}）：${toIssues(repairedParsed.error).slice(0, 3).join("；")}`,
       );
     }
     const normalizedRepaired = normalize(repairedParsed.data);
@@ -202,27 +225,33 @@ const generateValidated = async <T>({
 export const analyzeContentMaterial = async (
   input: ContentProjectInput,
   options: AiOptions,
-): Promise<GenerationResult<MaterialPlanV1>> =>
-  generateValidated({
+): Promise<GenerationResult<MaterialPlanV1>> => {
+  const user = [
+    "<content_brief>",
+    JSON.stringify({ ...input, sourceMarkdown: undefined }, null, 2),
+    "</content_brief>",
+    "<source_material>",
+    escapeXmlLikeContent(input.sourceMarkdown),
+    "</source_material>",
+  ].join("\n");
+
+  return generateValidated({
     ...options,
     schema: MaterialPlanSchema,
     system: [
       "你是内容研究员。把已有材料拆为可追溯的原子事实，再提出通用内容方向。",
+      "输出根节点必须直接是 MaterialPlan JSON 对象，顶层字段只能是 schemaVersion、sourceSummary、facts、gaps、direction。",
+      "不得返回数组、字符串化 JSON，也不得添加 materialPlan、data、result 等包装层。",
       "sourceExcerpt 应优先摘录 source_material 原文；允许合并换行、忽略 Markdown 格式、调整标点，或在不改变事实含义的前提下做轻微压缩。",
       "sourceExcerpt 必须能明确追溯到材料，不得补写材料中没有的事实或数据。",
       "不要预设最终产物是 PPT 或长图。",
     ].join("\n"),
-    user: [
-      "<content_brief>",
-      JSON.stringify({ ...input, sourceMarkdown: undefined }, null, 2),
-      "</content_brief>",
-      "<source_material>",
-      escapeXmlLikeContent(input.sourceMarkdown),
-      "</source_material>",
-    ].join("\n"),
+    user,
+    repairContext: user,
     businessIssues: (plan) =>
       getMaterialEvidenceIssues(plan, input.sourceMarkdown),
   });
+};
 
 export const generateContentDocument = async (
   input: ContentProjectInput,
